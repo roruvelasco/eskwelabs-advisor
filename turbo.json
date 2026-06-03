@@ -16,6 +16,9 @@
     "lint:fix": {
       "cache": false
     },
+    "lint:staged": {
+      "cache": false
+    },
     "test": {
       "dependsOn": ["^build"]
     }

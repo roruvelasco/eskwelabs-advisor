@@ -78,18 +78,18 @@ Before writing any code, construct a plan that addresses all of the following:
 
 Every change must consider:
 
-| Concern | Pattern |
-|---|---|
-| Auth | `requireActor(roles)`, `requireAllowlistedEifOrAdmin(env)` middleware |
-| Ownership | Service `assertOwns()` pattern in `conversations.service.ts` |
-| Not found | `throw notFound()` → 404 JSON response |
-| Forbidden | `throw forbidden()` → 403 JSON response |
-| Validation | `parseJsonBody(c, zodSchema)` → 400 on failure |
-| Rate limiting | Automatic via `RateLimitService` on `/api/*` |
-| Cost cap | `CostCapEnforcer` checks limits during chat turns |
-| Inactive users | `auth.middleware.ts` checks `isActive` |
-| Empty results | Return `{ data: [] }` not 404 |
-| Null/undefined | Handle defensively in serializers |
+| Concern        | Pattern                                                               |
+| -------------- | --------------------------------------------------------------------- |
+| Auth           | `requireActor(roles)`, `requireAllowlistedEifOrAdmin(env)` middleware |
+| Ownership      | Service `assertOwns()` pattern in `conversations.service.ts`          |
+| Not found      | `throw notFound()` → 404 JSON response                                |
+| Forbidden      | `throw forbidden()` → 403 JSON response                               |
+| Validation     | `parseJsonBody(c, zodSchema)` → 400 on failure                        |
+| Rate limiting  | Automatic via `RateLimitService` on `/api/*`                          |
+| Cost cap       | `CostCapEnforcer` checks limits during chat turns                     |
+| Inactive users | `auth.middleware.ts` checks `isActive`                                |
+| Empty results  | Return `{ data: [] }` not 404                                         |
+| Null/undefined | Handle defensively in serializers                                     |
 
 ### 9. Testing
 
@@ -101,35 +101,52 @@ Every change must consider:
 
 ### 10. Always Gate with Type-Check & Lint
 
-After any change, run:
+These run **automatically via Git hooks** (Husky v9 + lint-staged):
+
+- **pre-commit**: Prettier format + ESLint `--fix --max-warnings=0` on staged files only (`lint-staged`)
+- **pre-push**: `bun run check` (type-check, ~4.5s cold / ~48ms cached) + `bun run test` (Bun tests via Turborepo)
+
+To run manually:
+
 ```bash
-bun run check   # tsc --noEmit per package
-bun run lint    # ESLint 9 flat config
-bun run test    # Bun tests
+bun run check   # tsc --noEmit per package (turbo check)
+bun run lint    # ESLint 9 flat config (turbo lint)
+bun run test    # Bun tests (turbo test, depends on ^build)
+```
+
+To skip hooks in an emergency (use sparingly):
+
+```bash
+git commit --no-verify
+git push --no-verify
 ```
 
 ## Post-Change: Update Docs
 
 After completing a change, update the following if applicable:
 
-| Change Type | Files to Update |
-|---|---|
-| New domain | AGENTS.md (Backend Domains table), ARCHITECTURE.md (domain inventory) |
-| New DB table | AGENTS.md (Database Tables), DATABASE.md (table schema + relationships) |
-| New env var | AGENTS.md (Key Env Vars), `turbo.json` (globalPassThroughEnv) |
-| New API route | API_CONTRACT.md |
-| New frontend page/route | AGENTS.md (Frontend Domains table) |
-| New package/dependency | AGENTS.md (Project Map, Commands) |
-| New factory/pattern | ARCHITECTURE.md |
-| Auth flow change | AGENTS.md (Auth & CSP), ARCHITECTURE.md (Auth Flow) |
+| Change Type             | Files to Update                                                         |
+| ----------------------- | ----------------------------------------------------------------------- |
+| New domain              | AGENTS.md (Backend Domains table), ARCHITECTURE.md (domain inventory)   |
+| New DB table            | AGENTS.md (Database Tables), DATABASE.md (table schema + relationships) |
+| New env var             | AGENTS.md (Key Env Vars), `turbo.json` (globalPassThroughEnv)           |
+| New API route           | API_CONTRACT.md                                                         |
+| New frontend page/route | AGENTS.md (Frontend Domains table)                                      |
+| New package/dependency  | AGENTS.md (Project Map, Commands)                                       |
+| New factory/pattern     | ARCHITECTURE.md                                                         |
+| Auth flow change        | AGENTS.md (Auth & CSP), ARCHITECTURE.md (Auth Flow)                     |
 
 ## Backend Lifecycle Hooks
 
 ```typescript
 // packages/server/src/application.module.ts
 export class ApplicationModule {
-  async start() { /* Hook future providers here */ }
-  async stop()  { /* Close long-lived resources */ }
+  async start() {
+    /* Hook future providers here */
+  }
+  async stop() {
+    /* Close long-lived resources */
+  }
 }
 ```
 

@@ -1,6 +1,7 @@
 # Eskwelabs Advisor — Agent Guide
 
 Entry-point doc. For deep dives, see `agents/*`:
+
 - [ARCHITECTURE.md](agents/ARCHITECTURE.md) — full architecture, patterns, domain inventory
 - [API_CONTRACT.md](agents/API_CONTRACT.md) — all API endpoints & method signatures
 - [DATABASE.md](agents/DATABASE.md) — table schemas, relationships, migrations
@@ -17,23 +18,25 @@ Entry-point doc. For deep dives, see `agents/*`:
 
 ## Commands
 
-| Command | What it does | Notes |
-|---|---|---|
-| `bun run dev` | `turbo dev` — dev servers for all packages | |
-| `bun run dev:web` | `turbo dev --filter=@eskwelabs-advisor/web` | Next.js on port 3000 |
-| `bun run build` | `turbo build` — builds all packages | |
-| `bun run check` | `turbo check` → `tsc --noEmit` per package | Type-checking, NOT a build |
-| `bun run lint` | `turbo lint` → ESLint 9 flat config | |
-| `bun run format:fix` | Prettier at monorepo root | Single quotes, no trailing comma |
-| `bun run test` | `turbo test` | Test depends on `^build` in turbo pipeline |
-| `bun test` | Bun test runner (per-package) | Not Jest/Vitest |
-| `bun run db:generate` | `drizzle-kit generate` | Root config, schema at `packages/server/src/db/drizzle-schema.ts` |
-| `bun run db:migrate` | `drizzle-kit migrate` | Migrations in `packages/server/drizzle/` |
-| `bun run db:start` / `db:stop` | `supabase start` / `supabase stop` | |
+| Command                        | What it does                                    | Notes                                                               |
+| ------------------------------ | ----------------------------------------------- | ------------------------------------------------------------------- |
+| `bun run dev`                  | `turbo dev` — dev servers for all packages      |                                                                     |
+| `bun run dev:web`              | `turbo dev --filter=@eskwelabs-advisor/web`     | Next.js on port 3000                                                |
+| `bun run build`                | `turbo build` — builds all packages             |                                                                     |
+| `bun run check`                | `turbo check` → `tsc --noEmit` per package      | Type-checking, NOT a build                                          |
+| `bun run lint`                 | `turbo lint` → ESLint 9 flat config             |                                                                     |
+| `bun run format:fix`           | Prettier at monorepo root                       | Single quotes, no trailing comma                                    |
+| `bun run test`                 | `turbo test`                                    | Test depends on `^build` in turbo pipeline                          |
+| `bun test`                     | Bun test runner (per-package)                   | Not Jest/Vitest                                                     |
+| `bun run db:generate`          | `drizzle-kit generate`                          | Root config, schema at `packages/server/src/db/drizzle-schema.ts`   |
+| `bun run db:migrate`           | `drizzle-kit migrate`                           | Migrations in `packages/server/drizzle/`                            |
+| `bun run db:start` / `db:stop` | `supabase start` / `supabase stop`              |                                                                     |
+| `bun run prepare`              | `husky` — installs Git hooks into `.git/hooks/` | Runs automatically on `bun install`; run manually after first clone |
 
 ## Project Map
 
 ### Top-level
+
 ```
 .
 ├── apps/web/          # Next.js 15 App Router frontend
@@ -42,6 +45,7 @@ Entry-point doc. For deep dives, see `agents/*`:
 │   ├── ui/            # Shared React components (button, card, cn)
 │   ├── apps-config/   # ESLint 9 flat config
 │   └── typescript-config/  # Shared tsconfigs (base.json, next.json)
+├── .husky/            # Git hooks (pre-commit: lint-staged, pre-push: check + test)
 ├── agents/            # Supplementary docs
 ├── scripts/           # Helper scripts
 ├── supabase/          # Supabase local config
@@ -51,30 +55,30 @@ Entry-point doc. For deep dives, see `agents/*`:
 
 ### Backend Domains (`packages/server/src/<domain>/`)
 
-| Domain | Files | Key DI Tokens |
-|---|---|---|
-| `admin` | controller, service, repository, serializer, schema (stub), access-policy, use-cases, dto, tests | AdminController, AdminService, AdminRepository |
-| `advisors` | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests | AdvisorController, AdvisorsService, AdvisorsRepository |
-| `conversations` | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests | ConversationController, ConversationsService, ConversationsRepository |
-| `messages` | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests | MessageController, MessagesService, MessagesRepository |
-| `model-config` | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests | ModelConfigController, ModelConfigService, ModelConfigRepository |
-| `prompt-cache` | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests | PromptCacheController, PromptCacheService, PromptCacheRepository |
+| Domain           | Files                                                                                                          | Key DI Tokens                                                         |
+| ---------------- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `admin`          | controller, service, repository, serializer, schema (stub), access-policy, use-cases, dto, tests               | AdminController, AdminService, AdminRepository                        |
+| `advisors`       | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                      | AdvisorController, AdvisorsService, AdvisorsRepository                |
+| `conversations`  | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                      | ConversationController, ConversationsService, ConversationsRepository |
+| `messages`       | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                      | MessageController, MessagesService, MessagesRepository                |
+| `model-config`   | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                      | ModelConfigController, ModelConfigService, ModelConfigRepository      |
+| `prompt-cache`   | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                      | PromptCacheController, PromptCacheService, PromptCacheRepository      |
 | `usage-counters` | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests (+ cost-cap.service) | UsageCounterController, UsageCountersService, UsageCountersRepository |
-| `telemetry` | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests | TelemetryController, TelemetryService, TelemetryRepository |
-| `users` | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests | UsersController, UsersService, UsersRepository |
+| `telemetry`      | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                      | TelemetryController, TelemetryService, TelemetryRepository            |
+| `users`          | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                      | UsersController, UsersService, UsersRepository                        |
 
 Cross-cutting: `auth/` (auth-request.ts, auth.service.ts), `cache/` (redis.service.ts), `rate-limit/` (rate-limit.service.ts), `config/` (env.ts), `adapters/` (advisor-adapters.ts), `db/` (drizzle.service.ts), `di/` (container.ts), `common/factories/` (controller.factory.ts, repository.factory.ts), `common/middleware/` (auth.middleware.ts, error.middleware.ts, rate-limit.middleware.ts, security.middleware.ts, validation.middleware.ts), `common/http/` (http-exception.ts), `common/utils/` (client-ip.ts, day-ph.ts, hono.ts)
 
 ### Frontend Domains (`apps/web/src/`)
 
-| Route Group | Pages | Features | Domain Libs |
-|---|---|---|---|
-| `(auth)/login` | login/page.tsx | LoginPanel | domains/auth/{api,session,queries}.ts |
-| `(auth)/consent` | consent/page.tsx | ConsentNotice | domains/auth/{api,session,queries}.ts |
-| `(app)/advisors` | advisors/page.tsx | AdvisorSelection | domains/advisors/{api,queries}.ts |
-| `(app)/chat` | chat/page.tsx | ChatShell | domains/chat/{api,queries}.ts |
-| `(app)/history` | history/page.tsx | ConversationHistory | domains/conversations/{api,queries}.ts |
-| `admin` | admin/page.tsx | AdminDashboard | domains/admin/{api,queries}.ts |
+| Route Group      | Pages             | Features            | Domain Libs                            |
+| ---------------- | ----------------- | ------------------- | -------------------------------------- |
+| `(auth)/login`   | login/page.tsx    | LoginPanel          | domains/auth/{api,session,queries}.ts  |
+| `(auth)/consent` | consent/page.tsx  | ConsentNotice       | domains/auth/{api,session,queries}.ts  |
+| `(app)/advisors` | advisors/page.tsx | AdvisorSelection    | domains/advisors/{api,queries}.ts      |
+| `(app)/chat`     | chat/page.tsx     | ChatShell           | domains/chat/{api,queries}.ts          |
+| `(app)/history`  | history/page.tsx  | ConversationHistory | domains/conversations/{api,queries}.ts |
+| `admin`          | admin/page.tsx    | AdminDashboard      | domains/admin/{api,queries}.ts         |
 
 ### Database Tables
 
@@ -104,12 +108,14 @@ Defined in `packages/server/src/config/env.ts` via zod schema. All declared in `
 - Adapters (`advisor-adapters.ts`) are deterministic stubs — no real LLM/Google Docs calls
 - Supabase clients (`client.ts`, `server.ts`) return `null` — stubs
 - All frontend components are placeholders
+- **Git hooks** (Husky v9 + lint-staged): `pre-commit` runs Prettier + ESLint on staged files; `pre-push` runs `turbo check` + `turbo test`. Skip with `--no-verify` in emergencies. `git add -p` partial-hunk staging will cause lint-staged to reformat the whole file — commit the full file in that case.
 
 ## Development Process
 
 > **PRD**: Business requirements in [PRD.md](agents/PRD.md). Implementation guide in [DEVELOPMENT-FLOW.md](agents/DEVELOPMENT-FLOW.md) (grain of salt).
 
 Before making any change, read [CHANGE_PROCESS.md](agents/CHANGE_PROCESS.md) and construct a plan that:
+
 1. Adheres to the backend/frontend architecture patterns
 2. Follows the PRD logic — all edge cases, business rules, FRs/NFRs
 3. Respects the DI wiring in `container.ts`

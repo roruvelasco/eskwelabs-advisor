@@ -1,0 +1,4 @@
+#!/bin/sh
+# pre-commit: format + lint staged files via lint-staged
+[ "$CI" = "true" ] && exit 0
+bun x lint-staged

@@ -1,0 +1,9 @@
+#!/bin/sh
+# pre-push: type-check and test all packages via Turborepo
+[ "$CI" = "true" ] && exit 0
+
+echo "⚙️  Running type-check across all packages..."
+bun run check
+
+echo "🧪 Running tests across all packages..."
+bun run test
