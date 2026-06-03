@@ -3,6 +3,7 @@
 All routes are registered at `packages/server/src/application.controller.ts` under `basePath('/api')`.
 
 Common response envelope for errors:
+
 ```json
 { "error": { "code": "string", "message": "string", "details": {} } }
 ```
@@ -13,10 +14,10 @@ Error codes: `forbidden` (403), `unauthorized` (401), `not_found` (404), `rate_l
 
 ## Health & Info
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| `GET` | `/api/` | None | Service info `{ status, name }` |
-| `GET` | `/api/healthz` | None | Health check `{ status: 'ok' }` |
+| Method | Path           | Auth | Description                     |
+| ------ | -------------- | ---- | ------------------------------- |
+| `GET`  | `/api/`        | None | Service info `{ status, name }` |
+| `GET`  | `/api/healthz` | None | Health check `{ status: 'ok' }` |
 
 ---
 
@@ -25,9 +26,9 @@ Error codes: `forbidden` (403), `unauthorized` (401), `not_found` (404), `rate_l
 **Controller**: `AdvisorController` (`packages/server/src/advisors/`)
 **Auth**: `requireAllowlistedEifOrAdmin`
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/advisors` | List all advisors |
+| Method | Path            | Description       |
+| ------ | --------------- | ----------------- |
+| `GET`  | `/api/advisors` | List all advisors |
 
 Response: `{ data: Advisor[] }`
 
@@ -38,10 +39,10 @@ Response: `{ data: Advisor[] }`
 **Controller**: `UsersController` (`packages/server/src/users/`)
 **Auth**: `requireAllowlistedEifOrAdmin` on `/api/consent`, `requireActor(['admin'])` on admin routes
 
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/api/consent` | Acknowledge consent for current actor |
-| `GET` | `/api/admin/users` | List all users (admin only) |
+| Method | Path               | Description                           |
+| ------ | ------------------ | ------------------------------------- |
+| `POST` | `/api/consent`     | Acknowledge consent for current actor |
+| `GET`  | `/api/admin/users` | List all users (admin only)           |
 
 ---
 
@@ -50,11 +51,11 @@ Response: `{ data: Advisor[] }`
 **Controller**: `ConversationController` (`packages/server/src/conversations/`)
 **Auth**: `requireAllowlistedEifOrAdmin`
 
-| Method | Path | Query / Body | Description |
-|---|---|---|---|
-| `GET` | `/api/conversations` | `?advisorId=string` | List conversations for current actor |
-| `POST` | `/api/conversations` | `{ advisorId: string, title?: string }` | Create conversation |
-| `GET` | `/api/conversations/:id` | — | Get conversation detail |
+| Method | Path                     | Query / Body                            | Description                          |
+| ------ | ------------------------ | --------------------------------------- | ------------------------------------ |
+| `GET`  | `/api/conversations`     | `?advisorId=string`                     | List conversations for current actor |
+| `POST` | `/api/conversations`     | `{ advisorId: string, title?: string }` | Create conversation                  |
+| `GET`  | `/api/conversations/:id` | —                                       | Get conversation detail              |
 
 Response (list): `{ data: Conversation[] }`
 Response (single): `{ data: Conversation }`
@@ -66,11 +67,11 @@ Response (single): `{ data: Conversation }`
 **Controller**: `MessageController` (`packages/server/src/messages/`)
 **Auth**: `requireAllowlistedEifOrAdmin`
 
-| Method | Path | Body | Description |
-|---|---|---|---|
-| `GET` | `/api/messages` | `?conversationId=uuid` | List messages in a conversation |
-| `POST` | `/api/chat-turn` | `{ conversationId: uuid, content: string }` | Send a turn, get response |
-| `POST` | `/api/chat-turn/stream` | `{ conversationId: uuid, content: string }` | SSE-streamed chat turn |
+| Method | Path                    | Body                                        | Description                     |
+| ------ | ----------------------- | ------------------------------------------- | ------------------------------- |
+| `GET`  | `/api/messages`         | `?conversationId=uuid`                      | List messages in a conversation |
+| `POST` | `/api/chat-turn`        | `{ conversationId: uuid, content: string }` | Send a turn, get response       |
+| `POST` | `/api/chat-turn/stream` | `{ conversationId: uuid, content: string }` | SSE-streamed chat turn          |
 
 ### Stream Events (`POST /api/chat-turn/stream`)
 
@@ -85,10 +86,10 @@ Response (single): `{ data: Conversation }`
 **Controller**: `ModelConfigController` (`packages/server/src/model-config/`)
 **Auth**: `requireActor(['admin'])`
 
-| Method | Path | Body | Description |
-|---|---|---|---|
-| `GET` | `/api/admin/model-config` | — | List all model configs |
-| `PUT` | `/api/admin/model-config/:advisorId` | `{ provider: string, model: string }` | Update model config for advisor |
+| Method | Path                                 | Body                                  | Description                     |
+| ------ | ------------------------------------ | ------------------------------------- | ------------------------------- |
+| `GET`  | `/api/admin/model-config`            | —                                     | List all model configs          |
+| `PUT`  | `/api/admin/model-config/:advisorId` | `{ provider: string, model: string }` | Update model config for advisor |
 
 ---
 
@@ -97,10 +98,10 @@ Response (single): `{ data: Conversation }`
 **Controller**: `PromptCacheController` (`packages/server/src/prompt-cache/`)
 **Auth**: `requireActor(['admin'])`
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/admin/prompt-cache` | List prompt cache entries |
-| `POST` | `/api/admin/prompt-cache/refresh` | Refresh prompt cache |
+| Method | Path                              | Description               |
+| ------ | --------------------------------- | ------------------------- |
+| `GET`  | `/api/admin/prompt-cache`         | List prompt cache entries |
+| `POST` | `/api/admin/prompt-cache/refresh` | Refresh prompt cache      |
 
 ---
 
@@ -109,10 +110,10 @@ Response (single): `{ data: Conversation }`
 **Controller**: `UsageCounterController` (`packages/server/src/usage-counters/`)
 **Auth**: `requireActor(['admin'])`
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/admin/usage-counters` | List usage counters |
-| `GET` | `/api/admin/usage-users` | List usage by user |
+| Method | Path                        | Description         |
+| ------ | --------------------------- | ------------------- |
+| `GET`  | `/api/admin/usage-counters` | List usage counters |
+| `GET`  | `/api/admin/usage-users`    | List usage by user  |
 
 ---
 
@@ -121,9 +122,9 @@ Response (single): `{ data: Conversation }`
 **Controller**: `TelemetryController` (`packages/server/src/telemetry/`)
 **Auth**: `requireActor(['admin'])`
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/admin/telemetry` | List telemetry events |
+| Method | Path                   | Description           |
+| ------ | ---------------------- | --------------------- |
+| `GET`  | `/api/admin/telemetry` | List telemetry events |
 
 ---
 
@@ -132,9 +133,9 @@ Response (single): `{ data: Conversation }`
 **Controller**: `AdminController` (`packages/server/src/admin/`)
 **Auth**: `requireActor(['admin'])`
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/admin` | Admin dashboard overview |
+| Method | Path         | Description              |
+| ------ | ------------ | ------------------------ |
+| `GET`  | `/api/admin` | Admin dashboard overview |
 
 ---
 
@@ -150,12 +151,16 @@ export const apiClient = hc<ApiRoutes>('/').api;
 ```
 
 Domain API functions use the typed client:
+
 ```ts
 export function listAdvisors() {
-  return apiClient.advisors.$get().then(r => r.json());
+  return apiClient.advisors.$get().then((r) => r.json());
 }
-export function createConversation(input: { advisorId: string; title?: string }) {
-  return apiClient.conversations.$post({ json: input }).then(r => r.json());
+export function createConversation(input: {
+  advisorId: string;
+  title?: string;
+}) {
+  return apiClient.conversations.$post({ json: input }).then((r) => r.json());
 }
 ```
 

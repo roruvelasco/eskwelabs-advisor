@@ -9,6 +9,14 @@ Entry-point doc. For deep dives, see `agents/*`:
 - [PRD.md](agents/PRD.md) — business requirements, FRs, NFRs, edge cases, acceptance criteria
 - [DEVELOPMENT-FLOW.md](agents/DEVELOPMENT-FLOW.md) — phased implementation guide (grain-of-salt reference)
 
+## Agent Workflow
+
+When asked to build a new feature, fix a bug, or make any code change:
+
+1. Read the relevant section in [PRD.md](agents/PRD.md) for business rules and edge cases
+2. Read [CHANGE_PROCESS.md](agents/CHANGE_PROCESS.md) and construct a plan adhering to architecture patterns, DI wiring, and access control
+3. Propose the plan before writing any code
+
 ## Quick Reference
 
 - **Monorepo**: Turborepo + Bun workspaces, single `bun.lock`

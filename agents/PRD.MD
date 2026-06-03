@@ -26,15 +26,15 @@ Eskwelabs runs EIF (intern) mentoring on third-party Custom GPTs and Google Gems
 
 ### 1.3) Success Metrics / KPIs
 
-| KPI | Target (MVP) |
-|---|---|
-| Allow-listed EIFs able to authenticate and chat | ≥ 95% |
-| Completed turns persisted without loss | ≥ 99% |
-| Past conversations resumable | 100% of stored conversations reopen with full history |
-| Prompt/DNA update propagation (Doc edit → live) | ≤ cache TTL (5 min), zero redeploy |
-| Over-limit requests hard-blocked | 100% |
-| Client-side system-prompt / DNA exposures | 0 (verified via network inspection) |
-| Pilot uptime | ≥ 99% |
+| KPI                                             | Target (MVP)                                          |
+| ----------------------------------------------- | ----------------------------------------------------- |
+| Allow-listed EIFs able to authenticate and chat | ≥ 95%                                                 |
+| Completed turns persisted without loss          | ≥ 99%                                                 |
+| Past conversations resumable                    | 100% of stored conversations reopen with full history |
+| Prompt/DNA update propagation (Doc edit → live) | ≤ cache TTL (5 min), zero redeploy                    |
+| Over-limit requests hard-blocked                | 100%                                                  |
+| Client-side system-prompt / DNA exposures       | 0 (verified via network inspection)                   |
+| Pilot uptime                                    | ≥ 99%                                                 |
 
 ### 1.4) Non-Goals / Out of Scope
 
@@ -76,38 +76,38 @@ Eskwelabs runs EIF (intern) mentoring on third-party Custom GPTs and Google Gems
 
 ### 2.4) Functional Requirements (FRs)
 
-| ID | User Story | Description | Priority | Acceptance Criteria | Dependencies |
-|---|---|---|---|---|---|
-| FR-01 | As an EIF, I want to log in with my Google account so that only authorized interns can use the platform. | Google OAuth2 login restricted to a static allow-list stored in Supabase. | Must | Given a non-allow-listed account, When it attempts login, Then access is denied with a clear message; Given an allow-listed account, When it logs in, Then it reaches advisor selection. | Google OAuth2, allow-list table |
-| FR-02 | As an EIF, I want to choose an advisor and hold a multi-turn chat so that I get role-specific mentoring. | Advisor picker + streamed multi-turn chat for 3 advisors. | Must | Given a logged-in EIF, When they select an advisor and send messages, Then they receive coherent multi-turn replies scoped to that advisor. | FR-01, FR-03 |
-| FR-03 | As an admin, I want system prompts + DNA injected server-side so that EIFs never see them. | Server injects DNA digest + advisor's Doc-sourced prompt into every LLM call; neither reaches the client. | Must | Given any chat turn, When the response/headers/errors are inspected client-side, Then no system prompt or DNA text is present. | FR-04, FR-14 |
-| FR-04 | As an admin, I want prompts fetched live from a Google Doc so that I can update them without redeployment. | One Doc per advisor fetched via Docs API (service account), cached with 5-min TTL. | Must | Given an admin edits an advisor's Doc, When the TTL elapses (or cache is refreshed), Then new behavior is live with no redeploy. | Docs API, service account, cache |
-| FR-05 | As an admin, I want every turn persisted so that I can analyze interactions. | Append each turn + metadata to Supabase (messages). | Must | Given a completed/blocked/errored turn, When it finishes, Then a row with required fields is written to Supabase. | Supabase |
-| FR-06 | As an admin, I want hard caps on usage and spend so that costs stay controlled. | Per-user message/token caps + daily/monthly budget ceilings, enforced server-side. Daily reset = calendar day, PH time (Asia/Manila). | Must | Given a user/global limit is reached, When a new request is made, Then it is hard-blocked, no provider call occurs, and the block is logged. | Cost guard, limits config |
-| FR-07 | As an admin, I want rate limiting so that bursts cannot overwhelm cost or providers. | Per-user and global request rate limits. | Must | Given a user exceeds the rate limit, When they send another request, Then it is hard-blocked with retry guidance and logged. | Cost guard |
-| FR-08 | As an admin, I want to configure the model per advisor so that I control which model each advisor uses. | Admin sets provider/model per advisor; applied at call time. | Must | Given an admin changes an advisor's model, When an EIF next chats with that advisor, Then the new model is used and recorded. | Provider adapters, model config |
-| FR-09 | As an admin, I want to view usage and estimated cost (admin-only) so that I can monitor spend. | Per-user and aggregate usage/cost views from Supabase; not visible to EIFs. | Must | Given logged turns exist, When the admin opens the usage view, Then per-user and aggregate tokens and estimated cost are shown; EIFs have no access. | FR-05 |
-| FR-10 | As an EIF, I want streamed responses so that replies feel fast. | Token-by-token streaming to the UI. | Should | Given a chat turn, When the model responds, Then tokens render incrementally with first token ≤ ~3s under normal latency. | Provider streaming |
-| FR-11 | As an EIF, I want to be told my chats are logged so that monitoring is transparent. | First-run consent/notice + persistent footer note. | Must | Given a first login, When the app loads, Then a logging/monitoring notice is shown and acknowledged. | — |
-| FR-12 | As an EIF, I want graceful errors so that failures are understandable. | Handle provider/Doc/Supabase failures with clear UI states. | Must | Given a provider/Doc/Supabase failure, When it occurs, Then the user sees a clear error state and the event is logged. | FR-04, FR-05 |
-| FR-13 | As an admin, I want a manual cache refresh so that I can push prompt/DNA edits immediately. | Admin action to invalidate the prompt + DNA cache before TTL. | Should | Given an admin triggers refresh, When the next turn runs, Then the latest Doc/DNA content is used. | FR-04, FR-14 |
-| FR-14 | As an admin, I want a shared Eskwelabs DNA grounding so that all advisors stay on-brand. | DNA Doc (~30 pp) summarized into a compact digest, cached (5-min TTL), prepended to every advisor's system prompt. | Must | Given the DNA Doc is updated, When the cache refreshes, Then the regenerated digest grounds all advisor replies; DNA text never reaches the client. | Docs API, summarizer, cache |
-| FR-15 | As an EIF, I want to see and resume my past conversations so that I can continue work across sessions. | Conversation list (per user) + reopen with full message history restored into context. | Must | Given a returning EIF, When they open history and select a conversation, Then prior messages render and new turns continue with that context. | Supabase, RLS, FR-02 |
+| ID    | User Story                                                                                                 | Description                                                                                                                           | Priority | Acceptance Criteria                                                                                                                                                                      | Dependencies                     |
+| ----- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| FR-01 | As an EIF, I want to log in with my Google account so that only authorized interns can use the platform.   | Google OAuth2 login restricted to a static allow-list stored in Supabase.                                                             | Must     | Given a non-allow-listed account, When it attempts login, Then access is denied with a clear message; Given an allow-listed account, When it logs in, Then it reaches advisor selection. | Google OAuth2, allow-list table  |
+| FR-02 | As an EIF, I want to choose an advisor and hold a multi-turn chat so that I get role-specific mentoring.   | Advisor picker + streamed multi-turn chat for 3 advisors.                                                                             | Must     | Given a logged-in EIF, When they select an advisor and send messages, Then they receive coherent multi-turn replies scoped to that advisor.                                              | FR-01, FR-03                     |
+| FR-03 | As an admin, I want system prompts + DNA injected server-side so that EIFs never see them.                 | Server injects DNA digest + advisor's Doc-sourced prompt into every LLM call; neither reaches the client.                             | Must     | Given any chat turn, When the response/headers/errors are inspected client-side, Then no system prompt or DNA text is present.                                                           | FR-04, FR-14                     |
+| FR-04 | As an admin, I want prompts fetched live from a Google Doc so that I can update them without redeployment. | One Doc per advisor fetched via Docs API (service account), cached with 5-min TTL.                                                    | Must     | Given an admin edits an advisor's Doc, When the TTL elapses (or cache is refreshed), Then new behavior is live with no redeploy.                                                         | Docs API, service account, cache |
+| FR-05 | As an admin, I want every turn persisted so that I can analyze interactions.                               | Append each turn + metadata to Supabase (messages).                                                                                   | Must     | Given a completed/blocked/errored turn, When it finishes, Then a row with required fields is written to Supabase.                                                                        | Supabase                         |
+| FR-06 | As an admin, I want hard caps on usage and spend so that costs stay controlled.                            | Per-user message/token caps + daily/monthly budget ceilings, enforced server-side. Daily reset = calendar day, PH time (Asia/Manila). | Must     | Given a user/global limit is reached, When a new request is made, Then it is hard-blocked, no provider call occurs, and the block is logged.                                             | Cost guard, limits config        |
+| FR-07 | As an admin, I want rate limiting so that bursts cannot overwhelm cost or providers.                       | Per-user and global request rate limits.                                                                                              | Must     | Given a user exceeds the rate limit, When they send another request, Then it is hard-blocked with retry guidance and logged.                                                             | Cost guard                       |
+| FR-08 | As an admin, I want to configure the model per advisor so that I control which model each advisor uses.    | Admin sets provider/model per advisor; applied at call time.                                                                          | Must     | Given an admin changes an advisor's model, When an EIF next chats with that advisor, Then the new model is used and recorded.                                                            | Provider adapters, model config  |
+| FR-09 | As an admin, I want to view usage and estimated cost (admin-only) so that I can monitor spend.             | Per-user and aggregate usage/cost views from Supabase; not visible to EIFs.                                                           | Must     | Given logged turns exist, When the admin opens the usage view, Then per-user and aggregate tokens and estimated cost are shown; EIFs have no access.                                     | FR-05                            |
+| FR-10 | As an EIF, I want streamed responses so that replies feel fast.                                            | Token-by-token streaming to the UI.                                                                                                   | Should   | Given a chat turn, When the model responds, Then tokens render incrementally with first token ≤ ~3s under normal latency.                                                                | Provider streaming               |
+| FR-11 | As an EIF, I want to be told my chats are logged so that monitoring is transparent.                        | First-run consent/notice + persistent footer note.                                                                                    | Must     | Given a first login, When the app loads, Then a logging/monitoring notice is shown and acknowledged.                                                                                     | —                                |
+| FR-12 | As an EIF, I want graceful errors so that failures are understandable.                                     | Handle provider/Doc/Supabase failures with clear UI states.                                                                           | Must     | Given a provider/Doc/Supabase failure, When it occurs, Then the user sees a clear error state and the event is logged.                                                                   | FR-04, FR-05                     |
+| FR-13 | As an admin, I want a manual cache refresh so that I can push prompt/DNA edits immediately.                | Admin action to invalidate the prompt + DNA cache before TTL.                                                                         | Should   | Given an admin triggers refresh, When the next turn runs, Then the latest Doc/DNA content is used.                                                                                       | FR-04, FR-14                     |
+| FR-14 | As an admin, I want a shared Eskwelabs DNA grounding so that all advisors stay on-brand.                   | DNA Doc (~30 pp) summarized into a compact digest, cached (5-min TTL), prepended to every advisor's system prompt.                    | Must     | Given the DNA Doc is updated, When the cache refreshes, Then the regenerated digest grounds all advisor replies; DNA text never reaches the client.                                      | Docs API, summarizer, cache      |
+| FR-15 | As an EIF, I want to see and resume my past conversations so that I can continue work across sessions.     | Conversation list (per user) + reopen with full message history restored into context.                                                | Must     | Given a returning EIF, When they open history and select a conversation, Then prior messages render and new turns continue with that context.                                            | Supabase, RLS, FR-02             |
 
 ### 2.5) Non-Functional Requirements (NFRs)
 
-| Category | Requirement | Target / Threshold | How Measured | Notes |
-|---|---|---|---|---|
-| Latency | p95 first-token time | ≤ ~3 s under normal provider latency | Server timing logs | Streaming masks total generation time |
-| Cost | Avg cost per call | Within configured per-user/global ceilings | Token counts × model rate table | DNA digest adds fixed per-turn tokens — keep digest tight |
-| Reliability/Availability | Uptime during pilot | ≥ 99% | Vercel/Supabase monitoring | Stateless serverless + managed Postgres |
-| Security & Privacy | Keys, prompt & DNA secrecy; per-user data isolation | 0 client exposures; EIFs read only their own conversations | Network inspection, code review, Supabase RLS tests | Secrets in env vars only |
-| Safety/Policy | Logging consent shown | 100% of users see notice | First-run flow check | Transparency requirement |
-| Observability | Required logs present | All events in §8 captured | Supabase query | Structured server logs |
-| Maintainability | Prompt/versioning | Prompts + DNA in Docs; Doc revision logged per turn | Repo + log review | No redeploy for prompt/DNA edits |
-| Scalability | Concurrent EIFs | ~100 with bursty concurrency | Load check | Postgres handles history/log volume comfortably |
-| Accessibility & i18n | A11y level | Reasonable WCAG-aware web defaults (full A11y post-MVP) | Manual check | English only at MVP |
-| Explainability/Auditability | Audit trail | Each turn ties to Doc revision + DNA digest version + model + tokens | Supabase review | No source citations at MVP (no vector RAG) |
+| Category                    | Requirement                                         | Target / Threshold                                                   | How Measured                                        | Notes                                                     |
+| --------------------------- | --------------------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------- | --------------------------------------------------------- |
+| Latency                     | p95 first-token time                                | ≤ ~3 s under normal provider latency                                 | Server timing logs                                  | Streaming masks total generation time                     |
+| Cost                        | Avg cost per call                                   | Within configured per-user/global ceilings                           | Token counts × model rate table                     | DNA digest adds fixed per-turn tokens — keep digest tight |
+| Reliability/Availability    | Uptime during pilot                                 | ≥ 99%                                                                | Vercel/Supabase monitoring                          | Stateless serverless + managed Postgres                   |
+| Security & Privacy          | Keys, prompt & DNA secrecy; per-user data isolation | 0 client exposures; EIFs read only their own conversations           | Network inspection, code review, Supabase RLS tests | Secrets in env vars only                                  |
+| Safety/Policy               | Logging consent shown                               | 100% of users see notice                                             | First-run flow check                                | Transparency requirement                                  |
+| Observability               | Required logs present                               | All events in §8 captured                                            | Supabase query                                      | Structured server logs                                    |
+| Maintainability             | Prompt/versioning                                   | Prompts + DNA in Docs; Doc revision logged per turn                  | Repo + log review                                   | No redeploy for prompt/DNA edits                          |
+| Scalability                 | Concurrent EIFs                                     | ~100 with bursty concurrency                                         | Load check                                          | Postgres handles history/log volume comfortably           |
+| Accessibility & i18n        | A11y level                                          | Reasonable WCAG-aware web defaults (full A11y post-MVP)              | Manual check                                        | English only at MVP                                       |
+| Explainability/Auditability | Audit trail                                         | Each turn ties to Doc revision + DNA digest version + model + tokens | Supabase review                                     | No source citations at MVP (no vector RAG)                |
 
 ---
 
@@ -143,12 +143,12 @@ The digest is held server-side only and prepended to the system message ahead of
 
 ### 4.1) Prompt Registry
 
-| Prompt | URL | Purpose | Owner | Version | Parameters |
-|---|---|---|---|---|---|
-| Eskwelabs DNA (shared) | `{{dna_doc_url}}` | Brand/voice/lexicon grounding prepended to all advisors (as summarized digest) | Admin | Doc revision + digest version | Applies to every advisor |
-| Data Dashboard Advisor | `{{prompt_1_url}}` | Looker Studio/UX mentoring; advisory only — guides apprentice to build a decision-ready dashboard | Admin | Doc revision | Model: admin-set per advisor; temp: default/Doc hint |
-| SSOT Memo Advisor | `{{prompt_2_url}}` | KM/strategy mentoring; templates & interview guides toward an SSOT memo; advisory only | Admin | Doc revision | Model: admin-set per advisor; temp: default/Doc hint |
-| Advisor 3 (TBD) | `{{prompt_3_url}}` | Open question — purpose & opening prompt not yet provided | Admin | Doc revision | Model: admin-set per advisor |
+| Prompt                 | URL                | Purpose                                                                                           | Owner | Version                       | Parameters                                           |
+| ---------------------- | ------------------ | ------------------------------------------------------------------------------------------------- | ----- | ----------------------------- | ---------------------------------------------------- |
+| Eskwelabs DNA (shared) | `{{dna_doc_url}}`  | Brand/voice/lexicon grounding prepended to all advisors (as summarized digest)                    | Admin | Doc revision + digest version | Applies to every advisor                             |
+| Data Dashboard Advisor | `{{prompt_1_url}}` | Looker Studio/UX mentoring; advisory only — guides apprentice to build a decision-ready dashboard | Admin | Doc revision                  | Model: admin-set per advisor; temp: default/Doc hint |
+| SSOT Memo Advisor      | `{{prompt_2_url}}` | KM/strategy mentoring; templates & interview guides toward an SSOT memo; advisory only            | Admin | Doc revision                  | Model: admin-set per advisor; temp: default/Doc hint |
+| Advisor 3 (TBD)        | `{{prompt_3_url}}` | Open question — purpose & opening prompt not yet provided                                         | Admin | Doc revision                  | Model: admin-set per advisor                         |
 
 #### Prompt/DNA Loading Rules
 
@@ -186,17 +186,17 @@ flowchart TD
 
 ### 5.2) Responsibilities (RACI)
 
-| Step | Owner | Backup | Notes |
-|---|---|---|---|
-| Author/edit advisor prompts + DNA (Docs) | Admin | Eng | Source of truth; no in-app editor |
-| Configure model per advisor | Admin | Eng | Applied at call time |
-| Authenticate & chat | EIF | — | Static allow-list enforced |
-| Read prompts + DNA from Docs | Service account | Eng | Read-only; TTL cache + last-good fallback |
-| Summarize DNA into digest | Eng (system) | Admin | Regenerated on refresh/TTL |
-| Persist conversations & logs | Eng (system) → Supabase | Eng | RLS isolates per-user history |
-| Resume past conversations | EIF | Eng | Reads own conversations only |
-| Enforce cost caps & rate limits | Eng (system) | Admin | Hard block; PH calendar-day reset |
-| Monitor usage/cost | Admin | Eng | Admin-only |
+| Step                                     | Owner                   | Backup | Notes                                     |
+| ---------------------------------------- | ----------------------- | ------ | ----------------------------------------- |
+| Author/edit advisor prompts + DNA (Docs) | Admin                   | Eng    | Source of truth; no in-app editor         |
+| Configure model per advisor              | Admin                   | Eng    | Applied at call time                      |
+| Authenticate & chat                      | EIF                     | —      | Static allow-list enforced                |
+| Read prompts + DNA from Docs             | Service account         | Eng    | Read-only; TTL cache + last-good fallback |
+| Summarize DNA into digest                | Eng (system)            | Admin  | Regenerated on refresh/TTL                |
+| Persist conversations & logs             | Eng (system) → Supabase | Eng    | RLS isolates per-user history             |
+| Resume past conversations                | EIF                     | Eng    | Reads own conversations only              |
+| Enforce cost caps & rate limits          | Eng (system)            | Admin  | Hard block; PH calendar-day reset         |
+| Monitor usage/cost                       | Admin                   | Eng    | Admin-only                                |
 
 ---
 
@@ -233,17 +233,17 @@ flowchart TD
 
 ### 6.3) Negative & Edge Cases
 
-| Case | Expected behavior |
-|---|---|
-| Non-allow-listed Google account | Blocked at login with a clear message. |
-| Daily/monthly budget exceeded | Hard block; message states cap + reset window (PH calendar day); logged as blocked. |
-| Rate limit exceeded | Hard block with retry-after guidance; logged. |
-| Google Doc (prompt or DNA) unreachable, no cache | User-facing error; no LLM call; error logged. |
-| Provider API error/timeout | Graceful error state; partial stream handled; logged as error. |
-| Supabase write fails | Retry; never silently drop; surface/log failure. |
-| EIF tries to open another user's conversation | Blocked by RLS; not returned. |
-| EIF asks for the system prompt or DNA | Advisor declines; server never returns prompt/DNA. |
-| EIF asks advisor to produce the final deliverable | Advisor stays advisory and redirects (per prompt design). |
+| Case                                              | Expected behavior                                                                   |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Non-allow-listed Google account                   | Blocked at login with a clear message.                                              |
+| Daily/monthly budget exceeded                     | Hard block; message states cap + reset window (PH calendar day); logged as blocked. |
+| Rate limit exceeded                               | Hard block with retry-after guidance; logged.                                       |
+| Google Doc (prompt or DNA) unreachable, no cache  | User-facing error; no LLM call; error logged.                                       |
+| Provider API error/timeout                        | Graceful error state; partial stream handled; logged as error.                      |
+| Supabase write fails                              | Retry; never silently drop; surface/log failure.                                    |
+| EIF tries to open another user's conversation     | Blocked by RLS; not returned.                                                       |
+| EIF asks for the system prompt or DNA             | Advisor declines; server never returns prompt/DNA.                                  |
+| EIF asks advisor to produce the final deliverable | Advisor stays advisory and redirects (per prompt design).                           |
 
 ---
 
@@ -251,15 +251,15 @@ flowchart TD
 
 ### 7.1) Evaluation Rubric
 
-| Criterion | 1 — Poor | 3 — Acceptable | 5 — Excellent | Weight |
-|---|---|---|---|---|
-| Task success / relevance | Off-role or unhelpful replies | Mostly on-role, usable guidance | Consistently on-role, decision-ready mentoring | 0.20 |
-| Brand/voice fidelity (DNA) | Ignores Eskwelabs voice/lexicon | Generally on-brand | Reliably on-brand voice, lexicon, formatting | 0.15 |
-| Factual accuracy / grounding | Frequent errors | Generally accurate | Accurate, well-reasoned guidance | 0.10 |
-| Policy & safety compliance | Leaks prompt/DNA or ignores caps | Mostly compliant | Prompt/DNA secrecy + caps fully enforced | 0.20 |
-| Instruction & format adherence | Ignores advisory-only role | Usually advisory | Always advisory; never produces final deliverable | 0.15 |
-| Clarity & tone | Confusing | Clear enough | Clear, mentoring, well-structured | 0.05 |
-| Robustness | Crashes on errors/edge cases | Handles common failures | Graceful across all edge cases in §6.3 (incl. RLS isolation) | 0.15 |
+| Criterion                      | 1 — Poor                         | 3 — Acceptable                  | 5 — Excellent                                                | Weight |
+| ------------------------------ | -------------------------------- | ------------------------------- | ------------------------------------------------------------ | ------ |
+| Task success / relevance       | Off-role or unhelpful replies    | Mostly on-role, usable guidance | Consistently on-role, decision-ready mentoring               | 0.20   |
+| Brand/voice fidelity (DNA)     | Ignores Eskwelabs voice/lexicon  | Generally on-brand              | Reliably on-brand voice, lexicon, formatting                 | 0.15   |
+| Factual accuracy / grounding   | Frequent errors                  | Generally accurate              | Accurate, well-reasoned guidance                             | 0.10   |
+| Policy & safety compliance     | Leaks prompt/DNA or ignores caps | Mostly compliant                | Prompt/DNA secrecy + caps fully enforced                     | 0.20   |
+| Instruction & format adherence | Ignores advisory-only role       | Usually advisory                | Always advisory; never produces final deliverable            | 0.15   |
+| Clarity & tone                 | Confusing                        | Clear enough                    | Clear, mentoring, well-structured                            | 0.05   |
+| Robustness                     | Crashes on errors/edge cases     | Handles common failures         | Graceful across all edge cases in §6.3 (incl. RLS isolation) | 0.15   |
 
 ### 7.2) Pass Criteria
 
@@ -284,64 +284,64 @@ flowchart TD
 
 #### `users` — allow-list + identity
 
-| Column | Type | Description |
-|---|---|---|
-| `id` | uuid (pk) | User id |
-| `email` | text (unique) | Plaintext email (allow-list key) |
-| `role` | text | eif / admin |
-| `is_active` | bool | Allow-list toggle |
-| `created_at` | timestamptz | — |
+| Column       | Type          | Description                      |
+| ------------ | ------------- | -------------------------------- |
+| `id`         | uuid (pk)     | User id                          |
+| `email`      | text (unique) | Plaintext email (allow-list key) |
+| `role`       | text          | eif / admin                      |
+| `is_active`  | bool          | Allow-list toggle                |
+| `created_at` | timestamptz   | —                                |
 
 #### `conversations` — one row per thread
 
-| Column | Type | Description |
-|---|---|---|
-| `id` | uuid (pk) | Conversation id |
-| `user_id` | uuid (fk → users) | Owner (RLS scope) |
-| `advisor_id` | text | data-dashboard / ssot-memo / advisor-3 |
-| `title` | text | Auto/first-message derived |
-| `created_at` / `updated_at` | timestamptz | For history ordering / resume |
+| Column                      | Type              | Description                            |
+| --------------------------- | ----------------- | -------------------------------------- |
+| `id`                        | uuid (pk)         | Conversation id                        |
+| `user_id`                   | uuid (fk → users) | Owner (RLS scope)                      |
+| `advisor_id`                | text              | data-dashboard / ssot-memo / advisor-3 |
+| `title`                     | text              | Auto/first-message derived             |
+| `created_at` / `updated_at` | timestamptz       | For history ordering / resume          |
 
 #### `messages` — one row per turn (chat history + analytics)
 
-| Column | Type | Description |
-|---|---|---|
-| `id` | uuid (pk) | Turn id |
-| `conversation_id` | uuid (fk → conversations) | Thread |
-| `user_id` | uuid (fk → users) | Owner (RLS scope) |
-| `role` | text | user / assistant |
-| `content` | text | Message text (no system prompt / DNA) |
-| `provider` | text | openai / google / anthropic |
-| `model` | text | Model id used |
-| `prompt_tokens` | int | Input tokens |
-| `completion_tokens` | int | Output tokens |
-| `est_cost_usd` | numeric | token counts × model rate |
-| `latency_ms` | int | Provider round-trip |
-| `status` | text | ok / blocked / error |
-| `block_reason` | text | cap / budget / rate (if blocked) |
-| `prompt_doc_revision` | text | Doc revision used (not the text) |
-| `dna_digest_version` | text | Digest hash/version used |
-| `created_at` | timestamptz | — |
+| Column                | Type                      | Description                           |
+| --------------------- | ------------------------- | ------------------------------------- |
+| `id`                  | uuid (pk)                 | Turn id                               |
+| `conversation_id`     | uuid (fk → conversations) | Thread                                |
+| `user_id`             | uuid (fk → users)         | Owner (RLS scope)                     |
+| `role`                | text                      | user / assistant                      |
+| `content`             | text                      | Message text (no system prompt / DNA) |
+| `provider`            | text                      | openai / google / anthropic           |
+| `model`               | text                      | Model id used                         |
+| `prompt_tokens`       | int                       | Input tokens                          |
+| `completion_tokens`   | int                       | Output tokens                         |
+| `est_cost_usd`        | numeric                   | token counts × model rate             |
+| `latency_ms`          | int                       | Provider round-trip                   |
+| `status`              | text                      | ok / blocked / error                  |
+| `block_reason`        | text                      | cap / budget / rate (if blocked)      |
+| `prompt_doc_revision` | text                      | Doc revision used (not the text)      |
+| `dna_digest_version`  | text                      | Digest hash/version used              |
+| `created_at`          | timestamptz               | —                                     |
 
 #### `usage_counters` — fast cap enforcement
 
-| Column | Type | Description |
-|---|---|---|
-| `user_id` | uuid (fk → users) | — |
-| `day_ph` | date | Calendar day, Asia/Manila |
-| `messages_today` | int | Per-user daily count |
-| `tokens_today` | int | Per-user daily tokens |
-| `est_spend_today_usd` | numeric | Per-user daily spend |
+| Column                | Type              | Description               |
+| --------------------- | ----------------- | ------------------------- |
+| `user_id`             | uuid (fk → users) | —                         |
+| `day_ph`              | date              | Calendar day, Asia/Manila |
+| `messages_today`      | int               | Per-user daily count      |
+| `tokens_today`        | int               | Per-user daily tokens     |
+| `est_spend_today_usd` | numeric           | Per-user daily spend      |
 
 #### `model_config` — admin model selection per advisor
 
-| Column | Type | Description |
-|---|---|---|
-| `advisor_id` | text (pk) | Advisor |
-| `provider` | text | Active provider |
-| `model` | text | Active model |
-| `updated_by` | text | Admin email |
-| `updated_at` | timestamptz | — |
+| Column       | Type        | Description     |
+| ------------ | ----------- | --------------- |
+| `advisor_id` | text (pk)   | Advisor         |
+| `provider`   | text        | Active provider |
+| `model`      | text        | Active model    |
+| `updated_by` | text        | Admin email     |
+| `updated_at` | timestamptz | —               |
 
 **RLS:** EIFs may select only rows where `user_id = auth.uid()` in conversations / messages. Admin role bypasses for usage/cost views.
 
@@ -358,32 +358,32 @@ flowchart TD
 
 ### 9.1) Open Questions
 
-| Question | Status |
-|---|---|
-| What is the 3rd advisor (purpose, opening prompt, Doc)? Only two are specified. | **OPEN** |
-| Allow-list source | Resolved: static list stored in Supabase (users table) |
-| Cap/budget reset semantics | Resolved: calendar day, PH time (Asia/Manila) |
-| Prompt cache TTL | Resolved: 5 minutes (applies to prompts and DNA digest) |
-| Retention policy for conversation history + logs after the pilot | **OPEN** |
-| EIF self-usage visibility | Resolved: admin-only; EIFs do not see usage/cost |
-| Model granularity | Resolved: per-advisor model selection |
-| Email hashing | Resolved: plaintext email acceptable; no hashing at MVP |
-| Exact cap/budget values (max_messages_per_user_per_day, token caps, daily/monthly USD ceilings, rate-limit/min) | **OPEN** |
+| Question                                                                                                        | Status                                                  |
+| --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| What is the 3rd advisor (purpose, opening prompt, Doc)? Only two are specified.                                 | **OPEN**                                                |
+| Allow-list source                                                                                               | Resolved: static list stored in Supabase (users table)  |
+| Cap/budget reset semantics                                                                                      | Resolved: calendar day, PH time (Asia/Manila)           |
+| Prompt cache TTL                                                                                                | Resolved: 5 minutes (applies to prompts and DNA digest) |
+| Retention policy for conversation history + logs after the pilot                                                | **OPEN**                                                |
+| EIF self-usage visibility                                                                                       | Resolved: admin-only; EIFs do not see usage/cost        |
+| Model granularity                                                                                               | Resolved: per-advisor model selection                   |
+| Email hashing                                                                                                   | Resolved: plaintext email acceptable; no hashing at MVP |
+| Exact cap/budget values (max_messages_per_user_per_day, token caps, daily/monthly USD ceilings, rate-limit/min) | **OPEN**                                                |
 
 ### 9.2) Risks & Mitigations
 
-| Risk | Impact | Mitigation |
-|---|---|---|
-| DNA digest drift / lossy summary | Off-brand or missing guardrails | Keep digest tight but include lexicon/formatting rules verbatim; version + log digest; allow admin review |
-| Per-turn token cost from DNA digest | Higher cost on every call | Cap digest size; monitor avg tokens/call; tune length |
-| Prompt/DNA leakage to client | Loss of IP/control | Server-only assembly; adversarial test; never in responses/errors |
-| Cross-user history exposure | Privacy breach | Supabase RLS on conversations/messages; test isolation explicitly |
-| Provider cost overrun | Budget blown | Server-side hard caps + budget ceilings + rate limits; pre-call estimation; global kill via ceiling |
-| Doc fetch failure / quota | Advisors unusable | TTL cache + last-good fallback + manual refresh; clear error if no cache |
-| Serverless timeouts on long generations | Truncated replies | Stream responses; cap max output tokens |
-| 2-week timeline | Scope slip | Lock MVP to Must FRs; Supabase + Vercel reduce infra work; defer vector RAG / analytics dashboards |
-| Service-account or Supabase key compromise | Data exposure | Least-privilege scopes; keys only in env; rotate; restrict Doc sharing; RLS |
-| Inaccurate cost estimates (pricing drift) | Mis-set budgets | Maintain rate table; validate against provider billing periodically |
+| Risk                                       | Impact                          | Mitigation                                                                                                |
+| ------------------------------------------ | ------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| DNA digest drift / lossy summary           | Off-brand or missing guardrails | Keep digest tight but include lexicon/formatting rules verbatim; version + log digest; allow admin review |
+| Per-turn token cost from DNA digest        | Higher cost on every call       | Cap digest size; monitor avg tokens/call; tune length                                                     |
+| Prompt/DNA leakage to client               | Loss of IP/control              | Server-only assembly; adversarial test; never in responses/errors                                         |
+| Cross-user history exposure                | Privacy breach                  | Supabase RLS on conversations/messages; test isolation explicitly                                         |
+| Provider cost overrun                      | Budget blown                    | Server-side hard caps + budget ceilings + rate limits; pre-call estimation; global kill via ceiling       |
+| Doc fetch failure / quota                  | Advisors unusable               | TTL cache + last-good fallback + manual refresh; clear error if no cache                                  |
+| Serverless timeouts on long generations    | Truncated replies               | Stream responses; cap max output tokens                                                                   |
+| 2-week timeline                            | Scope slip                      | Lock MVP to Must FRs; Supabase + Vercel reduce infra work; defer vector RAG / analytics dashboards        |
+| Service-account or Supabase key compromise | Data exposure                   | Least-privilege scopes; keys only in env; rotate; restrict Doc sharing; RLS                               |
+| Inaccurate cost estimates (pricing drift)  | Mis-set budgets                 | Maintain rate table; validate against provider billing periodically                                       |
 
 ---
 
@@ -402,6 +402,7 @@ When business requirements change:
 7. **Scope section** — flag new non-goals as they emerge
 
 Also sync changes to:
+
 - `AGENTS.md` (Env Vars, Database Tables, FR references)
 - `DATABASE.md` (new tables/columns)
 - `CHANGE_PROCESS.md` (new edge cases, new business rules)

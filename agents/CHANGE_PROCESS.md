@@ -51,6 +51,9 @@ Before writing any code, construct a plan that addresses all of the following:
    - `<domain>.controller.ts` — extends `Controller`, registers routes + middleware
    - `tests/<domain>.test.ts` — Bun test coverage
 3. Export schema from `packages/server/src/db/drizzle-schema.ts`
+
+   > Never write manual SQL migrations — always use `bun run db:generate` then `bun run db:migrate`.
+
 4. Wire in `packages/server/src/di/container.ts`
 5. Register controller routes in `packages/server/src/application.controller.ts`
 6. Run `bun run check` (type-check) and `bun test` (unit tests)

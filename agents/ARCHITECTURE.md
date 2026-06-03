@@ -155,26 +155,29 @@ apps/web/src/app/
 
 Each domain in `apps/web/src/lib/domains/<domain>/` has:
 
-| File | Purpose |
-|---|---|
-| `api.ts` | API functions using `apiClient` (Hono typed client `hc<ApiRoutes>`) |
-| `queries.ts` | `@tanstack/react-query` `queryOptions` wrappers |
-| `session.ts` | (auth only) Cookie parsing for browser-side session actor |
+| File         | Purpose                                                             |
+| ------------ | ------------------------------------------------------------------- |
+| `api.ts`     | API functions using `apiClient` (Hono typed client `hc<ApiRoutes>`) |
+| `queries.ts` | `@tanstack/react-query` `queryOptions` wrappers                     |
+| `session.ts` | (auth only) Cookie parsing for browser-side session actor           |
 
 The `apiClient` is created once in `lib/api/client.ts`:
+
 ```ts
 const apiClient = hc<ApiRoutes>('/').api;
 ```
 
 Domain API functions delegate to typed client methods:
+
 ```ts
 // api.ts
 export function listAdvisors() {
-  return apiClient.advisors.$get().then(r => r.json());
+  return apiClient.advisors.$get().then((r) => r.json());
 }
 ```
 
 Query options wrap API functions:
+
 ```ts
 // queries.ts
 export const advisorsQuery = queryOptions({
@@ -193,25 +196,25 @@ export const advisorsQuery = queryOptions({
 
 # Shared Packages
 
-| Package | Contents | Key Exports |
-|---|---|---|
-| `@eskwelabs-advisor/ui` | Button, Card (CardHeader, CardTitle, CardContent), cn utility | `Button`, `Card`, `CardHeader`, `CardTitle`, `CardContent`, `cn` |
-| `@eskwelabs-advisor/apps-config` | ESLint 9 flat config | `@eskwelabs-advisor/apps-config/eslint` |
-| `@eskwelabs-advisor/typescript-config` | Shared tsconfig presets | `base.json`, `next.json` |
+| Package                                | Contents                                                      | Key Exports                                                      |
+| -------------------------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `@eskwelabs-advisor/ui`                | Button, Card (CardHeader, CardTitle, CardContent), cn utility | `Button`, `Card`, `CardHeader`, `CardTitle`, `CardContent`, `cn` |
+| `@eskwelabs-advisor/apps-config`       | ESLint 9 flat config                                          | `@eskwelabs-advisor/apps-config/eslint`                          |
+| `@eskwelabs-advisor/typescript-config` | Shared tsconfig presets                                       | `base.json`, `next.json`                                         |
 
 # Key File Paths
 
-| File | Purpose |
-|---|---|
-| `packages/server/src/index.ts` | `createServer()` entry — returns `{ routes, startServer, stopServer }` |
-| `packages/server/src/application.controller.ts` | Registers all domain controllers onto one Hono app |
-| `packages/server/src/application.module.ts` | Lifecycle hooks |
-| `packages/server/src/di/container.ts` | DI wiring for all classes |
-| `packages/server/src/config/env.ts` | `ServerEnv` zod schema |
-| `packages/server/src/common/middleware/auth.middleware.ts` | Actor resolution + guards |
-| `packages/server/src/common/middleware/error.middleware.ts` | Error → JSON response |
-| `packages/server/src/adapters/advisor-adapters.ts` | Deterministic provider stubs |
-| `apps/web/src/middleware.ts` | Next.js auth + CSP middleware |
-| `apps/web/src/lib/api/client.ts` | Hono typed client singleton |
-| `drizzle.config.ts` | Drizzle Kit config (root) |
-| `turbo.json` | Task pipeline + global env passthrough |
+| File                                                        | Purpose                                                                |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `packages/server/src/index.ts`                              | `createServer()` entry — returns `{ routes, startServer, stopServer }` |
+| `packages/server/src/application.controller.ts`             | Registers all domain controllers onto one Hono app                     |
+| `packages/server/src/application.module.ts`                 | Lifecycle hooks                                                        |
+| `packages/server/src/di/container.ts`                       | DI wiring for all classes                                              |
+| `packages/server/src/config/env.ts`                         | `ServerEnv` zod schema                                                 |
+| `packages/server/src/common/middleware/auth.middleware.ts`  | Actor resolution + guards                                              |
+| `packages/server/src/common/middleware/error.middleware.ts` | Error → JSON response                                                  |
+| `packages/server/src/adapters/advisor-adapters.ts`          | Deterministic provider stubs                                           |
+| `apps/web/src/middleware.ts`                                | Next.js auth + CSP middleware                                          |
+| `apps/web/src/lib/api/client.ts`                            | Hono typed client singleton                                            |
+| `drizzle.config.ts`                                         | Drizzle Kit config (root)                                              |
+| `turbo.json`                                                | Task pipeline + global env passthrough                                 |
