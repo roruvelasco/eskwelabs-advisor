@@ -7,6 +7,9 @@ This repo intentionally contains architecture stubs rather than product-complete
 ## Commands
 
 - `bun install --frozen-lockfile`
+- `bun run db:start`
+- `supabase status`
+- `bun run db:migrate`
 - `bun run dev`
 - `bun run check`
 - `bun run lint`
@@ -14,6 +17,19 @@ This repo intentionally contains architecture stubs rather than product-complete
 - `bun run format:fix`
 - `bun run build`
 - `bun run test`
+
+## Local Supabase
+
+This project uses the Supabase CLI for the local Supabase stack and Drizzle
+for schema ownership and SQL migrations.
+
+- Start Supabase services with `bun run db:start`.
+- Copy the local API URL, anon key, and service role key from `supabase status`
+  into `.env`.
+- Apply database migrations with `bun run db:migrate`.
+- Generate new migrations from the TypeScript schema with
+  `bun run db:generate`.
+- Open local Supabase Studio at `http://127.0.0.1:54323`.
 
 ## Shape
 

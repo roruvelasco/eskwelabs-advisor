@@ -23,7 +23,9 @@ const messages: MessageRow[] = [];
 
 export class MessagesRepository extends Repository {
   async listForConversation(conversationId: string) {
-    return messages.filter((message) => message.conversationId === conversationId);
+    return messages.filter(
+      (message) => message.conversationId === conversationId
+    );
   }
 
   async create(input: Omit<MessageRow, 'id' | 'createdAt'>) {

@@ -76,7 +76,8 @@ export function createContainer() {
     })
     .bind({
       provide: RateLimitService,
-      useFactory: (c) => new RateLimitService(c.get(RedisService), c.get(SERVER_ENV))
+      useFactory: (c) =>
+        new RateLimitService(c.get(RedisService), c.get(SERVER_ENV))
     })
     .bind({
       provide: CostCapEnforcer,
@@ -132,12 +133,18 @@ export function createContainer() {
       useFactory: (c) => new UsersRepository(c.get(DrizzleService))
     })
     .bind({ provide: AdminSerializer, useFactory: () => new AdminSerializer() })
-    .bind({ provide: AdvisorsSerializer, useFactory: () => new AdvisorsSerializer() })
+    .bind({
+      provide: AdvisorsSerializer,
+      useFactory: () => new AdvisorsSerializer()
+    })
     .bind({
       provide: ConversationsSerializer,
       useFactory: () => new ConversationsSerializer()
     })
-    .bind({ provide: MessagesSerializer, useFactory: () => new MessagesSerializer() })
+    .bind({
+      provide: MessagesSerializer,
+      useFactory: () => new MessagesSerializer()
+    })
     .bind({
       provide: ModelConfigSerializer,
       useFactory: () => new ModelConfigSerializer()
@@ -146,7 +153,10 @@ export function createContainer() {
       provide: PromptCacheSerializer,
       useFactory: () => new PromptCacheSerializer()
     })
-    .bind({ provide: TelemetrySerializer, useFactory: () => new TelemetrySerializer() })
+    .bind({
+      provide: TelemetrySerializer,
+      useFactory: () => new TelemetrySerializer()
+    })
     .bind({
       provide: UsageCountersSerializer,
       useFactory: () => new UsageCountersSerializer()
@@ -158,7 +168,8 @@ export function createContainer() {
     })
     .bind({
       provide: ConversationsService,
-      useFactory: (c) => new ConversationsService(c.get(ConversationsRepository))
+      useFactory: (c) =>
+        new ConversationsService(c.get(ConversationsRepository))
     })
     .bind({
       provide: ModelConfigService,
@@ -166,12 +177,16 @@ export function createContainer() {
     })
     .bind({
       provide: UsageCountersService,
-      useFactory: (c) => new UsageCountersService(c.get(UsageCountersRepository))
+      useFactory: (c) =>
+        new UsageCountersService(c.get(UsageCountersRepository))
     })
     .bind({
       provide: PromptCacheService,
       useFactory: (c) =>
-        new PromptCacheService(c.get(PromptCacheRepository), c.get(RedisService))
+        new PromptCacheService(
+          c.get(PromptCacheRepository),
+          c.get(RedisService)
+        )
     })
     .bind({
       provide: TelemetryService,

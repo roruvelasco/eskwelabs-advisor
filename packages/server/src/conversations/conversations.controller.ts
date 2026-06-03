@@ -27,7 +27,10 @@ export class ConversationController extends Controller {
         '/conversations/*',
         requireAllowlistedEifOrAdmin(this.env)
       );
-      this.controller.use('/conversations', requireAllowlistedEifOrAdmin(this.env));
+      this.controller.use(
+        '/conversations',
+        requireAllowlistedEifOrAdmin(this.env)
+      );
     }
 
     return this.controller

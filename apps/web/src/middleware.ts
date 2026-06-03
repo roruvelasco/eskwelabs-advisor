@@ -23,7 +23,7 @@ function cspHeader(nonce: string) {
     "style-src 'self' 'unsafe-inline'",
     `script-src ${scriptSrc}`,
     "connect-src 'self'",
-    "upgrade-insecure-requests"
+    'upgrade-insecure-requests'
   ].join('; ');
 }
 
@@ -47,7 +47,9 @@ function csv(name: string) {
 }
 
 function resolveActor(request: NextRequest) {
-  const email = request.cookies.get('eskwelabs_actor_email')?.value.toLowerCase();
+  const email = request.cookies
+    .get('eskwelabs_actor_email')
+    ?.value.toLowerCase();
   const id = request.cookies.get('eskwelabs_actor_id')?.value;
   const role = request.cookies.get('eskwelabs_actor_role')?.value;
   const active = request.cookies.get('eskwelabs_actor_active')?.value;
@@ -58,7 +60,11 @@ function resolveActor(request: NextRequest) {
   return {
     id,
     email,
-    role: adminEmails.includes(email) ? 'admin' : role === 'admin' ? 'admin' : 'eif',
+    role: adminEmails.includes(email)
+      ? 'admin'
+      : role === 'admin'
+        ? 'admin'
+        : 'eif',
     isActive: active !== 'false'
   };
 }
@@ -98,8 +104,8 @@ export function middleware(request: NextRequest) {
     pathname.startsWith('/api/advisors') ||
     pathname.startsWith('/api/conversations') ||
     pathname.startsWith('/api/messages') ||
-      pathname.startsWith('/api/chat-turn') ||
-      pathname.startsWith('/api/consent');
+    pathname.startsWith('/api/chat-turn') ||
+    pathname.startsWith('/api/consent');
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-nonce', nonce);
 

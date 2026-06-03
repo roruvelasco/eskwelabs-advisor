@@ -53,8 +53,16 @@ export class MessagesService {
     const config = await this.modelConfigService.getForAdvisor(advisorId);
 
     if (!config?.isEnabled) {
-      await this.createBlockedMessage(actor, input.conversationId, 'model_disabled');
-      throw new HttpException(429, 'Advisor model is disabled', 'model_disabled');
+      await this.createBlockedMessage(
+        actor,
+        input.conversationId,
+        'model_disabled'
+      );
+      throw new HttpException(
+        429,
+        'Advisor model is disabled',
+        'model_disabled'
+      );
     }
 
     await this.costCapEnforcer.assertAllowed({
@@ -181,7 +189,11 @@ export class MessagesService {
     } catch (error) {
       if (error instanceof HttpException) {
         if (error.code !== 'model_disabled') {
-          await this.createBlockedMessage(actor, input.conversationId, error.code);
+          await this.createBlockedMessage(
+            actor,
+            input.conversationId,
+            error.code
+          );
         }
       }
       throw error;
@@ -192,7 +204,9 @@ export class MessagesService {
     actor: Actor,
     input: { conversationId: string; content: string }
   ) {
-    let prepared: Awaited<ReturnType<MessagesService['prepareTurn']>> | undefined;
+    let prepared:
+      | Awaited<ReturnType<MessagesService['prepareTurn']>>
+      | undefined;
 
     try {
       prepared = await this.prepareTurn(actor, input);

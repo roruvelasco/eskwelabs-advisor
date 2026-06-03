@@ -16,7 +16,10 @@ export class AdvisorController extends Controller {
 
   routes() {
     if (this.env) {
-      this.controller.use('/advisors/*', requireAllowlistedEifOrAdmin(this.env));
+      this.controller.use(
+        '/advisors/*',
+        requireAllowlistedEifOrAdmin(this.env)
+      );
       this.controller.use('/advisors', requireAllowlistedEifOrAdmin(this.env));
     }
 

@@ -1,10 +1,6 @@
 import { queryOptions } from '@tanstack/react-query';
 
-import {
-  getAdminUsage,
-  listModelConfig,
-  listTelemetry
-} from './api';
+import { getAdminUsage, listModelConfig, listTelemetry } from './api';
 
 export const adminUsageQuery = queryOptions({
   queryKey: ['admin', 'usage'],

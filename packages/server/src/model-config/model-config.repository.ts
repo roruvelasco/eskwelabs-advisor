@@ -10,11 +10,7 @@ interface ModelConfigRow {
 }
 
 const rows = new Map<string, ModelConfigRow>(
-  [
-    'data-dashboard',
-    'ssot-memo',
-    'advisor-3'
-  ].map((advisorId) => [
+  ['data-dashboard', 'ssot-memo', 'advisor-3'].map((advisorId) => [
     advisorId,
     {
       advisorId,
@@ -37,7 +33,12 @@ export class ModelConfigRepository extends Repository {
 
   async upsert(
     advisorId: string,
-    input: { provider: string; model: string; updatedBy: string; isEnabled?: boolean }
+    input: {
+      provider: string;
+      model: string;
+      updatedBy: string;
+      isEnabled?: boolean;
+    }
   ) {
     const row = {
       advisorId,

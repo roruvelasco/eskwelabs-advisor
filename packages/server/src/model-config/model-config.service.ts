@@ -13,7 +13,12 @@ export class ModelConfigService {
 
   async update(
     advisorId: string,
-    input: { provider: string; model: string; updatedBy: string; isEnabled?: boolean }
+    input: {
+      provider: string;
+      model: string;
+      updatedBy: string;
+      isEnabled?: boolean;
+    }
   ) {
     return this.modelConfigRepository.upsert(advisorId, input);
   }

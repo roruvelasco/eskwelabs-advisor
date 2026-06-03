@@ -179,15 +179,18 @@ describe('messages service', () => {
 
   test('includes bounded successful conversation history before the newest user message', async () => {
     let capturedRequest: LlmChatRequest | undefined;
-    const history = Array.from({ length: 25 }, (_, index): MessageRow => ({
-      id: crypto.randomUUID(),
-      conversationId: 'conversation-id',
-      userId: actor.id,
-      role: index % 2 === 0 ? 'user' : 'assistant',
-      content: `history-${index}`,
-      status: 'ok',
-      createdAt: new Date(index).toISOString()
-    }));
+    const history = Array.from(
+      { length: 25 },
+      (_, index): MessageRow => ({
+        id: crypto.randomUUID(),
+        conversationId: 'conversation-id',
+        userId: actor.id,
+        role: index % 2 === 0 ? 'user' : 'assistant',
+        content: `history-${index}`,
+        status: 'ok',
+        createdAt: new Date(index).toISOString()
+      })
+    );
 
     history.splice(5, 0, {
       id: crypto.randomUUID(),
@@ -266,11 +269,13 @@ describe('messages service', () => {
       content: 'newest'
     });
 
-    expect(capturedRequest?.messages.map((message) => message.content)).toEqual([
-      'System instructions\nshared dna digest',
-      ...Array.from({ length: 20 }, (_, index) => `history-${index + 5}`),
-      'newest'
-    ]);
+    expect(capturedRequest?.messages.map((message) => message.content)).toEqual(
+      [
+        'System instructions\nshared dna digest',
+        ...Array.from({ length: 20 }, (_, index) => `history-${index + 5}`),
+        'newest'
+      ]
+    );
     expect(JSON.stringify(capturedRequest)).not.toContain('blocked-history');
   });
 
@@ -421,7 +426,11 @@ describe('messages service', () => {
       },
       {
         assertAllowed: async () => {
-          throw new HttpException(429, 'Daily message limit reached', 'daily_message_limit');
+          throw new HttpException(
+            429,
+            'Daily message limit reached',
+            'daily_message_limit'
+          );
         }
       } as never,
       {

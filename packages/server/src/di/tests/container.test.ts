@@ -31,7 +31,9 @@ describe('dependency container', () => {
     expect(container.get(PromptCacheController)).toBeInstanceOf(
       PromptCacheController
     );
-    expect(container.get(TelemetryController)).toBeInstanceOf(TelemetryController);
+    expect(container.get(TelemetryController)).toBeInstanceOf(
+      TelemetryController
+    );
     expect(container.get(UsageCounterController)).toBeInstanceOf(
       UsageCounterController
     );

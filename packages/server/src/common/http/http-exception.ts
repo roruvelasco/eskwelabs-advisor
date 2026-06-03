@@ -26,5 +26,10 @@ export function rateLimited(message = 'Rate limit exceeded') {
 }
 
 export function validationFailed(details?: Record<string, unknown>) {
-  return new HttpException(400, 'Invalid request', 'validation_failed', details);
+  return new HttpException(
+    400,
+    'Invalid request',
+    'validation_failed',
+    details
+  );
 }

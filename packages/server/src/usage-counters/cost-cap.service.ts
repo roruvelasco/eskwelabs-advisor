@@ -18,18 +18,33 @@ export class CostCapEnforcer {
     const spendToday = Number(usage.estimatedSpendTodayUsd);
 
     if (usage.messagesToday >= this.env.DAILY_MESSAGE_LIMIT) {
-      throw new HttpException(429, 'Daily message limit reached', 'daily_message_limit');
+      throw new HttpException(
+        429,
+        'Daily message limit reached',
+        'daily_message_limit'
+      );
     }
 
     if (usage.tokensToday >= this.env.DAILY_TOKEN_LIMIT) {
-      throw new HttpException(429, 'Daily token limit reached', 'daily_token_limit');
+      throw new HttpException(
+        429,
+        'Daily token limit reached',
+        'daily_token_limit'
+      );
     }
 
     if (spendToday >= this.env.DAILY_SPEND_LIMIT_USD) {
-      throw new HttpException(429, 'Daily spend limit reached', 'daily_spend_limit');
+      throw new HttpException(
+        429,
+        'Daily spend limit reached',
+        'daily_spend_limit'
+      );
     }
 
-    if (usage.tokensToday + input.estimatedTokens > this.env.DAILY_TOKEN_LIMIT) {
+    if (
+      usage.tokensToday + input.estimatedTokens >
+      this.env.DAILY_TOKEN_LIMIT
+    ) {
       throw new HttpException(
         429,
         'Estimated turn would exceed daily token limit',

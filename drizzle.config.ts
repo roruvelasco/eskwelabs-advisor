@@ -7,6 +7,6 @@ export default defineConfig({
   dbCredentials: {
     url:
       process.env.DATABASE_URL ??
-      'postgres://postgres:postgres@localhost:5432/eskwelabs_advisor'
+      'postgresql://postgres:postgres@127.0.0.1:54322/postgres'
   }
 });

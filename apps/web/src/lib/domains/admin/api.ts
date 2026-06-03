@@ -16,9 +16,10 @@ export function updateModelConfig(
   advisorId: string,
   input: ModelConfigUpdateInput
 ) {
-  const update = apiClient.admin['model-config'][':advisorId'].$put as (
-    input: { param: { advisorId: string }; json: ModelConfigUpdateInput }
-  ) => Promise<Response>;
+  const update = apiClient.admin['model-config'][':advisorId'].$put as (input: {
+    param: { advisorId: string };
+    json: ModelConfigUpdateInput;
+  }) => Promise<Response>;
 
   return update({
     param: { advisorId },

@@ -1,4 +1,5 @@
 create extension if not exists "pgcrypto";
+--> statement-breakpoint
 
 create table if not exists users (
   id uuid primary key default gen_random_uuid(),
@@ -8,6 +9,7 @@ create table if not exists users (
   consent_acknowledged_at timestamptz,
   created_at timestamptz not null default now()
 );
+--> statement-breakpoint
 
 create table if not exists advisors (
   id text primary key,
@@ -16,6 +18,7 @@ create table if not exists advisors (
   is_active boolean not null default true,
   created_at timestamptz not null default now()
 );
+--> statement-breakpoint
 
 insert into advisors (id, name, description)
 values
@@ -23,6 +26,7 @@ values
   ('ssot-memo', 'SSOT Memo Advisor', 'Single source of truth memo support'),
   ('advisor-3', 'Advisor 3', 'Configurable advisor slot')
 on conflict (id) do nothing;
+--> statement-breakpoint
 
 create table if not exists conversations (
   id uuid primary key default gen_random_uuid(),
@@ -33,6 +37,7 @@ create table if not exists conversations (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+--> statement-breakpoint
 
 create table if not exists messages (
   id uuid primary key default gen_random_uuid(),
@@ -52,6 +57,7 @@ create table if not exists messages (
   dna_digest_version text,
   created_at timestamptz not null default now()
 );
+--> statement-breakpoint
 
 create table if not exists usage_counters (
   user_id uuid not null references users(id),
@@ -61,6 +67,7 @@ create table if not exists usage_counters (
   estimated_spend_today_usd numeric not null default 0,
   primary key (user_id, day_ph)
 );
+--> statement-breakpoint
 
 create table if not exists model_config (
   advisor_id text primary key references advisors(id),
@@ -70,6 +77,7 @@ create table if not exists model_config (
   updated_by text,
   updated_at timestamptz not null default now()
 );
+--> statement-breakpoint
 
 create table if not exists prompt_cache (
   key text primary key,
@@ -80,6 +88,7 @@ create table if not exists prompt_cache (
   expires_at timestamptz not null,
   updated_at timestamptz not null default now()
 );
+--> statement-breakpoint
 
 create table if not exists telemetry_events (
   id uuid primary key default gen_random_uuid(),
@@ -89,22 +98,28 @@ create table if not exists telemetry_events (
   payload jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()
 );
+--> statement-breakpoint
 
 alter table users enable row level security;
+--> statement-breakpoint
 alter table conversations enable row level security;
+--> statement-breakpoint
 alter table messages enable row level security;
+--> statement-breakpoint
 
 create policy users_self_or_admin_select on users
   for select using (
     id::text = current_setting('request.jwt.claim.sub', true)
     or current_setting('request.jwt.claim.role', true) = 'admin'
   );
+--> statement-breakpoint
 
 create policy conversations_owner_or_admin_select on conversations
   for select using (
     user_id::text = current_setting('request.jwt.claim.sub', true)
     or current_setting('request.jwt.claim.role', true) = 'admin'
   );
+--> statement-breakpoint
 
 create policy messages_owner_or_admin_select on messages
   for select using (

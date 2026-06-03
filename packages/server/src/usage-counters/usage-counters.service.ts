@@ -2,16 +2,17 @@ import { UsageCountersRepository } from './usage-counters.repository';
 import { getPhilippinesDay } from '../common/utils/day-ph';
 
 export class UsageCountersService {
-  constructor(
-    private usageCountersRepository: UsageCountersRepository
-  ) {}
+  constructor(private usageCountersRepository: UsageCountersRepository) {}
 
   async list() {
     return this.usageCountersRepository.list();
   }
 
   async currentForUser(userId: string) {
-    return this.usageCountersRepository.findForUserDay(userId, getPhilippinesDay());
+    return this.usageCountersRepository.findForUserDay(
+      userId,
+      getPhilippinesDay()
+    );
   }
 
   async incrementTurn(

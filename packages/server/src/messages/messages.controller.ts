@@ -24,10 +24,16 @@ export class MessageController extends Controller {
 
   routes() {
     if (this.env) {
-      this.controller.use('/messages/*', requireAllowlistedEifOrAdmin(this.env));
+      this.controller.use(
+        '/messages/*',
+        requireAllowlistedEifOrAdmin(this.env)
+      );
       this.controller.use('/messages', requireAllowlistedEifOrAdmin(this.env));
       this.controller.use('/chat-turn', requireAllowlistedEifOrAdmin(this.env));
-      this.controller.use('/chat-turn/stream', requireAllowlistedEifOrAdmin(this.env));
+      this.controller.use(
+        '/chat-turn/stream',
+        requireAllowlistedEifOrAdmin(this.env)
+      );
     }
 
     return this.controller

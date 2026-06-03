@@ -18,7 +18,7 @@ export const serverEnvSchema = z.object({
   DATABASE_URL: z
     .string()
     .url()
-    .default('postgres://postgres:postgres@localhost:5432/eskwelabs_advisor'),
+    .default('postgresql://postgres:postgres@127.0.0.1:54322/postgres'),
   SUPABASE_URL: optionalUrl.default(''),
   SUPABASE_ANON_KEY: z.string().optional().default(''),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional().default(''),

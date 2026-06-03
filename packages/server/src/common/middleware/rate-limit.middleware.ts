@@ -8,10 +8,7 @@ export function createRateLimitMiddleware(
 ): MiddlewareHandler {
   return async (c, next) => {
     const actor = c.get('actor');
-    await rateLimitService.assertAllowed(
-      'api',
-      actor?.id ?? getClientIp(c)
-    );
+    await rateLimitService.assertAllowed('api', actor?.id ?? getClientIp(c));
     await next();
   };
 }

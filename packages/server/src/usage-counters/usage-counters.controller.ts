@@ -17,12 +17,14 @@ export class UsageCounterController extends Controller {
     this.controller.use('/admin/usage-counters', requireActor(['admin']));
     this.controller.use('/admin/usage-users', requireActor(['admin']));
 
-    return this.controller.get('/admin/usage-counters', async (c) => {
-      const rows = await this.usageCountersService.list();
-      return c.json(this.usageCountersSerializer.list(rows));
-    }).get('/admin/usage-users', async (c) => {
-      const rows = await this.usageCountersService.list();
-      return c.json(this.usageCountersSerializer.list(rows));
-    });
+    return this.controller
+      .get('/admin/usage-counters', async (c) => {
+        const rows = await this.usageCountersService.list();
+        return c.json(this.usageCountersSerializer.list(rows));
+      })
+      .get('/admin/usage-users', async (c) => {
+        const rows = await this.usageCountersService.list();
+        return c.json(this.usageCountersSerializer.list(rows));
+      });
   }
 }

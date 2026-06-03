@@ -4,7 +4,10 @@ import { forbidden, unauthorized } from '../http/http-exception';
 import type { Actor, ActorRole } from '../utils/hono';
 import type { ServerEnv } from '../../config/env';
 
-function resolveActorFromHeaders(headers: Headers, env: ServerEnv): Actor | null {
+function resolveActorFromHeaders(
+  headers: Headers,
+  env: ServerEnv
+): Actor | null {
   const email = headers.get('x-eskwelabs-actor-email')?.toLowerCase();
   const id = headers.get('x-eskwelabs-actor-id');
 
@@ -56,7 +59,9 @@ export function requireActor(roles: ActorRole[]): MiddlewareHandler {
   };
 }
 
-export function requireAllowlistedEifOrAdmin(env: ServerEnv): MiddlewareHandler {
+export function requireAllowlistedEifOrAdmin(
+  env: ServerEnv
+): MiddlewareHandler {
   return async (c, next) => {
     const actor = c.get('actor');
 
@@ -64,7 +69,8 @@ export function requireAllowlistedEifOrAdmin(env: ServerEnv): MiddlewareHandler 
       throw unauthorized();
     }
 
-    const isAdmin = actor.role === 'admin' && env.ADMIN_EMAILS.includes(actor.email);
+    const isAdmin =
+      actor.role === 'admin' && env.ADMIN_EMAILS.includes(actor.email);
     const isEif =
       actor.role === 'eif' && env.EIF_ALLOWLIST_EMAILS.includes(actor.email);
 

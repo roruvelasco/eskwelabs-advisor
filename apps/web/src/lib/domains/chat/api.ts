@@ -39,7 +39,11 @@ export function createChatTurn(input: {
 
 export async function streamChatTurn(
   input: { conversationId: string; content: string },
-  onEvent: (event: { type: 'chunk'; content: string } | { type: 'final' | 'error'; data: unknown }) => void
+  onEvent: (
+    event:
+      | { type: 'chunk'; content: string }
+      | { type: 'final' | 'error'; data: unknown }
+  ) => void
 ) {
   const response = await fetch('/api/chat-turn/stream', {
     method: 'POST',
