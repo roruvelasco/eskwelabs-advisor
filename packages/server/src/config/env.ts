@@ -29,6 +29,7 @@ export const serverEnvSchema = z.object({
   GOOGLE_DOCS_API_KEY: z.string().optional().default(''),
   OPENAI_API_KEY: z.string().optional().default(''),
   ANTHROPIC_API_KEY: z.string().optional().default(''),
+  GEMINI_API_KEY: z.string().optional().default(''),
   EIF_ALLOWLIST_EMAILS: csv,
   ADMIN_EMAILS: csv,
   DAILY_MESSAGE_LIMIT: z.coerce.number().int().positive().default(25),
