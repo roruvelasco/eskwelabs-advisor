@@ -41,8 +41,11 @@ Before writing any code, construct a plan that addresses all of the following:
 1. Create `packages/server/src/<domain>/` directory
 2. Create files in this order:
    - `<domain>.schema.ts` — Drizzle table definition
-   - `dto/<domain>.dto.ts` — Zod input/output DTOs
-   - `dto/<domain>.filters.dto.ts` — Query filter schemas
+   - `dto/<domain>.dto.ts` — **Derive** response DTOs from the table via `createSelectSchema` / `createInsertSchema` / `createUpdateSchema` from `drizzle-zod`. Plain `z.object` is only permitted for:
+     - Filter/query-param DTOs (`*.filters.dto.ts`) — not row shapes
+     - Mutation input bodies that are intentional subsets (e.g. event creation) — must include a comment explaining why
+     - Domains with no real backing table (e.g. `admin`)
+   - `dto/<domain>.filters.dto.ts` — Query filter schemas (plain Zod, query params not row shapes)
    - `<domain>.repository.ts` — extends `Repository`, implements data access
    - `<domain>.service.ts` — business logic, throws `HttpException` on violations
    - `<domain>.serializer.ts` — response shaping
@@ -94,7 +97,11 @@ Every change must consider:
 | Empty results  | Return `{ data: [] }` not 404                                         |
 | Null/undefined | Handle defensively in serializers                                     |
 
-### 9. Testing
+### 9. Comments
+
+Do not add comments to code unless they explain a non-obvious _why_ (edge case, workaround, perf reason). Comments that restate _what_ the code does waste tokens — the patterns (Drizzle schemas, Zod DTOs, Hono routes, DI wiring) are self-documenting.
+
+### 10. Testing
 
 - Tests use **Bun test runner** (`bun test` in package directory)
 - Tests depend on `^build` in turbo pipeline (`bun run test` runs build first)
@@ -102,7 +109,7 @@ Every change must consider:
 - For services: unit test business logic with mocked repositories
 - For controllers: integration test via Hono's `app.request()` (future)
 
-### 10. Always Gate with Type-Check & Lint
+### 11. Always Gate with Type-Check & Lint
 
 These run **automatically via Git hooks** (Husky v9 + lint-staged):
 

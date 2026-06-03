@@ -1,10 +1,17 @@
+import { createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
 
-export const userDto = z.object({
-  id: z.string(),
-  email: z.string().email(),
-  role: z.enum(['eif', 'admin']),
-  isActive: z.boolean()
+import { usersTable } from '../users.schema';
+
+const userSelectSchema = createSelectSchema(usersTable);
+
+export const userDto = userSelectSchema.pick({
+  id: true,
+  email: true,
+  role: true,
+  isActive: true,
+  consentAcknowledgedAt: true,
+  createdAt: true
 });
 
 export type UserDto = z.infer<typeof userDto>;

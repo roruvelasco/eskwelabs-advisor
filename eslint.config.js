@@ -1,3 +1,3 @@
-import config from '@eskwelabs-advisor/apps-config/eslint';
+import config from './packages/apps-config/eslint.js';
 
 export default config;

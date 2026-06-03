@@ -2,14 +2,9 @@ import { Controller } from '../common/factories/controller.factory';
 
 import { ModelConfigSerializer } from './model-config.serializer';
 import { ModelConfigService } from './model-config.service';
-import { z } from 'zod';
 import { requireActor } from '../common/middleware/auth.middleware';
 import { parseJsonBody } from '../common/middleware/validation.middleware';
-
-const updateModelConfigSchema = z.object({
-  provider: z.string().min(1),
-  model: z.string().min(1)
-});
+import { updateModelConfigDto } from './dto/model-config.dto';
 
 export class ModelConfigController extends Controller {
   constructor(
@@ -30,7 +25,7 @@ export class ModelConfigController extends Controller {
       })
       .put('/admin/model-config/:advisorId', async (c) => {
         const actor = c.get('actor')!;
-        const input = await parseJsonBody(c, updateModelConfigSchema);
+        const input = await parseJsonBody(c, updateModelConfigDto);
         const row = await this.modelConfigService.update(
           c.req.param('advisorId'),
           {

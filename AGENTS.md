@@ -104,6 +104,13 @@ Cross-cutting: `auth/` (auth-request.ts, auth.service.ts), `cache/` (redis.servi
 Defined in `packages/server/src/config/env.ts` via zod schema. All declared in `turbo.json` `globalPassThroughEnv`:
 `DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `GOOGLE_DOCS_SERVICE_ACCOUNT_JSON`, `OPENAI_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_DOCS_PROMPT_DOC_ID`, `GOOGLE_DOCS_DNA_DOC_ID`, `GOOGLE_DOCS_API_KEY`, `GEMINI_API_KEY`, `EIF_ALLOWLIST_EMAILS`, `ADMIN_EMAILS`, `DAILY_MESSAGE_LIMIT`, `DAILY_TOKEN_LIMIT`, `DAILY_SPEND_LIMIT_USD`, `DEFAULT_MAX_OUTPUT_TOKENS`, `RATE_LIMIT_WINDOW_SECONDS`, `RATE_LIMIT_MAX_REQUESTS`
 
+## Code Style
+
+- **DO NOT** add comments unless absolutely necessary (explaining a non-obvious edge case or reason).
+- Standard library code (Drizzle schemas, Zod DTOs, Hono routes, `@needle-di` DI wiring) should never be commented — the patterns are self-documenting.
+- Code is documentation. A comment that says _what_ the code does is waste — only explain _why_ when the reason isn't obvious.
+- This saves tokens for AI agents reading the codebase.
+
 ## Quirks
 
 - `bun run check` = type-checking, NOT a build

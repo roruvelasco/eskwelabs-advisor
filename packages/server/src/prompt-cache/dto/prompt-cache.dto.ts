@@ -1,6 +1,16 @@
+import { createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
 
-export const promptCacheDto = z.object({
-  key: z.string(),
-  valueHash: z.string()
+import { promptCacheTable } from '../prompt-cache.schema';
+
+export const promptCacheDto = createSelectSchema(promptCacheTable).pick({
+  key: true,
+  valueHash: true,
+  docRevision: true,
+  dnaDigestVersion: true,
+  lastGoodAt: true,
+  expiresAt: true,
+  updatedAt: true
 });
+
+export type PromptCacheDto = z.infer<typeof promptCacheDto>;
