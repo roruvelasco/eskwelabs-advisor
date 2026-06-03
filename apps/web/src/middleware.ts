@@ -107,7 +107,9 @@ export function middleware(request: NextRequest) {
     pathname.startsWith('/api/chat-turn') ||
     pathname.startsWith('/api/consent');
   const requestHeaders = new Headers(request.headers);
+  const csp = cspHeader(nonce);
   requestHeaders.set('x-nonce', nonce);
+  requestHeaders.set('Content-Security-Policy', csp);
 
   if (!isAdminArea && !isEifArea) {
     return withSecurityHeaders(
