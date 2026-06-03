@@ -5,7 +5,7 @@ import { telemetryEventsTable } from '../telemetry.schema';
 
 export const telemetryDto = z.object({
   eventName: z.string(),
-  payload: z.record(z.unknown()).optional()
+  payload: z.record(z.string(), z.unknown()).optional()
 });
 
 export type TelemetryDto = z.infer<typeof telemetryDto>;

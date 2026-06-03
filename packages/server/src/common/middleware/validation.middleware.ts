@@ -3,7 +3,7 @@ import type { z } from 'zod';
 
 import { validationFailed } from '../http/http-exception';
 
-export async function parseJsonBody<T extends z.ZodTypeAny>(
+export async function parseJsonBody<T extends z.ZodType>(
   c: Context,
   schema: T
 ): Promise<z.infer<T>> {

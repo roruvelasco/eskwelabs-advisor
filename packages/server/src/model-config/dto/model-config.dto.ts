@@ -19,13 +19,15 @@ export const modelConfigDto = createSelectSchema(modelConfigTable).pick({
 export type ModelConfigDto = z.infer<typeof modelConfigDto>;
 
 export const createModelConfigDto = createInsertSchema(modelConfigTable, {
-  provider: (s: z.ZodString) => s.min(1),
-  model: (s: z.ZodString) => s.min(1)
+  provider: (s) => s.min(1),
+  model: (s) => s.min(1)
 }).pick({ advisorId: true, provider: true, model: true });
 
 export const updateModelConfigDto = createUpdateSchema(modelConfigTable, {
-  provider: (s: z.ZodString) => s.min(1),
-  model: (s: z.ZodString) => s.min(1)
-}).pick({ provider: true, model: true });
+  provider: (s) => s.min(1),
+  model: (s) => s.min(1)
+})
+  .pick({ provider: true, model: true })
+  .required();
 
 export type UpdateModelConfigDto = z.infer<typeof updateModelConfigDto>;
