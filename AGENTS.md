@@ -8,6 +8,7 @@ Entry-point doc. For deep dives, see `agents/*`:
 - [CHANGE_PROCESS.md](agents/CHANGE_PROCESS.md) — protocol for making changes (READ FIRST before any edit)
 - [PRD.md](agents/PRD.md) — business requirements, FRs, NFRs, edge cases, acceptance criteria
 - [DEVELOPMENT-FLOW.md](agents/DEVELOPMENT-FLOW.md) — phased implementation guide (grain-of-salt reference)
+- [UI-PRACTICES.md](agents/UI-PRACTICES.md) — UI component principles (shadcn foundation, design tokens, motion)
 
 ## Agent Workflow
 
@@ -20,7 +21,7 @@ When asked to build a new feature, fix a bug, or make any code change:
 ## Quick Reference
 
 - **Monorepo**: Turborepo + Bun workspaces, single `bun.lock`
-- **Packages**: `apps/web` (Next.js 15), `packages/server` (Hono 4 API), `packages/ui` (shared components), `packages/apps-config` (ESLint), `packages/typescript-config` (tsconfigs)
+- **Packages**: `apps/web` (Next.js 15), `packages/server` (Hono 4 API), `packages/ui` (17 shadcn-based React components), `packages/apps-config` (ESLint), `packages/typescript-config` (tsconfigs)
 - **Server mount**: `apps/web/src/app/api/[[...route]]/route.ts` — catch-all, consumes `@eskwelabs-advisor/server` as **source** (transpiled by Next.js via `next.config.ts`)
 - **DI**: `@needle-di/core` — `packages/server/src/di/container.ts` (InjectionToken + Container)
 
@@ -88,9 +89,32 @@ Cross-cutting: `auth/` (auth-request.ts, auth.service.ts), `cache/` (redis.servi
 | `(app)/history`  | history/page.tsx  | ConversationHistory | domains/conversations/{api,queries}.ts |
 | `admin`          | admin/page.tsx    | AdminDashboard      | domains/admin/{api,queries}.ts         |
 
+### UI Components (`packages/ui/src/components/ui/`)
+
+All 17 components are shadcn/ui v4, generated via CLI, owned in the shared package:
+
+Button, Card (with sub-components), Badge, Input, Textarea, Dialog, DropdownMenu, Tabs, Tooltip, Avatar, ScrollArea, Separator, Select, Table, Popover, Accordion, Switch, Skeleton
+
+**Pattern**: Radix primitives + `class-variance-authority` + `cn()` utility. Components use CSS token references (`bg-primary`, `text-muted-foreground`, `border-border`) — no hardcoded hex values.
+
+**Workflow**: `npx shadcn@latest add <component> -c apps/web --yes` → move to `packages/ui/src/components/ui/` → update barrel at `packages/ui/src/index.ts`.
+
 ### Database Tables
 
 `advisors`, `users`, `conversations`, `messages`, `model_config`, `prompt_cache`, `usage_counters`, `telemetry_events` — see [DATABASE.md](agents/DATABASE.md).
+
+## Design System
+
+All styling tokens live in `apps/web/src/styles/globals.css` as CSS custom properties (OKLCH color space):
+
+- **Colors**: `--background`, `--foreground`, `--primary` (`#2d6a4f` elegant green), `--ring` (`#d4a373` warm gold), `--muted`, `--accent`, `--destructive`, etc.
+- **Radius**: `--radius: 0.625rem` — mapped to `rounded-sm/md/lg/xl` via `@theme inline`
+- **Typography**: `--font-sans` (Inter), `--font-serif` (Fraunces)
+- **Motion**: `tw-animate-css` for enter/exit animations + custom motion utilities (`.motion-lift`, `.motion-press`, `.motion-pop`, `.motion-stagger-in`)
+- **Variant**: Custom `@custom-variant` declarations for `data-open`, `data-closed`, `data-checked`, etc.
+- **Dark mode**: `.dark` class via `@custom-variant dark`
+
+To change the look, edit the CSS variables — not component files. See [UI-PRACTICES.md](agents/UI-PRACTICES.md) for full principles.
 
 ## Auth & CSP
 
@@ -122,7 +146,9 @@ Defined in `packages/server/src/config/env.ts` via zod schema. All declared in `
 - Repos currently use **in-memory Maps** (not yet backed by Drizzle queries)
 - Adapters (`advisor-adapters.ts`) are deterministic stubs — no real LLM/Google Docs calls
 - Supabase clients (`client.ts`, `server.ts`) return `null` — stubs
-- All frontend components are placeholders
+- All frontend components are placeholders (feature pages), but UI components in `packages/ui` are real shadcn components
+- `apps/web/src/lib/utils.ts` re-exports `cn` from `@eskwelabs-advisor/ui/utils` — necessary for shadcn CLI compatibility
+- shadcn v4 generates Radix imports from the `radix-ui` meta-package (not individual `@radix-ui/react-*` packages)
 - **Git hooks** (Husky v9 + lint-staged): `pre-commit` runs Prettier + ESLint on staged files; `pre-push` runs `turbo check` + `turbo test`. Skip with `--no-verify` in emergencies. `git add -p` partial-hunk staging will cause lint-staged to reformat the whole file — commit the full file in that case.
 
 ## Development Process
