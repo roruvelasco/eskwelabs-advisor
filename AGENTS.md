@@ -21,7 +21,7 @@ When asked to build a new feature, fix a bug, or make any code change:
 ## Quick Reference
 
 - **Monorepo**: Turborepo + Bun workspaces, single `bun.lock`
-- **Packages**: `apps/web` (Next.js 15), `packages/server` (Hono 4 API), `packages/ui` (17 shadcn-based React components), `packages/apps-config` (ESLint), `packages/typescript-config` (tsconfigs)
+- **Packages**: `apps/web` (Next.js 15), `packages/server` (Hono 4 API), `packages/ui` (shadcn-based React components + layout components + responsive hooks), `packages/apps-config` (ESLint), `packages/typescript-config` (tsconfigs)
 - **Server mount**: `apps/web/src/app/api/[[...route]]/route.ts` — catch-all, consumes `@eskwelabs-advisor/server` as **source** (transpiled by Next.js via `next.config.ts`)
 - **DI**: `@needle-di/core` — `packages/server/src/di/container.ts` (InjectionToken + Container)
 
@@ -89,15 +89,17 @@ Cross-cutting: `auth/` (auth-request.ts, auth.service.ts), `cache/` (redis.servi
 | `(app)/history`  | history/page.tsx  | ConversationHistory | domains/conversations/{api,queries}.ts |
 | `admin`          | admin/page.tsx    | AdminDashboard      | domains/admin/{api,queries}.ts         |
 
-### UI Components (`packages/ui/src/components/ui/`)
+### UI Components (`packages/ui/src/`)
 
-All 17 components are shadcn/ui v4, generated via CLI, owned in the shared package:
+**shadcn components** (`src/components/ui/`): Button, Card, Badge, Input, Textarea, Dialog, DropdownMenu, Tabs, Tooltip, Avatar, ScrollArea, Separator, Select, Table, Popover, Accordion, Switch, Skeleton, Sheet, Drawer
 
-Button, Card (with sub-components), Badge, Input, Textarea, Dialog, DropdownMenu, Tabs, Tooltip, Avatar, ScrollArea, Separator, Select, Table, Popover, Accordion, Switch, Skeleton
+**Layout components** (`src/components/layout/`): Container, Stack, Grid — reusable wrappers that replace inline `<div className="mx-auto max-w-5xl px-6">` soup.
 
-**Pattern**: Radix primitives + `class-variance-authority` + `cn()` utility. Components use CSS token references (`bg-primary`, `text-muted-foreground`, `border-border`) — no hardcoded hex values.
+**Hooks** (`src/hooks/`): `useMediaQuery(query)`, `useIsMobile(breakpoint?)`, `useBreakpoint()` — import from `@eskwelabs-advisor/ui/hooks`.
 
-**Workflow**: `npx shadcn@latest add <component> -c apps/web --yes` → move to `packages/ui/src/components/ui/` → update barrel at `packages/ui/src/index.ts`.
+**Pattern**: shadcn components use Radix primitives + `class-variance-authority` + `cn()` utility with CSS token references (`bg-primary`, `text-muted-foreground`, `border-border`).
+
+**shadcn workflow**: `npx shadcn@latest add <component> -c apps/web --yes` → move to `packages/ui/src/components/ui/` → update barrel at `packages/ui/src/index.ts`.
 
 ### Database Tables
 
@@ -110,7 +112,7 @@ All styling tokens live in `apps/web/src/styles/globals.css` as CSS custom prope
 - **Colors**: `--background`, `--foreground`, `--primary` (`#2d6a4f` elegant green), `--ring` (`#d4a373` warm gold), `--muted`, `--accent`, `--destructive`, etc.
 - **Radius**: `--radius: 0.625rem` — mapped to `rounded-sm/md/lg/xl` via `@theme inline`
 - **Typography**: `--font-sans` (Inter), `--font-serif` (Fraunces)
-- **Motion**: `tw-animate-css` for enter/exit animations + custom motion utilities (`.motion-lift`, `.motion-press`, `.motion-pop`, `.motion-stagger-in`)
+- **Motion**: `tw-animate-css` for enter/exit animations + custom motion utilities (`.motion-lift`, `.motion-press`, `.motion-pop`, `.motion-pulse-ring`, `.motion-stagger-in`)
 - **Variant**: Custom `@custom-variant` declarations for `data-open`, `data-closed`, `data-checked`, etc.
 - **Dark mode**: `.dark` class via `@custom-variant dark`
 
@@ -142,6 +144,10 @@ Defined in `packages/server/src/config/env.ts` via zod schema. All declared in `
 - Drizzle config is at monorepo root, schema source is `packages/server/src/db/drizzle-schema.ts`
 - Postgres driver is `postgres` (npm), not `pg` or `@neondatabase/serverless`
 - Tailwind CSS v4 with `@tailwindcss/postcss` (no `tailwind.config.js`)
+- **Tailwind v4: `@source` directive required** — `globals.css` must include `@source '../../node_modules/@eskwelabs-advisor/ui/src'` so Tailwind scans class names used inside `packages/ui`. Without this, any Tailwind class used only in shared components gets purged in production.
+- **Tailwind v4: `@utility` syntax** — custom utilities are declared with `@utility name { ... }` (replaces the old `@layer utilities` + plugin approach). Example: `@utility no-scrollbar { scrollbar-width: none; }`
+- **Tailwind v4: `not-{breakpoint}:` variant** — `not-md:` means "apply only when NOT at md breakpoint and above." This is v4-only — v3 does not have this. Do not confuse with `max-md:` ("below md").
+- **Tailwind v4: responsive variant direction** — `max-md:` = below 768px (desktop-down). `not-md:` = everywhere except exactly at `md`. Prefer mobile-first (`md:`) over `max-md:` except for targeted overrides.
 - Path alias `@/` maps to `apps/web/src/*` in web, `packages/server/src/*` in server
 - Repos currently use **in-memory Maps** (not yet backed by Drizzle queries)
 - Adapters (`advisor-adapters.ts`) are deterministic stubs — no real LLM/Google Docs calls
@@ -149,6 +155,7 @@ Defined in `packages/server/src/config/env.ts` via zod schema. All declared in `
 - All frontend components are placeholders (feature pages), but UI components in `packages/ui` are real shadcn components
 - `apps/web/src/lib/utils.ts` re-exports `cn` from `@eskwelabs-advisor/ui/utils` — necessary for shadcn CLI compatibility
 - shadcn v4 generates Radix imports from the `radix-ui` meta-package (not individual `@radix-ui/react-*` packages)
+- **shadcn CLI requires `-c apps/web`** — the `components.json` lives at `apps/web/components.json` and controls path aliases. Always run `npx shadcn@latest add <component> -c apps/web --yes`, then manually move the generated file from `apps/web/src/components/ui/` to `packages/ui/src/components/ui/` and add its export to `packages/ui/src/index.ts`.
 - **Git hooks** (Husky v9 + lint-staged): `pre-commit` runs Prettier + ESLint on staged files; `pre-push` runs `turbo check` + `turbo test`. Skip with `--no-verify` in emergencies. `git add -p` partial-hunk staging will cause lint-staged to reformat the whole file — commit the full file in that case.
 
 ## Development Process

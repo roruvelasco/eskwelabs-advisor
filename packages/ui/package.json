@@ -6,6 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./utils": "./src/utils/cn.ts",
+    "./hooks": "./src/hooks/index.ts",
+    "./layout": "./src/components/layout/index.ts",
     "./components/*": "./src/components/*"
   },
   "scripts": {
@@ -21,7 +23,8 @@
     "clsx": "^2.1.1",
     "lucide-react": "^0.468.0",
     "radix-ui": "^1.4.3",
-    "tailwind-merge": "^2.6.0"
+    "tailwind-merge": "^2.6.0",
+    "vaul": "^1.1.2"
   },
   "devDependencies": {
     "@eskwelabs-advisor/apps-config": "workspace:*",

@@ -16,4 +16,8 @@ export * from './components/ui/table';
 export * from './components/ui/popover';
 export * from './components/ui/accordion';
 export * from './components/ui/switch';
+export * from './components/ui/sheet';
+export * from './components/ui/drawer';
+export * from './components/layout';
+export * from './hooks';
 export * from './utils/cn';
