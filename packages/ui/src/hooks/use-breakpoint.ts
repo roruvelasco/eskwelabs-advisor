@@ -1,3 +1,5 @@
+'use client';
+
 import { useMediaQuery } from './use-media-query';
 
 export type Breakpoint = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
