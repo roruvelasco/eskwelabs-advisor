@@ -163,6 +163,7 @@ async function updateMiddleware(
   const isProtected = [
     ...eifRoutes,
     ...adminRoutes,
+    '/',
     '/api/advisors',
     '/api/conversations',
     '/api/messages',
