@@ -1,6 +1,8 @@
 import { apiClient } from '@/lib/api/client';
 
 type ModelConfigUpdateInput = { provider: string; model: string };
+type CreateUserInput = { email: string; role: 'eif' | 'admin' };
+type UpdateUserInput = { role?: 'eif' | 'admin'; isActive?: boolean };
 
 export function getAdminUsage() {
   return apiClient.admin.usage.$get().then((response) => response.json());
@@ -35,4 +37,26 @@ export function refreshPromptCache() {
 
 export function listTelemetry() {
   return apiClient.admin.telemetry.$get().then((response) => response.json());
+}
+
+export function listUsers() {
+  return apiClient.admin.users.$get().then((response) => response.json());
+}
+
+export function createUser(input: CreateUserInput) {
+  return apiClient.admin.users
+    .$post({ json: input })
+    .then((response) => response.json());
+}
+
+export function updateUser(userId: string, input: UpdateUserInput) {
+  const update = apiClient.admin.users[':userId'].$patch as (input: {
+    param: { userId: string };
+    json: UpdateUserInput;
+  }) => Promise<Response>;
+
+  return update({
+    param: { userId },
+    json: input
+  }).then((response) => response.json());
 }

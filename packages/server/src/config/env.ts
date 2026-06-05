@@ -1,18 +1,6 @@
 import { z } from 'zod';
 
 const optionalUrl = z.string().url().optional().or(z.literal(''));
-const csv = z
-  .string()
-  .optional()
-  .transform((value) =>
-    value
-      ? value
-          .split(',')
-          .map((item) => item.trim().toLowerCase())
-          .filter(Boolean)
-      : []
-  );
-
 export const serverEnvSchema = z.object({
   APP_ORIGIN: optionalUrl.default('http://localhost:3000'),
   DATABASE_URL: z
@@ -30,8 +18,6 @@ export const serverEnvSchema = z.object({
   OPENAI_API_KEY: z.string().optional().default(''),
   ANTHROPIC_API_KEY: z.string().optional().default(''),
   GEMINI_API_KEY: z.string().optional().default(''),
-  EIF_ALLOWLIST_EMAILS: csv,
-  ADMIN_EMAILS: csv,
   DAILY_MESSAGE_LIMIT: z.coerce.number().int().positive().default(25),
   DAILY_TOKEN_LIMIT: z.coerce.number().int().positive().default(100_000),
   DAILY_SPEND_LIMIT_USD: z.coerce.number().positive().default(10),

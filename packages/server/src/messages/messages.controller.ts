@@ -1,12 +1,11 @@
 import { Controller } from '../common/factories/controller.factory';
+import { requireActor } from '../common/middleware/auth.middleware';
+import { parseJsonBody } from '../common/middleware/validation.middleware';
+import { streamSSE } from 'hono/streaming';
+import { z } from 'zod';
 
 import { MessagesSerializer } from './messages.serializer';
 import { MessagesService } from './messages.service';
-import { streamSSE } from 'hono/streaming';
-import { z } from 'zod';
-import { requireAllowlistedEifOrAdmin } from '../common/middleware/auth.middleware';
-import { parseJsonBody } from '../common/middleware/validation.middleware';
-import type { ServerEnv } from '../config/env';
 
 const chatTurnSchema = z.object({
   conversationId: z.string().uuid(),
@@ -16,25 +15,16 @@ const chatTurnSchema = z.object({
 export class MessageController extends Controller {
   constructor(
     private messagesService: MessagesService,
-    private messagesSerializer: MessagesSerializer,
-    private env: ServerEnv
+    private messagesSerializer: MessagesSerializer
   ) {
     super();
   }
 
   routes() {
-    if (this.env) {
-      this.controller.use(
-        '/messages/*',
-        requireAllowlistedEifOrAdmin(this.env)
-      );
-      this.controller.use('/messages', requireAllowlistedEifOrAdmin(this.env));
-      this.controller.use('/chat-turn', requireAllowlistedEifOrAdmin(this.env));
-      this.controller.use(
-        '/chat-turn/stream',
-        requireAllowlistedEifOrAdmin(this.env)
-      );
-    }
+    this.controller.use('/messages/*', requireActor(['eif', 'admin']));
+    this.controller.use('/messages', requireActor(['eif', 'admin']));
+    this.controller.use('/chat-turn', requireActor(['eif', 'admin']));
+    this.controller.use('/chat-turn/stream', requireActor(['eif', 'admin']));
 
     return this.controller
       .get('/messages', async (c) => {

@@ -24,7 +24,7 @@ Error codes: `forbidden` (403), `unauthorized` (401), `not_found` (404), `rate_l
 ## Advisors
 
 **Controller**: `AdvisorController` (`packages/server/src/advisors/`)
-**Auth**: `requireAllowlistedEifOrAdmin`
+**Auth**: `requireActor(['eif', 'admin'])`
 
 | Method | Path            | Description       |
 | ------ | --------------- | ----------------- |
@@ -37,19 +37,37 @@ Response: `{ data: Advisor[] }`
 ## Users
 
 **Controller**: `UsersController` (`packages/server/src/users/`)
-**Auth**: `requireAllowlistedEifOrAdmin` on `/api/consent`, `requireActor(['admin'])` on admin routes
+**Auth**: `requireActor(['eif', 'admin'])` on `/api/consent`, `requireActor(['admin'])` on admin routes
 
-| Method | Path               | Description                           |
-| ------ | ------------------ | ------------------------------------- |
-| `POST` | `/api/consent`     | Acknowledge consent for current actor |
-| `GET`  | `/api/admin/users` | List all users (admin only)           |
+| Method  | Path                   | Body                                              | Description                                                     |
+| ------- | ---------------------- | ------------------------------------------------- | --------------------------------------------------------------- |
+| `POST`  | `/api/consent`         | —                                                 | Acknowledge consent for current actor                           |
+| `GET`   | `/api/admin/users`     | —                                                 | List all users (admin only)                                     |
+| `POST`  | `/api/admin/users`     | `{ email: string, role: "eif" \| "admin" }`       | Create or reactivate user (admin only)                          |
+| `PATCH` | `/api/admin/users/:id` | `{ role?: "eif" \| "admin", isActive?: boolean }` | Update user role/status (admin only, self-deactivation guarded) |
+
+Request body (`POST /api/admin/users`):
+
+```json
+{ "email": "user@example.com", "role": "eif" }
+```
+
+Request body (`PATCH /api/admin/users/:id`):
+
+```json
+{ "role": "admin", "isActive": true }
+```
+
+Response: `{ data: User }`
+
+**Self-deactivation guard**: Admin cannot set `isActive: false` or change `role` on their own user record. Returns `403 Forbidden` with code `forbidden`.
 
 ---
 
 ## Conversations
 
 **Controller**: `ConversationController` (`packages/server/src/conversations/`)
-**Auth**: `requireAllowlistedEifOrAdmin`
+**Auth**: `requireActor(['eif', 'admin'])`
 
 | Method | Path                     | Query / Body                            | Description                          |
 | ------ | ------------------------ | --------------------------------------- | ------------------------------------ |
@@ -65,7 +83,7 @@ Response (single): `{ data: Conversation }`
 ## Messages / Chat Turn
 
 **Controller**: `MessageController` (`packages/server/src/messages/`)
-**Auth**: `requireAllowlistedEifOrAdmin`
+**Auth**: `requireActor(['eif', 'admin'])`
 
 | Method | Path                    | Body                                        | Description                     |
 | ------ | ----------------------- | ------------------------------------------- | ------------------------------- |

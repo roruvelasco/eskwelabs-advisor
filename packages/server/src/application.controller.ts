@@ -15,14 +15,14 @@ import { createRateLimitMiddleware } from './common/middleware/rate-limit.middle
 import { securityHeadersMiddleware } from './common/middleware/security.middleware';
 
 import type { HonoEnv } from './common/utils/hono';
-import type { ServerEnv } from './config/env';
 import type { RateLimitService } from './rate-limit/rate-limit.service';
+import type { UsersService } from './users/users.service';
 
 export class ApplicationController {
   private app = new Hono<HonoEnv>();
 
   constructor(
-    private env: ServerEnv,
+    private usersService: UsersService,
     private rateLimitService: RateLimitService,
     private usersController: UsersController,
     private advisorController: AdvisorController,
@@ -38,10 +38,7 @@ export class ApplicationController {
   registerControllers() {
     this.app.onError(errorHandler);
     this.app.use('*', securityHeadersMiddleware);
-
-    if (this.env) {
-      this.app.use('*', createAuthMiddleware(this.env));
-    }
+    this.app.use('*', createAuthMiddleware(this.usersService));
 
     if (this.rateLimitService) {
       this.app.use('/api/*', createRateLimitMiddleware(this.rateLimitService));

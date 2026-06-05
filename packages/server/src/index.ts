@@ -18,6 +18,8 @@ export type ApiRoutes = ReturnType<
   ApplicationController['registerControllers']
 >;
 
+export { createContainer } from './di/container';
+export { AuthService } from './auth/auth.service';
 export * from './config/env';
 export * from './common/http/http-exception';
 export * from './common/utils/hono';

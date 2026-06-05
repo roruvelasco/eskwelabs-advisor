@@ -47,6 +47,7 @@ import { UsageCounterController } from '../usage-counters/usage-counters.control
 import { UsageCountersRepository } from '../usage-counters/usage-counters.repository';
 import { UsageCountersSerializer } from '../usage-counters/usage-counters.serializer';
 import { UsageCountersService } from '../usage-counters/usage-counters.service';
+import { AuthService } from '../auth/auth.service';
 import { UsersController } from '../users/users.controller';
 import { UsersRepository } from '../users/users.repository';
 import { UsersSerializer } from '../users/users.serializer';
@@ -197,6 +198,15 @@ export function createContainer() {
       useFactory: (c) => new UsersService(c.get(UsersRepository))
     })
     .bind({
+      provide: AuthService,
+      useFactory: (c) => new AuthService(c.get(UsersService))
+    })
+    .bind({
+      provide: UsersController,
+      useFactory: (c) =>
+        new UsersController(c.get(UsersService), c.get(UsersSerializer))
+    })
+    .bind({
       provide: MessagesService,
       useFactory: (c) =>
         new MessagesService(
@@ -224,40 +234,22 @@ export function createContainer() {
         )
     })
     .bind({
-      provide: UsersController,
-      useFactory: (c) =>
-        new UsersController(
-          c.get(UsersService),
-          c.get(UsersSerializer),
-          c.get(SERVER_ENV)
-        )
-    })
-    .bind({
       provide: AdvisorController,
       useFactory: (c) =>
-        new AdvisorController(
-          c.get(AdvisorsService),
-          c.get(AdvisorsSerializer),
-          c.get(SERVER_ENV)
-        )
+        new AdvisorController(c.get(AdvisorsService), c.get(AdvisorsSerializer))
     })
     .bind({
       provide: ConversationController,
       useFactory: (c) =>
         new ConversationController(
           c.get(ConversationsService),
-          c.get(ConversationsSerializer),
-          c.get(SERVER_ENV)
+          c.get(ConversationsSerializer)
         )
     })
     .bind({
       provide: MessageController,
       useFactory: (c) =>
-        new MessageController(
-          c.get(MessagesService),
-          c.get(MessagesSerializer),
-          c.get(SERVER_ENV)
-        )
+        new MessageController(c.get(MessagesService), c.get(MessagesSerializer))
     })
     .bind({
       provide: ModelConfigController,
@@ -300,7 +292,7 @@ export function createContainer() {
       provide: ApplicationController,
       useFactory: (c) =>
         new ApplicationController(
-          c.get(SERVER_ENV),
+          c.get(UsersService),
           c.get(RateLimitService),
           c.get(UsersController),
           c.get(AdvisorController),

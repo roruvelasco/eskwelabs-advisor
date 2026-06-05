@@ -121,14 +121,15 @@ To change the look, edit the CSS variables — not component files. See [UI-PRAC
 ## Auth & CSP
 
 - **Cookie-based auth**: `eskwelabs_actor_email`, `eskwelabs_actor_id`, `eskwelabs_actor_role`, `eskwelabs_actor_active` cookies set by middleware
-- **Next.js middleware** (`apps/web/src/middleware.ts`): resolves actor from cookies, gates EIF routes (`/advisors`, `/chat`, `/history`, `/consent` + API paths) and admin routes (`/admin`, `/api/admin`) against `ADMIN_EMAILS` / `EIF_ALLOWLIST_EMAILS` env vars. Sets `x-eskwelabs-actor-*` request headers.
-- **Hono middleware** (`auth.middleware.ts`): reads `x-eskwelabs-actor-*` headers, sets `c.get('actor')`. Three helpers: `createAuthMiddleware`, `requireActor(roles)`, `requireAllowlistedEifOrAdmin`
+- **Next.js middleware** (`apps/web/src/middleware.ts`): reads JWT via `getToken()`, gates routes against JWT claims (`role`, `isActive`). Sets `x-eskwelabs-actor-*` request headers from JWT-derived claims. Never queries Postgres.
+- **Hono middleware** (`auth.middleware.ts`): `createAuthMiddleware(usersService)` validates forwarded `id`/`email` against the `users` table via `UsersService`, sets `c.get('actor')` from DB role/status. Two helpers: `requireActor(roles)` for route gating.
+- **Allowlist source**: `users` table (Supabase/Postgres) — `email`, `role`, `is_active`. Bootstrap by inserting the first admin row directly into Supabase before first login.
 - **CSP**: Nonce-based in `middleware.ts`. Layout calls `await headers()` to force dynamic rendering per-request.
 
 ## Key Env Vars
 
 Defined in `packages/server/src/config/env.ts` via zod schema. All declared in `turbo.json` `globalPassThroughEnv`:
-`DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `GOOGLE_DOCS_SERVICE_ACCOUNT_JSON`, `OPENAI_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_DOCS_PROMPT_DOC_ID`, `GOOGLE_DOCS_DNA_DOC_ID`, `GOOGLE_DOCS_API_KEY`, `GEMINI_API_KEY`, `EIF_ALLOWLIST_EMAILS`, `ADMIN_EMAILS`, `DAILY_MESSAGE_LIMIT`, `DAILY_TOKEN_LIMIT`, `DAILY_SPEND_LIMIT_USD`, `DEFAULT_MAX_OUTPUT_TOKENS`, `RATE_LIMIT_WINDOW_SECONDS`, `RATE_LIMIT_MAX_REQUESTS`
+`DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `GOOGLE_DOCS_SERVICE_ACCOUNT_JSON`, `OPENAI_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_DOCS_PROMPT_DOC_ID`, `GOOGLE_DOCS_DNA_DOC_ID`, `GOOGLE_DOCS_API_KEY`, `GEMINI_API_KEY`, `DAILY_MESSAGE_LIMIT`, `DAILY_TOKEN_LIMIT`, `DAILY_SPEND_LIMIT_USD`, `DEFAULT_MAX_OUTPUT_TOKENS`, `RATE_LIMIT_WINDOW_SECONDS`, `RATE_LIMIT_MAX_REQUESTS`
 
 ## Code Style
 
@@ -149,7 +150,7 @@ Defined in `packages/server/src/config/env.ts` via zod schema. All declared in `
 - **Tailwind v4: `not-{breakpoint}:` variant** — `not-md:` means "apply only when NOT at md breakpoint and above." This is v4-only — v3 does not have this. Do not confuse with `max-md:` ("below md").
 - **Tailwind v4: responsive variant direction** — `max-md:` = below 768px (desktop-down). `not-md:` = everywhere except exactly at `md`. Prefer mobile-first (`md:`) over `max-md:` except for targeted overrides.
 - Path alias `@/` maps to `apps/web/src/*` in web, `packages/server/src/*` in server
-- Repos currently use **in-memory Maps** (not yet backed by Drizzle queries)
+- `UsersRepository` now uses **Drizzle queries**; other repos still use in-memory Maps (migration in progress)
 - Adapters (`advisor-adapters.ts`) are deterministic stubs — no real LLM/Google Docs calls
 - Supabase clients (`client.ts`, `server.ts`) return `null` — stubs
 - All frontend components are placeholders (feature pages), but UI components in `packages/ui` are real shadcn components

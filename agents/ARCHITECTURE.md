@@ -42,7 +42,7 @@ eskwelabs-advisor/
 │   │       │   ├── middleware/   # auth, error, rate-limit, security, validation
 │   │       │   └── utils/       # HonoEnv type, client-ip, day-ph helpers
 │   │       ├── adapters/        # Deterministic LLM adapters (stubs)
-│   │       ├── auth/            # AuthService stub
+│   │       ├── auth/            # AuthService DB-backed actor resolution
 │   │       ├── cache/           # RedisService
 │   │       ├── config/          # ServerEnv zod schema
 │   │       ├── db/              # DrizzleService, drizzle-schema (re-exports)
@@ -92,7 +92,7 @@ Every backend domain at `packages/server/src/<domain>/` follows the same layout:
 
 2. **DTO** (`dto/<domain>.dto.ts`): Zod schemas for input validation (`parseJsonBody`) and type definitions for typed responses.
 
-3. **Repository** (`<domain>.repository.ts`): Extends `Repository` (which receives `DrizzleService`). Currently uses in-memory Maps; future: Drizzle queries via `this.drizzle.db`.
+3. **Repository** (`<domain>.repository.ts`): Extends `Repository` (which receives `DrizzleService`). Uses `this.drizzle.db` for table-backed domains; some incomplete MVP domains still use deterministic in-memory stubs.
 
 4. **Service** (`<domain>.service.ts`): Pure business logic. Receives repository(ies) + optional cross-cutting deps (env, cost-cap, etc.). Throws `HttpException` on violations.
 
@@ -115,16 +115,17 @@ Every backend domain at `packages/server/src/<domain>/` follows the same layout:
 ### Middleware Stack (order in `application.controller.ts`)
 
 1. `securityHeadersMiddleware` — always applied first
-2. `createAuthMiddleware(env)` — resolves actor from request headers
+2. `createAuthMiddleware(usersService)` — validates forwarded actor id/email against the `users` table and resolves DB role/status
 3. `createRateLimitMiddleware(rateLimitService)` — applies to `/api/*`
-4. Per-controller middleware — e.g. `requireAllowlistedEifOrAdmin(env)` on domain routes
+4. Per-controller middleware — e.g. `requireActor(['eif', 'admin'])` on protected domain routes
 
 ### Auth Flow
 
-1. Next.js middleware (`apps/web/src/middleware.ts`) resolves actor from cookies, validates against env allowlists, sets `x-eskwelabs-actor-*` headers
-2. Hono `auth.middleware.ts` reads those headers and sets `c.set('actor', actor)`
-3. Route handlers access via `c.get('actor')`
-4. Guard helpers: `requireActor(roles)`, `requireAllowlistedEifOrAdmin(env)`
+1. NextAuth sign-in resolves Google email against the Supabase/Postgres `users` table via `AuthService`; missing/inactive users are rejected.
+2. Next.js middleware (`apps/web/src/middleware.ts`) reads JWT claims, gates routes by `role`/`isActive`, and forwards `x-eskwelabs-actor-*` request headers.
+3. Hono `auth.middleware.ts` validates forwarded id/email against the `users` table and sets `c.set('actor', actor)` from DB role/status.
+4. Route handlers access via `c.get('actor')`.
+5. Guard helper: `requireActor(roles)`.
 
 ### Error Handling
 

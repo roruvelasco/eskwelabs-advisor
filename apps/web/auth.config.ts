@@ -1,11 +1,8 @@
-import type { NextAuthConfig } from 'next-auth';
+import type { NextAuthOptions } from 'next-auth';
 import Google from 'next-auth/providers/google';
+import { createContainer, AuthService } from '@eskwelabs-advisor/server';
 
-const csv = (value: string | undefined): string[] =>
-  (value ?? '')
-    .split(',')
-    .map((v) => v.trim().toLowerCase())
-    .filter(Boolean);
+const authService = createContainer().get(AuthService);
 
 if (!process.env.AUTH_GOOGLE_ID || !process.env.AUTH_GOOGLE_SECRET) {
   console.warn(
@@ -16,8 +13,8 @@ if (!process.env.AUTH_GOOGLE_ID || !process.env.AUTH_GOOGLE_SECRET) {
 export const authConfig = {
   providers: [
     Google({
-      clientId: process.env.AUTH_GOOGLE_ID,
-      clientSecret: process.env.AUTH_GOOGLE_SECRET,
+      clientId: process.env.AUTH_GOOGLE_ID!,
+      clientSecret: process.env.AUTH_GOOGLE_SECRET!,
       allowDangerousEmailAccountLinking: true
     })
   ],
@@ -26,66 +23,57 @@ export const authConfig = {
     error: '/login'
   },
   callbacks: {
-    authorized({ auth, request }) {
-      const { pathname } = request.nextUrl;
-      const protectedRoutes = [
-        '/advisors',
-        '/chat',
-        '/history',
-        '/consent',
-        '/api/advisors',
-        '/api/conversations',
-        '/api/messages',
-        '/api/chat-turn',
-        '/api/consent',
-        '/admin',
-        '/api/admin'
-      ];
-
-      const isProtected = protectedRoutes.some(
-        (route) => pathname === route || pathname.startsWith(`${route}/`)
-      );
-
-      if (!isProtected) return true;
-      return !!auth?.user;
-    },
-
     async jwt({ token, user }) {
       if (user) {
-        token.id = user.id;
-        token.email = user.email?.toLowerCase();
-        token.name = user.name;
-        token.picture = user.image;
+        const email = user.email?.toLowerCase();
+        if (email) {
+          const actor = await authService.resolveLogin(email);
+          if (actor) {
+            token.id = actor.id;
+            token.email = actor.email;
+            token.role = actor.role;
+            token.isActive = actor.isActive;
+            token.picture = user.image;
+            token.name = user.name;
+          }
+        }
+        return token;
+      }
+
+      if (token.id && token.email) {
+        const actor = await authService.resolveActor(
+          token.id as string,
+          token.email as string
+        );
+        if (actor) {
+          token.id = actor.id;
+          token.email = actor.email;
+          token.role = actor.role;
+          token.isActive = actor.isActive;
+        } else {
+          token.isActive = false;
+        }
       }
       return token;
     },
-
     async session({ session, token }) {
       if (session.user) {
-        session.user.id = token.id as string;
-        session.user.email = token.email as string;
+        (session.user as { id: string; email: string }).id = token.id as string;
+        (session.user as { id: string; email: string }).email =
+          token.email as string;
       }
       return session;
     },
-
     async signIn({ user }) {
       const email = user.email?.toLowerCase();
-
       if (!email) {
         return false;
       }
-
-      const adminEmails = csv(process.env.ADMIN_EMAILS);
-      const eifAllowlist = csv(process.env.EIF_ALLOWLIST_EMAILS);
-
-      const isAdmin = adminEmails.includes(email);
-      const isAllowlistedEif = eifAllowlist.includes(email);
-
-      if (!isAdmin && !isAllowlistedEif) {
+      const actor = await authService.resolveLogin(email);
+      if (!actor) {
         console.warn('auth_rejected_not_in_allowlist', { email });
         return '/login?error=NotAllowlisted';
       }
-
       return true;
     }
   },
@@ -101,7 +89,5 @@ export const authConfig = {
   },
   jwt: {
     maxAge: 30 * 24 * 60 * 60 // 30 days
-  },
-  // Enable debug logs in non-production to surface provider errors
-  debug: process.env.NODE_ENV !== 'production'
-} satisfies NextAuthConfig;
+  }
+} satisfies NextAuthOptions;

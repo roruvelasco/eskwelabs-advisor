@@ -2,34 +2,46 @@ import type { MiddlewareHandler } from 'hono';
 
 import { forbidden, unauthorized } from '../http/http-exception';
 import type { Actor, ActorRole } from '../utils/hono';
-import type { ServerEnv } from '../../config/env';
+import type { UsersService } from '../../users/users.service';
 
-function resolveActorFromHeaders(
-  headers: Headers,
-  env: ServerEnv
-): Actor | null {
+function resolveActorFromHeaders(headers: Headers): Actor | null {
   const email = headers.get('x-eskwelabs-actor-email')?.toLowerCase();
   const id = headers.get('x-eskwelabs-actor-id');
 
-  if (!email || !id) {
-    return null;
-  }
+  if (!email || !id) return null;
 
   const roleHeader = headers.get('x-eskwelabs-actor-role') as ActorRole | null;
-  const isAdmin = env.ADMIN_EMAILS.includes(email);
-  const role = isAdmin ? 'admin' : roleHeader === 'admin' ? 'admin' : 'eif';
   const isActive = headers.get('x-eskwelabs-actor-active') !== 'false';
 
-  return { id, email, role, isActive };
+  return { id, email, role: roleHeader ?? 'eif', isActive };
 }
 
-export function createAuthMiddleware(env: ServerEnv): MiddlewareHandler {
+export function createAuthMiddleware(
+  usersService: UsersService
+): MiddlewareHandler {
   return async (c, next) => {
-    const actor = resolveActorFromHeaders(c.req.raw.headers, env);
-
-    if (actor) {
-      c.set('actor', actor);
+    const forwarded = resolveActorFromHeaders(c.req.raw.headers);
+    if (!forwarded) {
+      await next();
+      return;
     }
+
+    const actor = await usersService.findById(forwarded.id);
+    if (!actor || !actor.isActive) {
+      await next();
+      return;
+    }
+    if (actor.email.toLowerCase() !== forwarded.email.toLowerCase()) {
+      await next();
+      return;
+    }
+
+    c.set('actor', {
+      id: actor.id,
+      email: actor.email,
+      role: actor.role,
+      isActive: actor.isActive
+    });
 
     await next();
   };
@@ -58,42 +70,3 @@ export function requireActor(roles: ActorRole[]): MiddlewareHandler {
     await next();
   };
 }
-
-export function requireAllowlistedEifOrAdmin(
-  env: ServerEnv
-): MiddlewareHandler {
-  return async (c, next) => {
-    const actor = c.get('actor');
-
-    if (!actor) {
-      throw unauthorized();
-    }
-
-    const isAdmin =
-      actor.role === 'admin' && env.ADMIN_EMAILS.includes(actor.email);
-    const isEif =
-      actor.role === 'eif' && env.EIF_ALLOWLIST_EMAILS.includes(actor.email);
-
-    if (!actor.isActive || (!isAdmin && !isEif)) {
-      console.warn('allowlist_denied', {
-        actorId: actor.id,
-        email: actor.email,
-        role: actor.role,
-        isActive: actor.isActive
-      });
-      throw forbidden();
-    }
-
-    await next();
-  };
-}
-
-export const authMiddleware: MiddlewareHandler = async (c, next) => {
-  c.set('actor', {
-    id: 'stub-user-id',
-    email: 'stub@example.com',
-    role: 'eif',
-    isActive: true
-  });
-  await next();
-};

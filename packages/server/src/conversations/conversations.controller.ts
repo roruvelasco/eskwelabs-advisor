@@ -1,11 +1,10 @@
 import { Controller } from '../common/factories/controller.factory';
+import { requireActor } from '../common/middleware/auth.middleware';
+import { parseJsonBody } from '../common/middleware/validation.middleware';
+import { z } from 'zod';
 
 import { ConversationsSerializer } from './conversations.serializer';
 import { ConversationsService } from './conversations.service';
-import { z } from 'zod';
-import { requireAllowlistedEifOrAdmin } from '../common/middleware/auth.middleware';
-import { parseJsonBody } from '../common/middleware/validation.middleware';
-import type { ServerEnv } from '../config/env';
 
 const createConversationSchema = z.object({
   advisorId: z.string().min(1),
@@ -15,23 +14,14 @@ const createConversationSchema = z.object({
 export class ConversationController extends Controller {
   constructor(
     private conversationsService: ConversationsService,
-    private conversationsSerializer: ConversationsSerializer,
-    private env: ServerEnv
+    private conversationsSerializer: ConversationsSerializer
   ) {
     super();
   }
 
   routes() {
-    if (this.env) {
-      this.controller.use(
-        '/conversations/*',
-        requireAllowlistedEifOrAdmin(this.env)
-      );
-      this.controller.use(
-        '/conversations',
-        requireAllowlistedEifOrAdmin(this.env)
-      );
-    }
+    this.controller.use('/conversations/*', requireActor(['eif', 'admin']));
+    this.controller.use('/conversations', requireActor(['eif', 'admin']));
 
     return this.controller
       .get('/conversations', async (c) => {

@@ -13,8 +13,8 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "turbo dev",
-    "dev:web": "turbo dev --filter=@eskwelabs-advisor/web",
+    "dev": "bun --env-file=.env run turbo dev",
+    "dev:web": "bun --env-file=.env run turbo dev --filter=@eskwelabs-advisor/web",
     "build": "turbo build",
     "check": "turbo check",
     "lint": "turbo lint",

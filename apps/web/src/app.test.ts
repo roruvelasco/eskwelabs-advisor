@@ -8,9 +8,9 @@ describe('web app', () => {
     expect('eskwelabs-advisor').toContain('advisor');
   });
 
-  test('sets a restrictive content security policy', () => {
+  test('sets a restrictive content security policy', async () => {
     const request = new NextRequest('http://localhost/login');
-    const response = middleware(request);
+    const response = await middleware(request);
     const csp = response.headers.get('Content-Security-Policy');
 
     expect(csp).toContain("default-src 'self'");

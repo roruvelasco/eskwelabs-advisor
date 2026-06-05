@@ -84,18 +84,18 @@ Before writing any code, construct a plan that addresses all of the following:
 
 Every change must consider:
 
-| Concern        | Pattern                                                               |
-| -------------- | --------------------------------------------------------------------- |
-| Auth           | `requireActor(roles)`, `requireAllowlistedEifOrAdmin(env)` middleware |
-| Ownership      | Service `assertOwns()` pattern in `conversations.service.ts`          |
-| Not found      | `throw notFound()` → 404 JSON response                                |
-| Forbidden      | `throw forbidden()` → 403 JSON response                               |
-| Validation     | `parseJsonBody(c, zodSchema)` → 400 on failure                        |
-| Rate limiting  | Automatic via `RateLimitService` on `/api/*`                          |
-| Cost cap       | `CostCapEnforcer` checks limits during chat turns                     |
-| Inactive users | `auth.middleware.ts` checks `isActive`                                |
-| Empty results  | Return `{ data: [] }` not 404                                         |
-| Null/undefined | Handle defensively in serializers                                     |
+| Concern        | Pattern                                                                   |
+| -------------- | ------------------------------------------------------------------------- |
+| Auth           | `requireActor(roles)` with DB-backed `createAuthMiddleware(usersService)` |
+| Ownership      | Service `assertOwns()` pattern in `conversations.service.ts`              |
+| Not found      | `throw notFound()` → 404 JSON response                                    |
+| Forbidden      | `throw forbidden()` → 403 JSON response                                   |
+| Validation     | `parseJsonBody(c, zodSchema)` → 400 on failure                            |
+| Rate limiting  | Automatic via `RateLimitService` on `/api/*`                              |
+| Cost cap       | `CostCapEnforcer` checks limits during chat turns                         |
+| Inactive users | `auth.middleware.ts` checks `isActive`                                    |
+| Empty results  | Return `{ data: [] }` not 404                                             |
+| Null/undefined | Handle defensively in serializers                                         |
 
 ### 9. Comments
 

@@ -42,13 +42,6 @@ function withSecurityHeaders(response: NextResponse, nonce: string) {
   return response;
 }
 
-function csv(name: string) {
-  return (process.env[name] ?? '')
-    .split(',')
-    .map((value) => value.trim().toLowerCase())
-    .filter(Boolean);
-}
-
 function isPrefixed(pathname: string, prefixes: string[]) {
   return prefixes.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
@@ -73,47 +66,47 @@ function deny(request: NextRequest) {
 
 async function updateMiddleware(
   request: NextRequest,
-  session: Record<string, unknown> | null
+  token: Record<string, unknown> | null
 ) {
   const nonce = crypto.randomUUID().replaceAll('-', '');
   const pathname = request.nextUrl.pathname;
-  const adminEmails = csv('ADMIN_EMAILS');
-  const eifAllowlist = csv('EIF_ALLOWLIST_EMAILS');
 
-  // Helper to create standard response with security headers
   const createResponse = (response: NextResponse) => {
     return withSecurityHeaders(response, nonce);
   };
 
-  // If we have a session from NextAuth, convert to cookies and validate
-  if (session?.user) {
-    const user = session.user as Record<string, unknown>;
-    const email = (user.email as string)?.toLowerCase() || '';
-    const isAdmin = adminEmails.includes(email);
+  if (token?.email) {
+    const email = (token.email as string).toLowerCase();
+    const role = token.role as string | undefined;
+    const isActive = token.isActive === true;
+    const id = (token.id as string) || '';
 
-    // Double-check allow-list (defense-in-depth)
-    if (!isAdmin && !eifAllowlist.includes(email)) {
-      console.warn('middleware_allowlist_check_failed', { email });
+    const isAdmin = role === 'admin';
+
+    if (!id || !role || !isActive) {
       return createResponse(deny(request));
     }
 
-    // Create actor for cookie storage
-    const actor = {
-      id: (user.id as string) || crypto.randomUUID(),
-      email,
-      role: isAdmin ? 'admin' : 'eif',
-      isActive: true
-    };
+    const actor = { id, email, role, isActive };
 
-    // Create response with cookies
-    const response = NextResponse.next();
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set('x-eskwelabs-actor-id', actor.id);
+    requestHeaders.set('x-eskwelabs-actor-email', actor.email);
+    requestHeaders.set('x-eskwelabs-actor-role', actor.role);
+    requestHeaders.set('x-eskwelabs-actor-active', String(actor.isActive));
+    requestHeaders.set('x-nonce', nonce);
 
-    // Set auth cookies for downstream services
+    const response = NextResponse.next({
+      request: {
+        headers: requestHeaders
+      }
+    });
+
     response.cookies.set('eskwelabs_actor_id', actor.id, {
       httpOnly: true,
       sameSite: 'lax',
       secure: process.env.NODE_ENV === 'production',
-      maxAge: 30 * 24 * 60 * 60 // 30 days
+      maxAge: 30 * 24 * 60 * 60
     });
 
     response.cookies.set('eskwelabs_actor_email', actor.email, {
@@ -130,14 +123,13 @@ async function updateMiddleware(
       maxAge: 30 * 24 * 60 * 60
     });
 
-    response.cookies.set('eskwelabs_actor_active', 'true', {
+    response.cookies.set('eskwelabs_actor_active', String(actor.isActive), {
       httpOnly: true,
       sameSite: 'lax',
       secure: process.env.NODE_ENV === 'production',
       maxAge: 30 * 24 * 60 * 60
     });
 
-    // Check if accessing protected routes
     const isAdminArea =
       isPrefixed(pathname, adminRoutes) || pathname.startsWith('/api/admin');
     const isEifArea =
@@ -148,21 +140,14 @@ async function updateMiddleware(
       pathname.startsWith('/api/chat-turn') ||
       pathname.startsWith('/api/consent');
 
-    // Check authorization for protected routes
     if (isAdminArea && !isAdmin) {
       return createResponse(deny(request));
     }
 
-    if (isEifArea && !isAdmin && !eifAllowlist.includes(email)) {
+    if (isEifArea && !isAdmin && role !== 'eif') {
       return createResponse(deny(request));
     }
 
-    // Set headers for downstream Hono services
-    response.headers.set('x-nonce', nonce);
-    response.headers.set('x-eskwelabs-actor-id', actor.id);
-    response.headers.set('x-eskwelabs-actor-email', actor.email);
-    response.headers.set('x-eskwelabs-actor-role', actor.role);
-    response.headers.set('x-eskwelabs-actor-active', String(actor.isActive));
     response.headers.set('Content-Security-Policy', cspHeader(nonce));
     response.headers.set('X-Content-Type-Options', 'nosniff');
     response.headers.set('X-Frame-Options', 'DENY');
@@ -175,7 +160,6 @@ async function updateMiddleware(
     return response;
   }
 
-  // No session - check if route is protected
   const isProtected = [
     ...eifRoutes,
     ...adminRoutes,
@@ -191,7 +175,6 @@ async function updateMiddleware(
     return createResponse(deny(request));
   }
 
-  // Public route - pass through with security headers
   const response = NextResponse.next();
   response.headers.set('x-nonce', nonce);
   response.headers.set('Content-Security-Policy', cspHeader(nonce));
@@ -211,18 +194,8 @@ export async function middleware(request: NextRequest) {
     req: request,
     secret: process.env.AUTH_SECRET
   });
-  const session = token
-    ? {
-        user: {
-          id: token.sub ?? (token as { id?: string }).id ?? crypto.randomUUID(),
-          email: token.email,
-          name: token.name,
-          image: token.picture
-        }
-      }
-    : null;
 
-  return updateMiddleware(request, session as Record<string, unknown> | null);
+  return updateMiddleware(request, token as Record<string, unknown> | null);
 }
 
 export const config = {
