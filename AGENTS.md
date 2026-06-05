@@ -6,15 +6,15 @@ Entry-point doc. For deep dives, see `agents/*`:
 - [API_CONTRACT.md](agents/API_CONTRACT.md) — all API endpoints & method signatures
 - [DATABASE.md](agents/DATABASE.md) — table schemas, relationships, migrations
 - [CHANGE_PROCESS.md](agents/CHANGE_PROCESS.md) — protocol for making changes (READ FIRST before any edit)
-- [PRD.md](agents/PRD.md) — business requirements, FRs, NFRs, edge cases, acceptance criteria
-- [DEVELOPMENT-FLOW.md](agents/DEVELOPMENT-FLOW.md) — phased implementation guide (grain-of-salt reference)
+- [PRD.MD](agents/PRD.MD) — business requirements, FRs, NFRs, edge cases, acceptance criteria
+- [DEVELOPMENT-FLOW.MD](agents/DEVELOPMENT-FLOW.MD) — phased implementation guide (grain-of-salt reference)
 - [UI-PRACTICES.md](agents/UI-PRACTICES.md) — UI component principles (shadcn foundation, design tokens, motion)
 
 ## Agent Workflow
 
 When asked to build a new feature, fix a bug, or make any code change:
 
-1. Read the relevant section in [PRD.md](agents/PRD.md) for business rules and edge cases
+1. Read the relevant section in [PRD.MD](agents/PRD.MD) for business rules and edge cases
 2. Read [CHANGE_PROCESS.md](agents/CHANGE_PROCESS.md) and construct a plan adhering to architecture patterns, DI wiring, and access control
 3. Propose the plan before writing any code
 
@@ -161,7 +161,7 @@ Defined in `packages/server/src/config/env.ts` via zod schema. All declared in `
 
 ## Development Process
 
-> **PRD**: Business requirements in [PRD.md](agents/PRD.md). Implementation guide in [DEVELOPMENT-FLOW.md](agents/DEVELOPMENT-FLOW.md) (grain of salt).
+> **PRD**: Business requirements in [PRD.MD](agents/PRD.MD). Implementation guide in [DEVELOPMENT-FLOW.MD](agents/DEVELOPMENT-FLOW.MD) (grain of salt).
 
 Before making any change, read [CHANGE_PROCESS.md](agents/CHANGE_PROCESS.md) and construct a plan that:
 

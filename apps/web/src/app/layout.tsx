@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { headers } from 'next/headers';
 import { Fraunces, Geist } from 'next/font/google';
 
+import { Toaster } from '@eskwelabs-advisor/ui';
 import { QueryProvider } from '@/components/query-provider';
 
 import '../styles/globals.css';
@@ -37,6 +38,7 @@ export default async function RootLayout({
     >
       <body>
         <QueryProvider>{children}</QueryProvider>
+        <Toaster position="bottom-right" />
       </body>
     </html>
   );

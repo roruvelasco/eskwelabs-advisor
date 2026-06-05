@@ -15,7 +15,7 @@ Before writing any code, construct a plan that addresses all of the following:
 
 ### 2. Follow the PRD
 
-> **PRD**: Business requirements in [PRD.md](PRD.md). Implementation guide in [DEVELOPMENT-FLOW.md](DEVELOPMENT-FLOW.md) (grain of salt).
+> **PRD**: Business requirements in [PRD.MD](PRD.MD). Implementation guide in [DEVELOPMENT-FLOW.MD](DEVELOPMENT-FLOW.MD) (grain of salt).
 
 - Every change must align with the product requirements and business rules in the PRD
 - Consider all edge cases (see PRD §6.3), not just the happy path
