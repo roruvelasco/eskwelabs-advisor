@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
+import { UsageCountersRepository } from '../usage-counters.repository';
 import { UsageCountersService } from '../usage-counters.service';
 
 describe('usage counters service', () => {
@@ -56,5 +57,77 @@ describe('usage counters service', () => {
         }
       }
     ]);
+  });
+});
+
+describe('usage counters repository', () => {
+  test('increments with SQL deltas instead of read-then-overwrite', async () => {
+    const calls: unknown[] = [];
+    const repository = Object.create(
+      UsageCountersRepository.prototype
+    ) as UsageCountersRepository;
+    const repositoryInternals = repository as unknown as {
+      drizzle: unknown;
+      findForUserDay: () => never;
+    };
+
+    repositoryInternals.findForUserDay = () => {
+      throw new Error('findForUserDay should not be called');
+    };
+    repositoryInternals.drizzle = {
+      db: {
+        insert: () => ({
+          values: (values: unknown) => {
+            calls.push({ values });
+            return {
+              onConflictDoUpdate: (update: unknown) => {
+                calls.push({ update });
+                return {
+                  returning: async () => [
+                    {
+                      userId: 'user-id',
+                      dayPh: '2026-06-08',
+                      messagesToday: 3,
+                      tokensToday: 42,
+                      estimatedSpendTodayUsd: '0.001000'
+                    }
+                  ]
+                };
+              }
+            };
+          }
+        })
+      }
+    };
+
+    await (repository as UsageCountersRepository).increment(
+      'user-id',
+      {
+        messages: 1,
+        tokens: 12,
+        estimatedSpendUsd: 0.001
+      },
+      '2026-06-08'
+    );
+
+    expect(calls[0]).toEqual({
+      values: {
+        userId: 'user-id',
+        dayPh: '2026-06-08',
+        messagesToday: 1,
+        tokensToday: 12,
+        estimatedSpendTodayUsd: '0.001000'
+      }
+    });
+    expect(calls[1]).toMatchObject({
+      update: {
+        target: expect.any(Array),
+        set: {
+          messagesToday: expect.any(Object),
+          tokensToday: expect.any(Object),
+          estimatedSpendTodayUsd: expect.any(Object)
+        }
+      }
+    });
   });
 });
