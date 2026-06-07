@@ -1,34 +1,20 @@
+import { eq } from 'drizzle-orm';
+
 import { Repository } from '../common/factories/repository.factory';
-
-interface ModelConfigRow {
-  advisorId: string;
-  provider: string;
-  model: string;
-  isEnabled: boolean;
-  updatedBy?: string;
-  updatedAt: string;
-}
-
-const rows = new Map<string, ModelConfigRow>(
-  ['data-dashboard', 'ssot-memo', 'advisor-3'].map((advisorId) => [
-    advisorId,
-    {
-      advisorId,
-      provider: 'deterministic',
-      model: 'deterministic-model',
-      isEnabled: true,
-      updatedAt: new Date(0).toISOString()
-    }
-  ])
-);
+import { modelConfigTable, type ModelConfig } from './model-config.schema';
 
 export class ModelConfigRepository extends Repository {
-  async list() {
-    return [...rows.values()];
+  async list(): Promise<ModelConfig[]> {
+    return this.drizzle.db.select().from(modelConfigTable);
   }
 
-  async find(advisorId: string) {
-    return rows.get(advisorId) ?? null;
+  async find(advisorId: string): Promise<ModelConfig | undefined> {
+    const rows = await this.drizzle.db
+      .select()
+      .from(modelConfigTable)
+      .where(eq(modelConfigTable.advisorId, advisorId))
+      .limit(1);
+    return rows[0];
   }
 
   async upsert(
@@ -39,16 +25,29 @@ export class ModelConfigRepository extends Repository {
       updatedBy: string;
       isEnabled?: boolean;
     }
-  ) {
-    const row = {
-      advisorId,
-      provider: input.provider,
-      model: input.model,
-      isEnabled: input.isEnabled ?? true,
-      updatedBy: input.updatedBy,
-      updatedAt: new Date().toISOString()
-    };
-    rows.set(advisorId, row);
-    return row;
+  ): Promise<ModelConfig> {
+    const rows = await this.drizzle.db
+      .insert(modelConfigTable)
+      .values({
+        advisorId,
+        provider: input.provider,
+        model: input.model,
+        isEnabled: input.isEnabled ?? true,
+        updatedBy: input.updatedBy,
+        updatedAt: new Date()
+      })
+      .onConflictDoUpdate({
+        target: modelConfigTable.advisorId,
+        set: {
+          provider: input.provider,
+          model: input.model,
+          isEnabled: input.isEnabled ?? true,
+          updatedBy: input.updatedBy,
+          updatedAt: new Date()
+        }
+      })
+      .returning();
+
+    return rows[0];
   }
 }

@@ -8,6 +8,10 @@ import {
   DeterministicDnaDigestGenerator,
   DeterministicLlmProvider,
   DeterministicPromptFetcher,
+  GeminiLlmProvider,
+  GoogleDocsBackedPromptFetcher,
+  GoogleDocsClient,
+  GoogleDocsGeminiDnaDigestGenerator,
   type DnaDigestGenerator,
   type GoogleDocsPromptFetcher,
   type LlmProvider
@@ -87,15 +91,45 @@ export function createContainer() {
     })
     .bind({
       provide: PROMPT_FETCHER,
-      useFactory: () => new DeterministicPromptFetcher()
+      useFactory: (c) => {
+        const env = c.get(SERVER_ENV);
+        if (env.GOOGLE_DOCS_SERVICE_ACCOUNT_JSON || env.GOOGLE_DOCS_API_KEY) {
+          return new GoogleDocsBackedPromptFetcher(
+            c.get(AdvisorsService),
+            new GoogleDocsClient(env),
+            c.get(RedisService),
+            c.get(PromptCacheRepository)
+          );
+        }
+        return new DeterministicPromptFetcher();
+      }
     })
     .bind({
       provide: DNA_DIGEST_GENERATOR,
-      useFactory: () => new DeterministicDnaDigestGenerator()
+      useFactory: (c) => {
+        const env = c.get(SERVER_ENV);
+        if (
+          env.GOOGLE_DOCS_DNA_DOC_ID &&
+          (env.GOOGLE_DOCS_SERVICE_ACCOUNT_JSON || env.GOOGLE_DOCS_API_KEY) &&
+          env.GEMINI_API_KEY
+        ) {
+          return new GoogleDocsGeminiDnaDigestGenerator(
+            new GoogleDocsClient(env),
+            c.get(RedisService),
+            c.get(PromptCacheRepository),
+            env
+          );
+        }
+        return new DeterministicDnaDigestGenerator();
+      }
     })
     .bind({
       provide: LLM_PROVIDER,
-      useFactory: () => new DeterministicLlmProvider()
+      useFactory: (c) => {
+        const env = c.get(SERVER_ENV);
+        if (env.GEMINI_API_KEY) return new GeminiLlmProvider(env);
+        return new DeterministicLlmProvider();
+      }
     })
     .bind({
       provide: AdminRepository,
@@ -170,7 +204,11 @@ export function createContainer() {
     .bind({
       provide: ConversationsService,
       useFactory: (c) =>
-        new ConversationsService(c.get(ConversationsRepository))
+        new ConversationsService(
+          c.get(ConversationsRepository),
+          c.get(AdvisorsService),
+          c.get(ModelConfigService)
+        )
     })
     .bind({
       provide: ModelConfigService,
@@ -218,6 +256,7 @@ export function createContainer() {
           c.get(LLM_PROVIDER),
           c.get(CostCapEnforcer),
           c.get(UsageCountersService),
+          c.get(TelemetryService),
           c.get(SERVER_ENV)
         )
     })
