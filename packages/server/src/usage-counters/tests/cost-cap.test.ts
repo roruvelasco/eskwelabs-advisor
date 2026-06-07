@@ -68,4 +68,18 @@ describe('cost cap enforcer', () => {
       })
     ).resolves.toBeUndefined();
   });
+
+  test('blocks when estimated turn exceeds remaining spend cap', async () => {
+    await expect(
+      enforcerFor({
+        messagesToday: 0,
+        tokensToday: 10,
+        estimatedSpendTodayUsd: '0.95'
+      }).assertAllowed({
+        userId: 'user-id',
+        estimatedTokens: 10,
+        estimatedCostUsd: 0.06
+      })
+    ).rejects.toMatchObject({ code: 'estimated_spend_limit' });
+  });
 });

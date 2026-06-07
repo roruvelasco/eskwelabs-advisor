@@ -19,7 +19,7 @@ export const serverEnvSchema = z.object({
   OPENAI_API_KEY: z.string().optional().default(''),
   ANTHROPIC_API_KEY: z.string().optional().default(''),
   GEMINI_API_KEY: z.string().optional().default(''),
-  GEMINI_MODEL: z.string().optional().default('gemini-2.0-flash'),
+  GEMINI_MODEL: z.string().optional().default('gemini-2.5-flash-lite'),
   DAILY_MESSAGE_LIMIT: z.coerce.number().int().positive().default(25),
   DAILY_TOKEN_LIMIT: z.coerce.number().int().positive().default(100_000),
   DAILY_SPEND_LIMIT_USD: z.coerce.number().positive().default(10),

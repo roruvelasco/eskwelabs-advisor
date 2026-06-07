@@ -1,12 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 
-import { createContainer } from '../../di/container';
 import { telemetryDto } from '../dto/telemetry.dto';
 import { TelemetryService } from '../telemetry.service';
 
 describe('telemetry service', () => {
-  test('lists placeholder events', async () => {
-    const service = createContainer().get(TelemetryService);
+  test('lists events from the repository', async () => {
+    const service = new TelemetryService({
+      list: async () => []
+    } as never);
+
     await expect(service.list()).resolves.toEqual([]);
   });
 });

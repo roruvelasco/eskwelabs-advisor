@@ -9,7 +9,7 @@ describe('model config service', () => {
         {
           advisorId: 'data-dashboard',
           provider: 'gemini',
-          model: 'gemini-2.0-flash',
+          model: 'gemini-2.5-flash-lite',
           isEnabled: true,
           updatedBy: null,
           updatedAt: new Date()
@@ -21,7 +21,7 @@ describe('model config service', () => {
       expect.objectContaining({
         advisorId: 'data-dashboard',
         provider: 'gemini',
-        model: 'gemini-2.0-flash',
+        model: 'gemini-2.5-flash-lite',
         isEnabled: true
       })
     ]);

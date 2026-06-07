@@ -66,9 +66,9 @@ CREATE TABLE "model_config" (
 --> statement-breakpoint
 INSERT INTO "model_config" ("advisor_id", "provider", "model", "is_enabled", "updated_by")
 VALUES
-	('data-dashboard', 'gemini', 'gemini-2.0-flash', true, NULL),
-	('ssot-memo', 'gemini', 'gemini-2.0-flash', true, NULL),
-	('advisor-3', 'gemini', 'gemini-2.0-flash', true, NULL)
+	('data-dashboard', 'gemini', 'gemini-2.5-flash-lite', true, NULL),
+	('ssot-memo', 'gemini', 'gemini-2.5-flash-lite', true, NULL),
+	('advisor-3', 'gemini', 'gemini-2.5-flash-lite', true, NULL)
 ON CONFLICT ("advisor_id") DO NOTHING;
 --> statement-breakpoint
 CREATE TABLE "prompt_cache" (

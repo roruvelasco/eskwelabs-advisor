@@ -1,0 +1,52 @@
+export type ModelRate = {
+  provider: string;
+  model: string;
+  inputUsdPerMillionTokens: number;
+  outputUsdPerMillionTokens: number;
+};
+
+const MODEL_RATES: ModelRate[] = [
+  {
+    provider: 'gemini',
+    model: 'gemini-2.5-flash-lite',
+    inputUsdPerMillionTokens: 0.1,
+    outputUsdPerMillionTokens: 0.4
+  },
+  {
+    provider: 'gemini',
+    model: 'gemini-2.5-flash',
+    inputUsdPerMillionTokens: 0.3,
+    outputUsdPerMillionTokens: 2.5
+  },
+  {
+    provider: 'deterministic',
+    model: 'deterministic-model',
+    inputUsdPerMillionTokens: 0,
+    outputUsdPerMillionTokens: 0
+  }
+];
+
+export function getModelRate(provider: string, model: string) {
+  return MODEL_RATES.find(
+    (rate) => rate.provider === provider && rate.model === model
+  );
+}
+
+export function estimateModelCostUsd(input: {
+  provider: string;
+  model: string;
+  promptTokens: number;
+  completionTokens: number;
+}) {
+  const rate = getModelRate(input.provider, input.model);
+  if (!rate) return null;
+
+  return (
+    (input.promptTokens / 1_000_000) * rate.inputUsdPerMillionTokens +
+    (input.completionTokens / 1_000_000) * rate.outputUsdPerMillionTokens
+  );
+}
+
+export function formatEstimatedCostUsd(value: number) {
+  return value.toFixed(6);
+}

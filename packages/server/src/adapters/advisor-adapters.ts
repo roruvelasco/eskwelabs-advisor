@@ -5,6 +5,10 @@ import type { RedisService } from '../cache/redis.service';
 import type { ServerEnv } from '../config/env';
 import type { AdvisorsService } from '../advisors/advisors.service';
 import type { PromptCacheRepository } from '../prompt-cache/prompt-cache.repository';
+import {
+  estimateModelCostUsd,
+  formatEstimatedCostUsd
+} from '../usage-counters/model-rates';
 
 export interface PromptSnapshot {
   text: string;
@@ -483,20 +487,6 @@ function geminiSystemInstruction(messages: LlmChatRequest['messages']) {
   return text ? { parts: [{ text }] } : undefined;
 }
 
-function estimateGeminiCost(
-  promptTokens: number,
-  completionTokens: number,
-  env: ServerEnv
-) {
-  const inputRate = 0.1;
-  const outputRate = 0.4;
-  if (!env.GEMINI_API_KEY) return '0';
-  return (
-    (promptTokens / 1_000_000) * inputRate +
-    (completionTokens / 1_000_000) * outputRate
-  ).toFixed(6);
-}
-
 export class GeminiLlmProvider implements LlmProvider {
   constructor(private env: ServerEnv) {}
 
@@ -553,10 +543,13 @@ export class GeminiLlmProvider implements LlmProvider {
       promptTokens,
       completionTokens,
       latencyMs: Date.now() - startedAt,
-      estimatedCostUsd: estimateGeminiCost(
-        promptTokens,
-        completionTokens,
-        this.env
+      estimatedCostUsd: formatEstimatedCostUsd(
+        estimateModelCostUsd({
+          provider: request.provider,
+          model: request.model,
+          promptTokens,
+          completionTokens
+        }) ?? 0
       )
     };
   }
@@ -624,10 +617,13 @@ export class GeminiLlmProvider implements LlmProvider {
             totalTokens:
               payload.usageMetadata.totalTokenCount ??
               promptTokens + completionTokens,
-            estimatedCostUsd: estimateGeminiCost(
-              promptTokens,
-              completionTokens,
-              this.env
+            estimatedCostUsd: formatEstimatedCostUsd(
+              estimateModelCostUsd({
+                provider: request.provider,
+                model: request.model,
+                promptTokens,
+                completionTokens
+              }) ?? 0
             )
           };
         }

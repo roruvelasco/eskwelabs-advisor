@@ -43,7 +43,7 @@ describe('conversations service', () => {
         getForAdvisor: async () => ({
           advisorId: 'data-dashboard',
           provider: 'gemini',
-          model: 'gemini-2.0-flash',
+          model: 'gemini-2.5-flash-lite',
           isEnabled: true,
           updatedAt: new Date()
         })
@@ -76,7 +76,7 @@ describe('conversations service', () => {
         getForAdvisor: async () => ({
           advisorId: 'data-dashboard',
           provider: 'gemini',
-          model: 'gemini-2.0-flash',
+          model: 'gemini-2.5-flash-lite',
           isEnabled: false,
           updatedAt: new Date()
         })
