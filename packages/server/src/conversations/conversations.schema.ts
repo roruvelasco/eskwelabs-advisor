@@ -1,11 +1,15 @@
 import { pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { advisorsTable } from '../advisors/advisors.schema';
+import { usersTable } from '../users/users.schema';
 
 export const conversationsTable = pgTable('conversations', {
-  id: uuid('id')
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  userId: uuid('user_id').notNull(),
-  advisorId: text('advisor_id').notNull(),
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => usersTable.id),
+  advisorId: text('advisor_id')
+    .notNull()
+    .references(() => advisorsTable.id),
   title: text('title').notNull().default('Untitled conversation'),
   status: text('status').notNull().default('active'),
   createdAt: timestamp('created_at', { withTimezone: true })

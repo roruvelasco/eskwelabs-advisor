@@ -1,9 +1,7 @@
 import { jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 export const telemetryEventsTable = pgTable('telemetry_events', {
-  id: uuid('id')
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
+  id: uuid('id').primaryKey().defaultRandom(),
   eventName: text('event_name').notNull(),
   actorId: uuid('actor_id'),
   severity: text('severity').notNull().default('info'),

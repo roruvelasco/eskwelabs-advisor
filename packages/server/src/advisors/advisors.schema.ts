@@ -4,6 +4,7 @@ export const advisorsTable = pgTable('advisors', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   description: text('description').notNull().default(''),
+  promptDocId: text('prompt_doc_id'),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()

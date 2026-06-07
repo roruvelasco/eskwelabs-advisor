@@ -7,10 +7,14 @@ import {
   uuid
 } from 'drizzle-orm/pg-core';
 
+import { usersTable } from '../users/users.schema';
+
 export const usageCountersTable = pgTable(
   'usage_counters',
   {
-    userId: uuid('user_id').notNull(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => usersTable.id),
     dayPh: date('day_ph').notNull(),
     messagesToday: integer('messages_today').notNull().default(0),
     tokensToday: integer('tokens_today').notNull().default(0),
@@ -22,3 +26,5 @@ export const usageCountersTable = pgTable(
     pk: primaryKey({ columns: [table.userId, table.dayPh] })
   })
 );
+
+export type UsageCounter = typeof usageCountersTable.$inferSelect;

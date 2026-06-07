@@ -1,7 +1,10 @@
 import { boolean, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { advisorsTable } from '../advisors/advisors.schema';
 
 export const modelConfigTable = pgTable('model_config', {
-  advisorId: text('advisor_id').primaryKey(),
+  advisorId: text('advisor_id')
+    .primaryKey()
+    .references(() => advisorsTable.id),
   provider: text('provider').notNull(),
   model: text('model').notNull(),
   isEnabled: boolean('is_enabled').notNull().default(true),

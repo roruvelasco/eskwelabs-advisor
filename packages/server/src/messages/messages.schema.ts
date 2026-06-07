@@ -7,12 +7,17 @@ import {
   uuid
 } from 'drizzle-orm/pg-core';
 
+import { conversationsTable } from '../conversations/conversations.schema';
+import { usersTable } from '../users/users.schema';
+
 export const messagesTable = pgTable('messages', {
-  id: uuid('id')
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  conversationId: uuid('conversation_id').notNull(),
-  userId: uuid('user_id').notNull(),
+  id: uuid('id').primaryKey().defaultRandom(),
+  conversationId: uuid('conversation_id')
+    .notNull()
+    .references(() => conversationsTable.id),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => usersTable.id),
   role: text('role').notNull(),
   content: text('content').notNull(),
   provider: text('provider'),
