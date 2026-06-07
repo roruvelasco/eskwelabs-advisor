@@ -1,8 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { createContainer } from '../../di/container';
 import { HttpException } from '../../common/http/http-exception';
-import { ConversationsService } from '../../conversations/conversations.service';
 import { MessagesService } from '../messages.service';
 import type { MessageRow } from '../messages.repository';
 import type { Actor } from '../../common/utils/hono';
@@ -67,7 +65,8 @@ describe('messages service', () => {
             status: 'active',
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
-          })
+          }),
+          touch: async () => undefined
         } as never,
         {
           getForAdvisor: async () => ({
@@ -110,6 +109,7 @@ describe('messages service', () => {
         },
         { assertAllowed: async () => undefined } as never,
         { incrementTurn: async () => undefined } as never,
+        { record: async () => undefined } as never,
         { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never
       );
     }
@@ -128,21 +128,75 @@ describe('messages service', () => {
 
     expect(dnaCalls).toBe(2);
     expect(requests.map((request) => request.messages[0]?.content)).toEqual([
-      'System instructions for data-dashboard\nshared dna digest',
-      'System instructions for ssot-memo\nshared dna digest'
+      'shared dna digest\nSystem instructions for data-dashboard',
+      'shared dna digest\nSystem instructions for ssot-memo'
     ]);
   });
 
   test('runs a chat turn without leaking system prompt content', async () => {
-    const container = createContainer();
-    const conversationsService = container.get(ConversationsService);
-    const messagesService = container.get(MessagesService);
-    const conversation = await conversationsService.create(actor, {
-      advisorId: 'data-dashboard'
-    });
+    const conversationId = crypto.randomUUID();
+    const messagesService = new MessagesService(
+      {
+        listForConversation: async () => [],
+        create: async (input: Omit<MessageRow, 'id' | 'createdAt'>) => ({
+          id: crypto.randomUUID(),
+          createdAt: new Date().toISOString(),
+          ...input
+        })
+      } as never,
+      {
+        assertOwns: async () => ({
+          id: conversationId,
+          userId: actor.id,
+          advisorId: 'data-dashboard',
+          title: 'Untitled',
+          status: 'active',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }),
+        touch: async () => undefined
+      } as never,
+      {
+        getForAdvisor: async () => ({
+          advisorId: 'data-dashboard',
+          provider: 'deterministic',
+          model: 'deterministic-model',
+          isEnabled: true,
+          updatedAt: new Date().toISOString()
+        })
+      } as never,
+      {
+        fetchPrompt: async () => ({
+          text: 'System instructions',
+          revision: 'prompt-revision',
+          hash: 'prompt-hash'
+        })
+      },
+      {
+        getDigest: async () => ({
+          digest: 'DNA digest',
+          version: 'dna-v1',
+          hash: 'dna-hash'
+        })
+      },
+      {
+        complete: async () => ({
+          content: 'Draft response for the learner.',
+          promptTokens: 100,
+          completionTokens: 20,
+          latencyMs: 1,
+          estimatedCostUsd: '0.001'
+        }),
+        stream: streamShouldNotBeCalled
+      },
+      { assertAllowed: async () => undefined } as never,
+      { incrementTurn: async () => undefined } as never,
+      { record: async () => undefined } as never,
+      { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never
+    );
 
     const turn = await messagesService.chatTurn(actor, {
-      conversationId: conversation.id,
+      conversationId,
       content: 'What should I inspect?'
     });
 
@@ -152,16 +206,78 @@ describe('messages service', () => {
   });
 
   test('streams chunks and a final safe payload', async () => {
-    const container = createContainer();
-    const conversationsService = container.get(ConversationsService);
-    const messagesService = container.get(MessagesService);
-    const conversation = await conversationsService.create(actor, {
-      advisorId: 'data-dashboard'
-    });
+    const conversationId = crypto.randomUUID();
+    const messagesService = new MessagesService(
+      {
+        listForConversation: async () => [],
+        create: async (input: Omit<MessageRow, 'id' | 'createdAt'>) => ({
+          id: crypto.randomUUID(),
+          createdAt: new Date().toISOString(),
+          ...input
+        })
+      } as never,
+      {
+        assertOwns: async () => ({
+          id: conversationId,
+          userId: actor.id,
+          advisorId: 'data-dashboard',
+          title: 'Untitled',
+          status: 'active',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }),
+        touch: async () => undefined
+      } as never,
+      {
+        getForAdvisor: async () => ({
+          advisorId: 'data-dashboard',
+          provider: 'deterministic',
+          model: 'deterministic-model',
+          isEnabled: true,
+          updatedAt: new Date().toISOString()
+        })
+      } as never,
+      {
+        fetchPrompt: async () => ({
+          text: 'System instructions',
+          revision: 'prompt-revision',
+          hash: 'prompt-hash'
+        })
+      },
+      {
+        getDigest: async () => ({
+          digest: 'DNA digest',
+          version: 'dna-v1',
+          hash: 'dna-hash'
+        })
+      },
+      {
+        complete: async () => {
+          throw new Error('complete should not be called');
+        },
+        async *stream() {
+          yield { type: 'delta' as const, content: 'Draft ' };
+          yield { type: 'delta' as const, content: 'response' };
+          yield {
+            type: 'done' as const,
+            usage: {
+              promptTokens: 100,
+              completionTokens: 20,
+              totalTokens: 120,
+              estimatedCostUsd: '0.001'
+            }
+          };
+        }
+      },
+      { assertAllowed: async () => undefined } as never,
+      { incrementTurn: async () => undefined } as never,
+      { record: async () => undefined } as never,
+      { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never
+    );
 
     const events: StreamEvent[] = [];
     for await (const event of messagesService.streamChatTurn(actor, {
-      conversationId: conversation.id,
+      conversationId,
       content: 'Stream this'
     })) {
       events.push(event);
@@ -221,7 +337,8 @@ describe('messages service', () => {
           status: 'active',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
-        })
+        }),
+        touch: async () => undefined
       } as never,
       {
         getForAdvisor: async () => ({
@@ -261,6 +378,7 @@ describe('messages service', () => {
       },
       { assertAllowed: async () => undefined } as never,
       { incrementTurn: async () => undefined } as never,
+      { record: async () => undefined } as never,
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never
     );
 
@@ -271,7 +389,7 @@ describe('messages service', () => {
 
     expect(capturedRequest?.messages.map((message) => message.content)).toEqual(
       [
-        'System instructions\nshared dna digest',
+        'shared dna digest\nSystem instructions',
         ...Array.from({ length: 20 }, (_, index) => `history-${index + 5}`),
         'newest'
       ]
@@ -343,6 +461,7 @@ describe('messages service', () => {
           increments.push(input);
         }
       } as never,
+      { record: async () => undefined } as never,
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never
     );
 
@@ -436,6 +555,7 @@ describe('messages service', () => {
       {
         incrementTurn: async () => undefined
       } as never,
+      { record: async () => undefined } as never,
       {
         DEFAULT_MAX_OUTPUT_TOKENS: 2000
       } as never

@@ -1,11 +1,29 @@
 import { describe, expect, test } from 'bun:test';
 
-import { createContainer } from '../../di/container';
 import { ModelConfigService } from '../model-config.service';
 
 describe('model config service', () => {
-  test('lists seeded advisor model config', async () => {
-    const service = createContainer().get(ModelConfigService);
-    await expect(service.list()).resolves.toHaveLength(3);
+  test('lists advisor model config from the repository', async () => {
+    const service = new ModelConfigService({
+      list: async () => [
+        {
+          advisorId: 'data-dashboard',
+          provider: 'gemini',
+          model: 'gemini-2.0-flash',
+          isEnabled: true,
+          updatedBy: null,
+          updatedAt: new Date()
+        }
+      ]
+    } as never);
+
+    await expect(service.list()).resolves.toEqual([
+      expect.objectContaining({
+        advisorId: 'data-dashboard',
+        provider: 'gemini',
+        model: 'gemini-2.0-flash',
+        isEnabled: true
+      })
+    ]);
   });
 });
