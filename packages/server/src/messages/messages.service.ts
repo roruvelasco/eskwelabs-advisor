@@ -11,6 +11,7 @@ import type { Actor } from '../common/utils/hono';
 import type { ServerEnv } from '../config/env';
 import type { ConversationsService } from '../conversations/conversations.service';
 import type { ModelConfigService } from '../model-config/model-config.service';
+import type { TelemetryService } from '../telemetry/telemetry.service';
 import type { CostCapEnforcer } from '../usage-counters/cost-cap.service';
 import type { UsageCountersService } from '../usage-counters/usage-counters.service';
 
@@ -26,6 +27,7 @@ export class MessagesService {
     private llmProvider: LlmProvider,
     private costCapEnforcer: CostCapEnforcer,
     private usageCountersService: UsageCountersService,
+    private telemetryService: TelemetryService,
     private env: ServerEnv
   ) {}
 
@@ -101,7 +103,7 @@ export class MessagesService {
       messages: [
         {
           role: 'system',
-          content: `${prompt.text}\n${dna.digest}`
+          content: `${dna.digest}\n${prompt.text}`
         },
         ...history,
         { role: 'user', content: input.content }
@@ -131,6 +133,24 @@ export class MessagesService {
       status: 'blocked',
       blockReason
     });
+  }
+
+  private async recordTelemetry(
+    eventName: string,
+    actor: Actor,
+    severity: 'info' | 'warning' | 'error',
+    payload: Record<string, unknown>
+  ) {
+    try {
+      await this.telemetryService.record(
+        eventName,
+        actor.id,
+        severity,
+        payload
+      );
+    } catch {
+      return;
+    }
   }
 
   private async persistAssistantTurn(
@@ -167,6 +187,16 @@ export class MessagesService {
       estimatedCostUsd: Number(completion.estimatedCostUsd)
     });
 
+    await this.conversationsService.touch(conversationId);
+    await this.recordTelemetry('chat_turn_completed', actor, 'info', {
+      conversationId,
+      provider: prepared.provider,
+      model: prepared.model,
+      promptTokens: completion.promptTokens,
+      completionTokens: completion.completionTokens,
+      estimatedCostUsd: completion.estimatedCostUsd
+    });
+
     return assistantMessage;
   }
 
@@ -195,6 +225,10 @@ export class MessagesService {
             error.code
           );
         }
+        await this.recordTelemetry('chat_turn_blocked', actor, 'warning', {
+          conversationId: input.conversationId,
+          code: error.code
+        });
       }
       throw error;
     }
@@ -270,6 +304,13 @@ export class MessagesService {
               : 'chat_stream_error',
           promptDocRevision: prepared.promptDocRevision,
           dnaDigestVersion: prepared.dnaDigestVersion
+        });
+        await this.recordTelemetry('chat_turn_stream_error', actor, 'error', {
+          conversationId: input.conversationId,
+          code:
+            error instanceof Error && 'code' in error
+              ? String(error.code)
+              : 'chat_stream_error'
         });
       }
 
