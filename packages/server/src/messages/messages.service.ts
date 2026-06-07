@@ -1,4 +1,7 @@
-import { MessagesRepository } from './messages.repository';
+import {
+  MessagesRepository,
+  type MessageCreateInput
+} from './messages.repository';
 import type {
   DnaDigestGenerator,
   GoogleDocsPromptFetcher,
@@ -13,6 +16,7 @@ import type { ConversationsService } from '../conversations/conversations.servic
 import type { ModelConfigService } from '../model-config/model-config.service';
 import type { TelemetryService } from '../telemetry/telemetry.service';
 import type { CostCapEnforcer } from '../usage-counters/cost-cap.service';
+import { estimateModelCostUsd } from '../usage-counters/model-rates';
 import type { UsageCountersService } from '../usage-counters/usage-counters.service';
 
 export class MessagesService {
@@ -36,10 +40,25 @@ export class MessagesService {
     return this.messagesRepository.listForConversation(conversationId);
   }
 
-  private estimatedTurnBudget() {
+  private estimatedTurnBudget(config: { provider: string; model: string }) {
+    const estimatedCostUsd = estimateModelCostUsd({
+      provider: config.provider,
+      model: config.model,
+      promptTokens: this.env.DEFAULT_MAX_OUTPUT_TOKENS,
+      completionTokens: this.env.DEFAULT_MAX_OUTPUT_TOKENS
+    });
+
+    if (estimatedCostUsd === null) {
+      throw new HttpException(
+        422,
+        'Model rate is not configured',
+        'model_rate_not_configured'
+      );
+    }
+
     return {
       estimatedTokens: this.env.DEFAULT_MAX_OUTPUT_TOKENS * 2,
-      estimatedCostUsd: 0
+      estimatedCostUsd
     };
   }
 
@@ -69,7 +88,7 @@ export class MessagesService {
 
     await this.costCapEnforcer.assertAllowed({
       userId: actor.id,
-      ...this.estimatedTurnBudget()
+      ...this.estimatedTurnBudget(config)
     });
 
     const prompt = await this.promptFetcher.fetchPrompt(advisorId);
@@ -89,14 +108,6 @@ export class MessagesService {
         content: message.content
       }));
 
-    const userMessage = await this.messagesRepository.create({
-      conversationId: input.conversationId,
-      userId: actor.id,
-      role: 'user',
-      content: input.content,
-      status: 'ok'
-    });
-
     const request: LlmChatRequest = {
       provider: config.provider,
       model: config.model,
@@ -112,11 +123,11 @@ export class MessagesService {
 
     return {
       request,
-      userMessage,
       provider: config.provider,
       model: config.model,
       promptDocRevision: prompt.revision,
-      dnaDigestVersion: dna.version
+      dnaDigestVersion: dna.version,
+      userContent: input.content
     };
   }
 
@@ -153,7 +164,21 @@ export class MessagesService {
     }
   }
 
-  private async persistAssistantTurn(
+  private userMessageInput(
+    actor: Actor,
+    conversationId: string,
+    content: string
+  ): MessageCreateInput {
+    return {
+      conversationId,
+      userId: actor.id,
+      role: 'user',
+      content,
+      status: 'ok'
+    };
+  }
+
+  private assistantMessageInput(
     actor: Actor,
     conversationId: string,
     prepared: Awaited<ReturnType<MessagesService['prepareTurn']>>,
@@ -164,8 +189,8 @@ export class MessagesService {
       estimatedCostUsd: string;
       latencyMs: number;
     }
-  ) {
-    const assistantMessage = await this.messagesRepository.create({
+  ): MessageCreateInput {
+    return {
       conversationId,
       userId: actor.id,
       role: 'assistant',
@@ -179,7 +204,45 @@ export class MessagesService {
       status: 'ok',
       promptDocRevision: prepared.promptDocRevision,
       dnaDigestVersion: prepared.dnaDigestVersion
-    });
+    };
+  }
+
+  private assistantErrorMessageInput(
+    actor: Actor,
+    conversationId: string,
+    prepared: Awaited<ReturnType<MessagesService['prepareTurn']>>,
+    input: { content: string; blockReason: string }
+  ): MessageCreateInput {
+    return {
+      conversationId,
+      userId: actor.id,
+      role: 'assistant',
+      content: input.content,
+      provider: prepared.provider,
+      model: prepared.model,
+      status: 'error',
+      blockReason: input.blockReason,
+      promptDocRevision: prepared.promptDocRevision,
+      dnaDigestVersion: prepared.dnaDigestVersion
+    };
+  }
+
+  private async persistSuccessfulTurn(
+    actor: Actor,
+    conversationId: string,
+    prepared: Awaited<ReturnType<MessagesService['prepareTurn']>>,
+    completion: {
+      content: string;
+      promptTokens: number;
+      completionTokens: number;
+      estimatedCostUsd: string;
+      latencyMs: number;
+    }
+  ) {
+    const turn = await this.messagesRepository.createSuccessfulTurn(
+      this.userMessageInput(actor, conversationId, prepared.userContent),
+      this.assistantMessageInput(actor, conversationId, prepared, completion)
+    );
 
     await this.usageCountersService.incrementTurn(actor.id, {
       promptTokens: completion.promptTokens,
@@ -197,27 +260,54 @@ export class MessagesService {
       estimatedCostUsd: completion.estimatedCostUsd
     });
 
-    return assistantMessage;
+    return turn;
   }
 
   async chatTurn(
     actor: Actor,
     input: { conversationId: string; content: string }
   ) {
+    let prepared:
+      | Awaited<ReturnType<MessagesService['prepareTurn']>>
+      | undefined;
+
     try {
-      const prepared = await this.prepareTurn(actor, input);
+      prepared = await this.prepareTurn(actor, input);
       const completion = await this.llmProvider.complete(prepared.request);
 
-      const assistantMessage = await this.persistAssistantTurn(
+      return this.persistSuccessfulTurn(
         actor,
         input.conversationId,
         prepared,
         completion
       );
-
-      return { userMessage: prepared.userMessage, assistantMessage };
     } catch (error) {
-      if (error instanceof HttpException) {
+      if (prepared) {
+        const blockReason =
+          error instanceof Error && 'code' in error
+            ? String(error.code)
+            : 'chat_turn_error';
+        await this.messagesRepository.createErroredTurn(
+          this.userMessageInput(
+            actor,
+            input.conversationId,
+            prepared.userContent
+          ),
+          this.assistantErrorMessageInput(
+            actor,
+            input.conversationId,
+            prepared,
+            {
+              content: 'Request failed.',
+              blockReason
+            }
+          )
+        );
+        await this.recordTelemetry('chat_turn_error', actor, 'error', {
+          conversationId: input.conversationId,
+          code: blockReason
+        });
+      } else if (error instanceof HttpException) {
         if (error.code !== 'model_disabled') {
           await this.createBlockedMessage(
             actor,
@@ -274,7 +364,7 @@ export class MessagesService {
         latencyMs: Date.now() - startedAt
       };
 
-      const assistantMessage = await this.persistAssistantTurn(
+      const turn = await this.persistSuccessfulTurn(
         actor,
         input.conversationId,
         prepared,
@@ -284,33 +374,35 @@ export class MessagesService {
       yield {
         type: 'final' as const,
         data: {
-          userMessage: prepared.userMessage,
-          assistantMessage
+          userMessage: turn.userMessage,
+          assistantMessage: turn.assistantMessage
         }
       };
     } catch (error) {
       if (prepared) {
-        await this.messagesRepository.create({
-          conversationId: input.conversationId,
-          userId: actor.id,
-          role: 'assistant',
-          content: 'Stream failed.',
-          provider: prepared.provider,
-          model: prepared.model,
-          status: 'error',
-          blockReason:
-            error instanceof Error && 'code' in error
-              ? String(error.code)
-              : 'chat_stream_error',
-          promptDocRevision: prepared.promptDocRevision,
-          dnaDigestVersion: prepared.dnaDigestVersion
-        });
+        const blockReason =
+          error instanceof Error && 'code' in error
+            ? String(error.code)
+            : 'chat_stream_error';
+        await this.messagesRepository.createErroredTurn(
+          this.userMessageInput(
+            actor,
+            input.conversationId,
+            prepared.userContent
+          ),
+          this.assistantErrorMessageInput(
+            actor,
+            input.conversationId,
+            prepared,
+            {
+              content: 'Stream failed.',
+              blockReason
+            }
+          )
+        );
         await this.recordTelemetry('chat_turn_stream_error', actor, 'error', {
           conversationId: input.conversationId,
-          code:
-            error instanceof Error && 'code' in error
-              ? String(error.code)
-              : 'chat_stream_error'
+          code: blockReason
         });
       }
 

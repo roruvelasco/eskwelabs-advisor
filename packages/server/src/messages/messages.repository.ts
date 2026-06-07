@@ -22,6 +22,8 @@ export interface MessageRow {
   createdAt: string;
 }
 
+export type MessageCreateInput = Omit<MessageRow, 'id' | 'createdAt'>;
+
 function nullable<T>(value: T | null): T | undefined {
   return value ?? undefined;
 }
@@ -58,12 +60,47 @@ export class MessagesRepository extends Repository {
     return rows.map(toRow);
   }
 
-  async create(input: Omit<MessageRow, 'id' | 'createdAt'>) {
+  async create(input: MessageCreateInput) {
     const rows = await this.drizzle.db
       .insert(messagesTable)
       .values(input)
       .returning();
 
     return toRow(rows[0]);
+  }
+
+  async createSuccessfulTurn(
+    userMessage: MessageCreateInput,
+    assistantMessage: MessageCreateInput
+  ) {
+    return this.createTurn(userMessage, assistantMessage);
+  }
+
+  async createErroredTurn(
+    userMessage: MessageCreateInput,
+    assistantMessage: MessageCreateInput
+  ) {
+    return this.createTurn(userMessage, assistantMessage);
+  }
+
+  private async createTurn(
+    userMessage: MessageCreateInput,
+    assistantMessage: MessageCreateInput
+  ) {
+    return this.drizzle.db.transaction(async (tx) => {
+      const userRows = await tx
+        .insert(messagesTable)
+        .values(userMessage)
+        .returning();
+      const assistantRows = await tx
+        .insert(messagesTable)
+        .values(assistantMessage)
+        .returning();
+
+      return {
+        userMessage: toRow(userRows[0]),
+        assistantMessage: toRow(assistantRows[0])
+      };
+    });
   }
 }

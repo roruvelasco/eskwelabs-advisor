@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { HttpException } from '../../common/http/http-exception';
 import { MessagesService } from '../messages.service';
-import type { MessageRow } from '../messages.repository';
+import type { MessageCreateInput, MessageRow } from '../messages.repository';
 import type { Actor } from '../../common/utils/hono';
 import type {
   LlmChatChunk,
@@ -41,6 +41,55 @@ async function* streamShouldNotBeCalled(): AsyncGenerator<LlmChatChunk> {
   throw new Error('stream should not be called');
 }
 
+function createMessageRow(input: MessageCreateInput): MessageRow {
+  return {
+    id: crypto.randomUUID(),
+    createdAt: new Date().toISOString(),
+    ...input
+  };
+}
+
+function createMessageRepository(input?: {
+  history?: MessageRow[];
+  createdMessages?: MessageRow[];
+}) {
+  const history = input?.history ?? [];
+  const createdMessages = input?.createdMessages ?? [];
+
+  return {
+    listForConversation: async () => history,
+    create: async (message: MessageCreateInput) => {
+      const row = createMessageRow(message);
+      createdMessages.push(row);
+      return row;
+    },
+    createSuccessfulTurn: async (
+      userMessage: MessageCreateInput,
+      assistantMessage: MessageCreateInput
+    ) => {
+      const userRow = createMessageRow(userMessage);
+      const assistantRow = createMessageRow(assistantMessage);
+      createdMessages.push(userRow, assistantRow);
+      return {
+        userMessage: userRow,
+        assistantMessage: assistantRow
+      };
+    },
+    createErroredTurn: async (
+      userMessage: MessageCreateInput,
+      assistantMessage: MessageCreateInput
+    ) => {
+      const userRow = createMessageRow(userMessage);
+      const assistantRow = createMessageRow(assistantMessage);
+      createdMessages.push(userRow, assistantRow);
+      return {
+        userMessage: userRow,
+        assistantMessage: assistantRow
+      };
+    }
+  };
+}
+
 describe('messages service', () => {
   test('uses shared DNA digest independent of actor and advisor', async () => {
     const requests: LlmChatRequest[] = [];
@@ -48,14 +97,7 @@ describe('messages service', () => {
 
     function serviceFor(advisorId: string, requestMessages: MessageRow[] = []) {
       return new MessagesService(
-        {
-          listForConversation: async () => requestMessages,
-          create: async (input: Omit<MessageRow, 'id' | 'createdAt'>) => ({
-            id: crypto.randomUUID(),
-            createdAt: new Date().toISOString(),
-            ...input
-          })
-        } as never,
+        createMessageRepository({ history: requestMessages }) as never,
         {
           assertOwns: async () => ({
             id: crypto.randomUUID(),
@@ -136,14 +178,7 @@ describe('messages service', () => {
   test('runs a chat turn without leaking system prompt content', async () => {
     const conversationId = crypto.randomUUID();
     const messagesService = new MessagesService(
-      {
-        listForConversation: async () => [],
-        create: async (input: Omit<MessageRow, 'id' | 'createdAt'>) => ({
-          id: crypto.randomUUID(),
-          createdAt: new Date().toISOString(),
-          ...input
-        })
-      } as never,
+      createMessageRepository() as never,
       {
         assertOwns: async () => ({
           id: conversationId,
@@ -208,14 +243,7 @@ describe('messages service', () => {
   test('streams chunks and a final safe payload', async () => {
     const conversationId = crypto.randomUUID();
     const messagesService = new MessagesService(
-      {
-        listForConversation: async () => [],
-        create: async (input: Omit<MessageRow, 'id' | 'createdAt'>) => ({
-          id: crypto.randomUUID(),
-          createdAt: new Date().toISOString(),
-          ...input
-        })
-      } as never,
+      createMessageRepository() as never,
       {
         assertOwns: async () => ({
           id: conversationId,
@@ -320,14 +348,7 @@ describe('messages service', () => {
     });
 
     const service = new MessagesService(
-      {
-        listForConversation: async () => history,
-        create: async (input: Omit<MessageRow, 'id' | 'createdAt'>) => ({
-          id: crypto.randomUUID(),
-          createdAt: new Date().toISOString(),
-          ...input
-        })
-      } as never,
+      createMessageRepository({ history }) as never,
       {
         assertOwns: async () => ({
           id: 'conversation-id',
@@ -401,18 +422,7 @@ describe('messages service', () => {
     const createdMessages: MessageRow[] = [];
     const increments: unknown[] = [];
     const service = new MessagesService(
-      {
-        listForConversation: async () => [],
-        create: async (input: Omit<MessageRow, 'id' | 'createdAt'>) => {
-          const row = {
-            id: crypto.randomUUID(),
-            createdAt: new Date().toISOString(),
-            ...input
-          };
-          createdMessages.push(row);
-          return row;
-        }
-      } as never,
+      createMessageRepository({ createdMessages }) as never,
       {
         assertOwns: async () => ({
           id: 'conversation-id',
@@ -485,23 +495,233 @@ describe('messages service', () => {
     });
   });
 
+  test('passes nonzero model-rate spend estimate into cap checks', async () => {
+    let capturedBudget:
+      | { userId: string; estimatedTokens: number; estimatedCostUsd: number }
+      | undefined;
+    const service = new MessagesService(
+      createMessageRepository() as never,
+      {
+        assertOwns: async () => ({
+          id: 'conversation-id',
+          userId: actor.id,
+          advisorId: 'data-dashboard',
+          title: 'Untitled',
+          status: 'active',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }),
+        touch: async () => undefined
+      } as never,
+      {
+        getForAdvisor: async () => ({
+          advisorId: 'data-dashboard',
+          provider: 'gemini',
+          model: 'gemini-2.5-flash-lite',
+          isEnabled: true,
+          updatedAt: new Date().toISOString()
+        })
+      } as never,
+      {
+        fetchPrompt: async () => ({
+          text: 'System instructions',
+          revision: 'prompt-revision',
+          hash: 'prompt-hash'
+        })
+      },
+      {
+        getDigest: async () => ({
+          digest: 'shared dna digest',
+          version: 'dna-v1',
+          hash: 'dna-hash'
+        })
+      },
+      {
+        complete: async () => ({
+          content: 'ok',
+          promptTokens: 10,
+          completionTokens: 2,
+          latencyMs: 1,
+          estimatedCostUsd: '0.000001'
+        }),
+        stream: streamShouldNotBeCalled
+      },
+      {
+        assertAllowed: async (budget: {
+          userId: string;
+          estimatedTokens: number;
+          estimatedCostUsd: number;
+        }) => {
+          capturedBudget = budget;
+        }
+      } as never,
+      { incrementTurn: async () => undefined } as never,
+      { record: async () => undefined } as never,
+      { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never
+    );
+
+    await service.chatTurn(actor, {
+      conversationId: crypto.randomUUID(),
+      content: 'estimate'
+    });
+
+    expect(capturedBudget).toEqual({
+      userId: actor.id,
+      estimatedTokens: 4000,
+      estimatedCostUsd: 0.001
+    });
+  });
+
+  test('blocks unknown model rates before prompt and provider work', async () => {
+    let promptCalls = 0;
+    let providerCalls = 0;
+    const createdMessages: MessageRow[] = [];
+    const service = new MessagesService(
+      createMessageRepository({ createdMessages }) as never,
+      {
+        assertOwns: async () => ({
+          id: 'conversation-id',
+          userId: actor.id,
+          advisorId: 'data-dashboard',
+          title: 'Untitled',
+          status: 'active',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        })
+      } as never,
+      {
+        getForAdvisor: async () => ({
+          advisorId: 'data-dashboard',
+          provider: 'unknown',
+          model: 'unknown-model',
+          isEnabled: true,
+          updatedAt: new Date().toISOString()
+        })
+      } as never,
+      {
+        fetchPrompt: async () => {
+          promptCalls += 1;
+          throw new Error('prompt should not be fetched');
+        }
+      },
+      {
+        getDigest: async () => {
+          throw new Error('dna should not be generated');
+        }
+      },
+      {
+        complete: async () => {
+          providerCalls += 1;
+          throw new Error('provider should not be called');
+        },
+        stream: streamShouldNotBeCalled
+      },
+      { assertAllowed: async () => undefined } as never,
+      { incrementTurn: async () => undefined } as never,
+      { record: async () => undefined } as never,
+      { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never
+    );
+
+    await expect(
+      service.chatTurn(actor, {
+        conversationId: crypto.randomUUID(),
+        content: 'blocked'
+      })
+    ).rejects.toMatchObject({ code: 'model_rate_not_configured' });
+
+    expect(promptCalls).toBe(0);
+    expect(providerCalls).toBe(0);
+    expect(createdMessages).toHaveLength(1);
+    expect(createdMessages[0]).toMatchObject({
+      role: 'assistant',
+      status: 'blocked',
+      blockReason: 'model_rate_not_configured'
+    });
+  });
+
+  test('persists paired user and assistant error rows when provider fails after preflight', async () => {
+    const createdMessages: MessageRow[] = [];
+    const increments: unknown[] = [];
+    const service = new MessagesService(
+      createMessageRepository({ createdMessages }) as never,
+      {
+        assertOwns: async () => ({
+          id: 'conversation-id',
+          userId: actor.id,
+          advisorId: 'data-dashboard',
+          title: 'Untitled',
+          status: 'active',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }),
+        touch: async () => undefined
+      } as never,
+      {
+        getForAdvisor: async () => ({
+          advisorId: 'data-dashboard',
+          provider: 'deterministic',
+          model: 'deterministic-model',
+          isEnabled: true,
+          updatedAt: new Date().toISOString()
+        })
+      } as never,
+      {
+        fetchPrompt: async () => ({
+          text: 'System instructions',
+          revision: 'prompt-revision',
+          hash: 'prompt-hash'
+        })
+      },
+      {
+        getDigest: async () => ({
+          digest: 'shared dna digest',
+          version: 'dna-v1',
+          hash: 'dna-hash'
+        })
+      },
+      {
+        complete: async () => {
+          throw new HttpException(502, 'Provider failed', 'provider_error');
+        },
+        stream: streamShouldNotBeCalled
+      },
+      { assertAllowed: async () => undefined } as never,
+      {
+        incrementTurn: async (_userId: string, input: unknown) => {
+          increments.push(input);
+        }
+      } as never,
+      { record: async () => undefined } as never,
+      { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never
+    );
+
+    await expect(
+      service.chatTurn(actor, {
+        conversationId: crypto.randomUUID(),
+        content: 'provider failure'
+      })
+    ).rejects.toMatchObject({ code: 'provider_error' });
+
+    expect(increments).toEqual([]);
+    expect(createdMessages).toHaveLength(2);
+    expect(createdMessages[0]).toMatchObject({
+      role: 'user',
+      status: 'ok',
+      content: 'provider failure'
+    });
+    expect(createdMessages[1]).toMatchObject({
+      role: 'assistant',
+      status: 'error',
+      blockReason: 'provider_error'
+    });
+  });
+
   test('blocks before prompt and provider work when caps fail', async () => {
     let promptCalls = 0;
     let providerCalls = 0;
     const createdMessages: MessageRow[] = [];
     const service = new MessagesService(
-      {
-        listForConversation: async () => [],
-        create: async (input: Omit<MessageRow, 'id' | 'createdAt'>) => {
-          const row = {
-            id: crypto.randomUUID(),
-            createdAt: new Date().toISOString(),
-            ...input
-          };
-          createdMessages.push(row);
-          return row;
-        }
-      } as never,
+      createMessageRepository({ createdMessages }) as never,
       {
         assertOwns: async () => ({
           id: 'conversation-id',
