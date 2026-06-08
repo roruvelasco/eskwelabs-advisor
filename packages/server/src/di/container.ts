@@ -5,15 +5,12 @@ import { AdminRepository } from '../admin/admin.repository';
 import { AdminSerializer } from '../admin/admin.serializer';
 import { AdminService } from '../admin/admin.service';
 import {
-  DeterministicDnaDigestGenerator,
+  DeterministicDnaDigestSummarizer,
   DeterministicLlmProvider,
-  DeterministicPromptFetcher,
   GeminiLlmProvider,
-  GoogleDocsBackedPromptFetcher,
   GoogleDocsClient,
   GoogleDocsGeminiDnaDigestGenerator,
-  type DnaDigestGenerator,
-  type GoogleDocsPromptFetcher,
+  type DnaDigestSummarizer,
   type LlmProvider
 } from '../adapters/advisor-adapters';
 import { AdvisorController } from '../advisors/advisors.controller';
@@ -41,6 +38,15 @@ import { PromptCacheController } from '../prompt-cache/prompt-cache.controller';
 import { PromptCacheRepository } from '../prompt-cache/prompt-cache.repository';
 import { PromptCacheSerializer } from '../prompt-cache/prompt-cache.serializer';
 import { PromptCacheService } from '../prompt-cache/prompt-cache.service';
+import { CompiledSystemPromptBuilder } from '../prompt-cache/compiled-system-prompt.builder';
+import { DnaDigestsRepository } from '../prompt-cache/dna-digests.repository';
+import {
+  DeterministicPromptContextService,
+  PromptContextService,
+  type PromptContextLoader
+} from '../prompt-cache/prompt-context.service';
+import { PromptIngestionService } from '../prompt-cache/prompt-ingestion.service';
+import { PromptSnapshotsRepository } from '../prompt-cache/prompt-snapshots.repository';
 import { RateLimitService } from '../rate-limit/rate-limit.service';
 import { TelemetryController } from '../telemetry/telemetry.controller';
 import { TelemetryRepository } from '../telemetry/telemetry.repository';
@@ -58,13 +64,13 @@ import { UsersSerializer } from '../users/users.serializer';
 import { UsersService } from '../users/users.service';
 
 export const SERVER_ENV = new InjectionToken<ServerEnv>('SERVER_ENV');
-export const PROMPT_FETCHER = new InjectionToken<GoogleDocsPromptFetcher>(
-  'PROMPT_FETCHER'
-);
-export const DNA_DIGEST_GENERATOR = new InjectionToken<DnaDigestGenerator>(
-  'DNA_DIGEST_GENERATOR'
+export const DNA_DIGEST_SUMMARIZER = new InjectionToken<DnaDigestSummarizer>(
+  'DNA_DIGEST_SUMMARIZER'
 );
 export const LLM_PROVIDER = new InjectionToken<LlmProvider>('LLM_PROVIDER');
+export const PROMPT_CONTEXT_LOADER = new InjectionToken<PromptContextLoader>(
+  'PROMPT_CONTEXT_LOADER'
+);
 
 export function createContainer() {
   const container = new Container();
@@ -90,37 +96,16 @@ export function createContainer() {
         new CostCapEnforcer(c.get(UsageCountersService), c.get(SERVER_ENV))
     })
     .bind({
-      provide: PROMPT_FETCHER,
+      provide: DNA_DIGEST_SUMMARIZER,
       useFactory: (c) => {
         const env = c.get(SERVER_ENV);
-        if (env.GOOGLE_DOCS_SERVICE_ACCOUNT_JSON || env.GOOGLE_DOCS_API_KEY) {
-          return new GoogleDocsBackedPromptFetcher(
-            c.get(AdvisorsService),
-            new GoogleDocsClient(env),
-            c.get(RedisService),
-            c.get(PromptCacheRepository)
-          );
-        }
-        return new DeterministicPromptFetcher();
-      }
-    })
-    .bind({
-      provide: DNA_DIGEST_GENERATOR,
-      useFactory: (c) => {
-        const env = c.get(SERVER_ENV);
-        if (
-          env.GOOGLE_DOCS_DNA_DOC_ID &&
-          (env.GOOGLE_DOCS_SERVICE_ACCOUNT_JSON || env.GOOGLE_DOCS_API_KEY) &&
-          env.GEMINI_API_KEY
-        ) {
+        if (env.GEMINI_API_KEY) {
           return new GoogleDocsGeminiDnaDigestGenerator(
             new GoogleDocsClient(env),
-            c.get(RedisService),
-            c.get(PromptCacheRepository),
             env
           );
         }
-        return new DeterministicDnaDigestGenerator();
+        return new DeterministicDnaDigestSummarizer();
       }
     })
     .bind({
@@ -156,6 +141,14 @@ export function createContainer() {
       useFactory: (c) => new PromptCacheRepository(c.get(DrizzleService))
     })
     .bind({
+      provide: PromptSnapshotsRepository,
+      useFactory: (c) => new PromptSnapshotsRepository(c.get(DrizzleService))
+    })
+    .bind({
+      provide: DnaDigestsRepository,
+      useFactory: (c) => new DnaDigestsRepository(c.get(DrizzleService))
+    })
+    .bind({
       provide: TelemetryRepository,
       useFactory: (c) => new TelemetryRepository(c.get(DrizzleService))
     })
@@ -187,6 +180,10 @@ export function createContainer() {
     .bind({
       provide: PromptCacheSerializer,
       useFactory: () => new PromptCacheSerializer()
+    })
+    .bind({
+      provide: CompiledSystemPromptBuilder,
+      useFactory: () => new CompiledSystemPromptBuilder()
     })
     .bind({
       provide: TelemetrySerializer,
@@ -224,8 +221,45 @@ export function createContainer() {
       useFactory: (c) =>
         new PromptCacheService(
           c.get(PromptCacheRepository),
-          c.get(RedisService)
+          c.get(RedisService),
+          c.get(PromptIngestionService),
+          c.get(PromptSnapshotsRepository),
+          c.get(DnaDigestsRepository),
+          c.get(TelemetryService)
         )
+    })
+    .bind({
+      provide: PromptIngestionService,
+      useFactory: (c) =>
+        new PromptIngestionService(
+          c.get(AdvisorsService),
+          new GoogleDocsClient(c.get(SERVER_ENV)),
+          c.get(DNA_DIGEST_SUMMARIZER),
+          c.get(PromptSnapshotsRepository),
+          c.get(DnaDigestsRepository),
+          c.get(RedisService),
+          c.get(SERVER_ENV),
+          c.get(TelemetryService)
+        )
+    })
+    .bind({
+      provide: PROMPT_CONTEXT_LOADER,
+      useFactory: (c) => {
+        const env = c.get(SERVER_ENV);
+        if (env.GOOGLE_DOCS_SERVICE_ACCOUNT_JSON) {
+          return new PromptContextService(
+            c.get(PromptSnapshotsRepository),
+            c.get(DnaDigestsRepository),
+            c.get(RedisService),
+            c.get(CompiledSystemPromptBuilder),
+            c.get(TelemetryService)
+          );
+        }
+
+        return new DeterministicPromptContextService(
+          c.get(CompiledSystemPromptBuilder)
+        );
+      }
     })
     .bind({
       provide: TelemetryService,
@@ -251,8 +285,7 @@ export function createContainer() {
           c.get(MessagesRepository),
           c.get(ConversationsService),
           c.get(ModelConfigService),
-          c.get(PROMPT_FETCHER),
-          c.get(DNA_DIGEST_GENERATOR),
+          c.get(PROMPT_CONTEXT_LOADER),
           c.get(LLM_PROVIDER),
           c.get(CostCapEnforcer),
           c.get(UsageCountersService),

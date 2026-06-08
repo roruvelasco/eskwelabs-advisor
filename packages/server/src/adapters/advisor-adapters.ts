@@ -1,33 +1,14 @@
 import { createHash, createSign } from 'node:crypto';
 
 import { HttpException } from '../common/http/http-exception';
-import type { RedisService } from '../cache/redis.service';
 import type { ServerEnv } from '../config/env';
-import type { AdvisorsService } from '../advisors/advisors.service';
-import type { PromptCacheRepository } from '../prompt-cache/prompt-cache.repository';
 import {
   estimateModelCostUsd,
   formatEstimatedCostUsd
 } from '../usage-counters/model-rates';
 
-export interface PromptSnapshot {
-  text: string;
-  revision: string;
-  hash: string;
-}
-
-export interface DnaDigestSnapshot {
-  digest: string;
-  version: string;
-  hash: string;
-}
-
-export interface GoogleDocsPromptFetcher {
-  fetchPrompt(advisorId: string): Promise<PromptSnapshot>;
-}
-
-export interface DnaDigestGenerator {
-  getDigest(): Promise<DnaDigestSnapshot>;
+export interface DnaDigestSummarizer {
+  summarize(text: string): Promise<string>;
 }
 
 export interface LlmChatRequest {
@@ -60,7 +41,6 @@ export interface LlmProvider {
   stream(request: LlmChatRequest): AsyncGenerator<LlmChatChunk>;
 }
 
-const PROMPT_TTL_SECONDS = 300;
 const DOCS_SCOPE = 'https://www.googleapis.com/auth/documents.readonly';
 
 function sha256(value: string) {
@@ -102,45 +82,6 @@ type GoogleDocumentResponse = {
   };
 };
 
-type CacheValue<T> = {
-  value: T;
-  updatedAt: string;
-};
-
-async function getFreshCache<T>(redisService: RedisService, key: string) {
-  const cached = await redisService.get<CacheValue<T>>(key);
-  return cached?.value ?? null;
-}
-
-async function getLastGoodCache<T>(redisService: RedisService, key: string) {
-  const cached = await redisService.get<CacheValue<T>>(`last-good:${key}`);
-  return cached?.value ?? null;
-}
-
-async function setPromptCache<T>(
-  redisService: RedisService,
-  promptCacheRepository: PromptCacheRepository,
-  key: string,
-  value: T,
-  metadata: {
-    valueHash: string;
-    docRevision?: string | null;
-    dnaDigestVersion?: string | null;
-  }
-) {
-  const envelope = { value, updatedAt: new Date().toISOString() };
-  await redisService.set(key, envelope, PROMPT_TTL_SECONDS);
-  await redisService.set(`last-good:${key}`, envelope);
-  await promptCacheRepository.upsert({
-    key,
-    valueHash: metadata.valueHash,
-    docRevision: metadata.docRevision ?? null,
-    dnaDigestVersion: metadata.dnaDigestVersion ?? null,
-    lastGoodAt: new Date(),
-    expiresAt: new Date(Date.now() + PROMPT_TTL_SECONDS * 1000)
-  });
-}
-
 export class GoogleDocsClient {
   private accessToken?: { value: string; expiresAt: number };
 
@@ -169,55 +110,58 @@ export class GoogleDocsClient {
     }
 
     const serviceAccount = this.serviceAccount;
-    if (!serviceAccount?.client_email || !serviceAccount.private_key) {
-      return null;
-    }
-
-    const tokenUri =
-      serviceAccount.token_uri ?? 'https://oauth2.googleapis.com/token';
-    const now = Math.floor(Date.now() / 1000);
-    const header = base64Url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
-    const claim = base64Url(
-      JSON.stringify({
-        iss: serviceAccount.client_email,
-        scope: DOCS_SCOPE,
-        aud: tokenUri,
-        exp: now + 3600,
-        iat: now
-      })
-    );
-    const signature = createSign('RSA-SHA256')
-      .update(`${header}.${claim}`)
-      .sign(serviceAccount.private_key);
-    const assertion = `${header}.${claim}.${base64Url(signature)}`;
-
-    const response = await fetch(tokenUri, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-        assertion
-      })
-    });
-
-    if (!response.ok) {
-      throw new HttpException(
-        503,
-        'Google Docs authentication failed',
-        'docs_auth_failed'
+    if (serviceAccount?.client_email && serviceAccount.private_key) {
+      const tokenUri =
+        serviceAccount.token_uri ?? 'https://oauth2.googleapis.com/token';
+      const now = Math.floor(Date.now() / 1000);
+      const header = base64Url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+      const claim = base64Url(
+        JSON.stringify({
+          iss: serviceAccount.client_email,
+          scope: DOCS_SCOPE,
+          aud: tokenUri,
+          exp: now + 3600,
+          iat: now
+        })
       );
+      const signature = createSign('RSA-SHA256')
+        .update(`${header}.${claim}`)
+        .sign(serviceAccount.private_key);
+      const assertion = `${header}.${claim}.${base64Url(signature)}`;
+
+      const response = await fetch(tokenUri, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+          assertion
+        })
+      });
+
+      if (!response.ok) {
+        throw new HttpException(
+          503,
+          'Google Docs authentication failed',
+          'docs_auth_failed'
+        );
+      }
+
+      const payload = (await response.json()) as {
+        access_token: string;
+        expires_in?: number;
+      };
+      this.accessToken = {
+        value: payload.access_token,
+        expiresAt: Date.now() + (payload.expires_in ?? 3600) * 1000
+      };
+      return this.accessToken.value;
     }
 
-    const payload = (await response.json()) as {
-      access_token: string;
-      expires_in?: number;
-    };
-    this.accessToken = {
-      value: payload.access_token,
-      expiresAt: Date.now() + (payload.expires_in ?? 3600) * 1000
-    };
-
-    return this.accessToken.value;
+    throw new HttpException(
+      503,
+      'Google Docs service account is not configured',
+      'docs_not_configured'
+    );
   }
 
   async fetchDocument(docId: string) {
@@ -230,20 +174,9 @@ export class GoogleDocsClient {
     );
 
     const token = await this.getAccessToken();
-    if (!token && this.env.GOOGLE_DOCS_API_KEY) {
-      url.searchParams.set('key', this.env.GOOGLE_DOCS_API_KEY);
-    }
-
-    if (!token && !this.env.GOOGLE_DOCS_API_KEY) {
-      throw new HttpException(
-        503,
-        'Google Docs credentials are not configured',
-        'docs_not_configured'
-      );
-    }
 
     const response = await fetch(url, {
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined
+      headers: { Authorization: `Bearer ${token}` }
     });
 
     if (!response.ok) {
@@ -268,73 +201,13 @@ export class GoogleDocsClient {
   }
 }
 
-export class GoogleDocsBackedPromptFetcher implements GoogleDocsPromptFetcher {
-  constructor(
-    private advisorsService: AdvisorsService,
-    private docsClient: GoogleDocsClient,
-    private redisService: RedisService,
-    private promptCacheRepository: PromptCacheRepository
-  ) {}
-
-  async fetchPrompt(advisorId: string) {
-    const key = `prompt:${advisorId}`;
-    const cached = await getFreshCache<PromptSnapshot>(this.redisService, key);
-    if (cached) return cached;
-
-    try {
-      const advisor = await this.advisorsService.getActive(advisorId);
-      if (!advisor.promptDocId) {
-        throw new HttpException(
-          422,
-          'Advisor prompt is not configured',
-          'advisor_prompt_not_configured'
-        );
-      }
-
-      const document = await this.docsClient.fetchDocument(advisor.promptDocId);
-      const snapshot = {
-        text: document.text,
-        revision: document.revision,
-        hash: sha256(document.text)
-      };
-
-      await setPromptCache(
-        this.redisService,
-        this.promptCacheRepository,
-        key,
-        snapshot,
-        {
-          valueHash: snapshot.hash,
-          docRevision: snapshot.revision
-        }
-      );
-
-      return snapshot;
-    } catch (error) {
-      const lastGood = await getLastGoodCache<PromptSnapshot>(
-        this.redisService,
-        key
-      );
-      if (lastGood) return lastGood;
-      if (error instanceof HttpException) throw error;
-      throw new HttpException(
-        503,
-        'Advisor prompt is unavailable',
-        'prompt_unavailable'
-      );
-    }
-  }
-}
-
-export class GoogleDocsGeminiDnaDigestGenerator implements DnaDigestGenerator {
+export class GoogleDocsGeminiDnaDigestGenerator implements DnaDigestSummarizer {
   constructor(
     private docsClient: GoogleDocsClient,
-    private redisService: RedisService,
-    private promptCacheRepository: PromptCacheRepository,
     private env: ServerEnv
   ) {}
 
-  private async summarizeDna(text: string) {
+  async summarize(text: string) {
     if (!this.env.GEMINI_API_KEY) {
       throw new HttpException(
         503,
@@ -388,62 +261,6 @@ export class GoogleDocsGeminiDnaDigestGenerator implements DnaDigestGenerator {
     }
 
     return digest;
-  }
-
-  async getDigest() {
-    const key = 'dna:digest';
-    const cached = await getFreshCache<DnaDigestSnapshot>(
-      this.redisService,
-      key
-    );
-    if (cached) return cached;
-
-    try {
-      if (!this.env.GOOGLE_DOCS_DNA_DOC_ID) {
-        throw new HttpException(
-          503,
-          'DNA document is not configured',
-          'dna_doc_not_configured'
-        );
-      }
-
-      const document = await this.docsClient.fetchDocument(
-        this.env.GOOGLE_DOCS_DNA_DOC_ID
-      );
-      const digest = await this.summarizeDna(document.text);
-      const version = sha256(digest);
-      const snapshot = {
-        digest,
-        version,
-        hash: version
-      };
-
-      await setPromptCache(
-        this.redisService,
-        this.promptCacheRepository,
-        key,
-        snapshot,
-        {
-          valueHash: version,
-          docRevision: document.revision,
-          dnaDigestVersion: version
-        }
-      );
-
-      return snapshot;
-    } catch (error) {
-      const lastGood = await getLastGoodCache<DnaDigestSnapshot>(
-        this.redisService,
-        key
-      );
-      if (lastGood) return lastGood;
-      if (error instanceof HttpException) throw error;
-      throw new HttpException(
-        503,
-        'DNA digest is unavailable',
-        'dna_digest_unavailable'
-      );
-    }
   }
 }
 
@@ -643,42 +460,9 @@ export class GeminiLlmProvider implements LlmProvider {
   }
 }
 
-export class DeterministicPromptFetcher implements GoogleDocsPromptFetcher {
-  async fetchPrompt(advisorId: string) {
-    return {
-      text: `System instructions for ${advisorId}`,
-      revision: 'deterministic-revision',
-      hash: `prompt:${advisorId}:deterministic`
-    };
-  }
-}
-
-export class DeterministicDnaDigestGenerator implements DnaDigestGenerator {
-  private static readonly CACHE_TTL_MS = 300_000;
-  private static cache:
-    | { snapshot: DnaDigestSnapshot; expiresAt: number }
-    | undefined;
-
-  async getDigest() {
-    if (
-      DeterministicDnaDigestGenerator.cache &&
-      DeterministicDnaDigestGenerator.cache.expiresAt > Date.now()
-    ) {
-      return DeterministicDnaDigestGenerator.cache.snapshot;
-    }
-
-    const snapshot = {
-      digest: 'DNA digest for all advisors',
-      version: 'deterministic-dna-v1',
-      hash: 'dna:digest:deterministic'
-    };
-
-    DeterministicDnaDigestGenerator.cache = {
-      snapshot,
-      expiresAt: Date.now() + DeterministicDnaDigestGenerator.CACHE_TTL_MS
-    };
-
-    return snapshot;
+export class DeterministicDnaDigestSummarizer implements DnaDigestSummarizer {
+  async summarize() {
+    return 'DNA digest for all advisors';
   }
 }
 
