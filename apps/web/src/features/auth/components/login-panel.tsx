@@ -53,6 +53,7 @@ const errorMessages: Record<string, string> = {
   OAuthCallback: 'Error during authentication. Please try again.',
   AuthServiceUnavailable:
     'Sign in is temporarily unavailable. Please try again later.',
+  CredentialsSignin: 'Invalid email or password. Please try again.',
   EmailSigninError: 'Sign in failed. Please try again.',
   Default: 'An error occurred during sign in. Please try again.'
 };
@@ -73,11 +74,28 @@ function AuthErrorToast() {
 export function LoginPanel() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
     try {
-      await signIn('google', { callbackUrl: '/consent', redirect: true });
+      await signIn('google', { callbackUrl: '/advisors', redirect: true });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEmailSignIn = async () => {
+    if (!email || !password) return;
+    setIsLoading(true);
+    try {
+      await signIn('credentials', {
+        email,
+        password,
+        callbackUrl: '/advisors',
+        redirect: true
+      });
     } finally {
       setIsLoading(false);
     }
@@ -132,6 +150,8 @@ export function LoginPanel() {
                   type="email"
                   placeholder="you@eskwelabs.com"
                   autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                 />
               </div>
 
@@ -144,6 +164,8 @@ export function LoginPanel() {
                     placeholder="••••••••"
                     className="pr-10"
                     autoComplete="current-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                   />
                   <Button
                     type="button"
@@ -159,8 +181,13 @@ export function LoginPanel() {
                 </div>
               </div>
 
-              <Button className="w-full" size="lg" disabled>
-                Continue with email
+              <Button
+                className="w-full"
+                size="lg"
+                onClick={handleEmailSignIn}
+                disabled={isLoading}
+              >
+                {isLoading ? 'Signing in...' : 'Continue with email'}
               </Button>
             </CardContent>
           </Card>

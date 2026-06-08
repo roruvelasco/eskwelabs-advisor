@@ -1,8 +1,12 @@
 import type { NextAuthOptions } from 'next-auth';
+import Credentials from 'next-auth/providers/credentials';
 import Google from 'next-auth/providers/google';
 import { createContainer, AuthService } from '@eskwelabs-advisor/server';
 
-type AuthResolver = Pick<AuthService, 'resolveActor' | 'resolveLogin'>;
+type AuthResolver = Pick<
+  AuthService,
+  'resolveActor' | 'resolveLogin' | 'resolveCredentials'
+>;
 type LoginActor = Awaited<ReturnType<AuthService['resolveLogin']>>;
 
 const defaultAuthService = createContainer().get(AuthService);
@@ -43,6 +47,30 @@ async function resolveActorForAuth(
 export function createAuthConfig(authService: AuthResolver): NextAuthOptions {
   return {
     providers: [
+      ...(process.env.NODE_ENV !== 'production'
+        ? [
+            Credentials({
+              name: 'credentials',
+              credentials: {
+                email: { label: 'Email', type: 'email' },
+                password: { label: 'Password', type: 'password' }
+              },
+              async authorize(credentials) {
+                if (!credentials?.email || !credentials?.password) return null;
+                const actor = await authService.resolveCredentials(
+                  credentials.email,
+                  credentials.password
+                );
+                if (!actor) return null;
+                return {
+                  id: actor.id,
+                  email: actor.email,
+                  name: actor.email.split('@')[0]
+                };
+              }
+            })
+          ]
+        : []),
       Google({
         clientId: process.env.AUTH_GOOGLE_ID!,
         clientSecret: process.env.AUTH_GOOGLE_SECRET!,
