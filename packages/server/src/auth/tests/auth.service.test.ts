@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { hash } from 'bcryptjs';
 
 import { AuthService } from '../auth.service';
 import type { User } from '../../users/users.schema';
@@ -7,6 +8,7 @@ describe('auth service', () => {
   const user: User = {
     id: '11111111-1111-4111-8111-111111111111',
     email: 'eif@example.com',
+    passwordHash: null,
     role: 'eif',
     isActive: true,
     consentAcknowledgedAt: null,
@@ -57,5 +59,52 @@ describe('auth service', () => {
     await expect(
       serviceFor([user]).resolveActor(user.id, 'other@example.com')
     ).resolves.toBeNull();
+  });
+
+  describe('resolveCredentials', () => {
+    const passwordPlain = 'password123';
+    let passwordHash: string;
+
+    test('resolves credentials for active user with password', async () => {
+      passwordHash = await hash(passwordPlain, 10);
+      const pwUser = { ...user, passwordHash };
+      await expect(
+        serviceFor([pwUser]).resolveCredentials(user.email, passwordPlain)
+      ).resolves.toEqual({
+        id: user.id,
+        email: user.email,
+        role: 'eif',
+        isActive: true
+      });
+    });
+
+    test('rejects credentials with wrong password', async () => {
+      const pwUser = { ...user, passwordHash };
+      await expect(
+        serviceFor([pwUser]).resolveCredentials(user.email, 'wrong-password')
+      ).resolves.toBeNull();
+    });
+
+    test('rejects credentials for inactive user', async () => {
+      const pwUser = { ...user, passwordHash, isActive: false };
+      await expect(
+        serviceFor([pwUser]).resolveCredentials(user.email, passwordPlain)
+      ).resolves.toBeNull();
+    });
+
+    test('rejects credentials for user without passwordHash', async () => {
+      await expect(
+        serviceFor([user]).resolveCredentials(user.email, passwordPlain)
+      ).resolves.toBeNull();
+    });
+
+    test('rejects credentials for non-existent user', async () => {
+      await expect(
+        serviceFor([user]).resolveCredentials(
+          'unknown@example.com',
+          passwordPlain
+        )
+      ).resolves.toBeNull();
+    });
   });
 });

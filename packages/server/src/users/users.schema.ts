@@ -4,6 +4,7 @@ import type { ActorRole } from '../common/utils/hono';
 export const usersTable = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
   email: text('email').notNull().unique(),
+  passwordHash: text('password_hash'),
   role: text('role').notNull().default('eif').$type<ActorRole>(),
   isActive: boolean('is_active').notNull().default(true),
   consentAcknowledgedAt: timestamp('consent_acknowledged_at', {

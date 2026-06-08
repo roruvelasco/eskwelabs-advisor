@@ -8,6 +8,7 @@ describe('users service', () => {
   const user: User = {
     id: '11111111-1111-4111-8111-111111111111',
     email: 'eif@example.com',
+    passwordHash: null,
     role: 'eif',
     isActive: true,
     consentAcknowledgedAt: null,

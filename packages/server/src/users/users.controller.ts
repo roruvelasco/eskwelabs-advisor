@@ -22,6 +22,13 @@ export class UsersController extends Controller {
     this.controller.use('/admin/users', requireActor(['admin']));
 
     return this.controller
+      .get('/consent', async (c) => {
+        const actor = c.get('actor')!;
+        const user = await this.usersService.findById(actor.id);
+        return c.json({
+          consentedAt: user?.consentAcknowledgedAt ?? null
+        });
+      })
       .post('/consent', async (c) => {
         const actor = c.get('actor')!;
         const row = await this.usersService.acknowledgeConsent(actor.id);
