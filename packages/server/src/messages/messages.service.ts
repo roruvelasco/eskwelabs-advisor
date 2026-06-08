@@ -3,8 +3,6 @@ import {
   type MessageCreateInput
 } from './messages.repository';
 import type {
-  DnaDigestGenerator,
-  GoogleDocsPromptFetcher,
   LlmChatRequest,
   LlmUsage,
   LlmProvider
@@ -18,22 +16,35 @@ import type { TelemetryService } from '../telemetry/telemetry.service';
 import type { CostCapEnforcer } from '../usage-counters/cost-cap.service';
 import { estimateModelCostUsd } from '../usage-counters/model-rates';
 import type { UsageCountersService } from '../usage-counters/usage-counters.service';
+import type { PromptContextLoader } from '../prompt-cache/prompt-context.service';
 
 export class MessagesService {
   private static readonly HISTORY_MESSAGE_LIMIT = 20;
+  private promptContextService: PromptContextLoader;
+  private llmProvider: LlmProvider;
+  private costCapEnforcer: CostCapEnforcer;
+  private usageCountersService: UsageCountersService;
+  private telemetryService: TelemetryService;
+  private env: ServerEnv;
 
   constructor(
     private messagesRepository: MessagesRepository,
     private conversationsService: ConversationsService,
     private modelConfigService: ModelConfigService,
-    private promptFetcher: GoogleDocsPromptFetcher,
-    private dnaDigestGenerator: DnaDigestGenerator,
-    private llmProvider: LlmProvider,
-    private costCapEnforcer: CostCapEnforcer,
-    private usageCountersService: UsageCountersService,
-    private telemetryService: TelemetryService,
-    private env: ServerEnv
-  ) {}
+    promptContextService: PromptContextLoader,
+    llmProvider: LlmProvider,
+    costCapEnforcer: CostCapEnforcer,
+    usageCountersService: UsageCountersService,
+    telemetryService: TelemetryService,
+    env: ServerEnv
+  ) {
+    this.promptContextService = promptContextService;
+    this.llmProvider = llmProvider;
+    this.costCapEnforcer = costCapEnforcer;
+    this.usageCountersService = usageCountersService;
+    this.telemetryService = telemetryService;
+    this.env = env;
+  }
 
   async list(actor: Actor, conversationId: string) {
     await this.conversationsService.assertOwns(actor, conversationId);
@@ -91,8 +102,8 @@ export class MessagesService {
       ...this.estimatedTurnBudget(config)
     });
 
-    const prompt = await this.promptFetcher.fetchPrompt(advisorId);
-    const dna = await this.dnaDigestGenerator.getDigest();
+    const promptContext =
+      await this.promptContextService.getForAdvisor(advisorId);
 
     const history = (
       await this.messagesRepository.listForConversation(input.conversationId)
@@ -114,7 +125,7 @@ export class MessagesService {
       messages: [
         {
           role: 'system',
-          content: `${dna.digest}\n${prompt.text}`
+          content: promptContext.systemPrompt
         },
         ...history,
         { role: 'user', content: input.content }
@@ -125,8 +136,9 @@ export class MessagesService {
       request,
       provider: config.provider,
       model: config.model,
-      promptDocRevision: prompt.revision,
-      dnaDigestVersion: dna.version,
+      promptSnapshotHash: promptContext.promptSnapshotHash,
+      promptDocRevision: promptContext.promptDocRevision,
+      dnaDigestVersion: promptContext.dnaDigestVersion,
       userContent: input.content
     };
   }
@@ -255,6 +267,8 @@ export class MessagesService {
       conversationId,
       provider: prepared.provider,
       model: prepared.model,
+      promptSnapshotHash: prepared.promptSnapshotHash,
+      dnaDigestVersion: prepared.dnaDigestVersion,
       promptTokens: completion.promptTokens,
       completionTokens: completion.completionTokens,
       estimatedCostUsd: completion.estimatedCostUsd

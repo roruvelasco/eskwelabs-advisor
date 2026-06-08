@@ -8,6 +8,7 @@ import type {
   LlmChatChunk,
   LlmChatRequest
 } from '../../adapters/advisor-adapters';
+import { CompiledSystemPromptBuilder } from '../../prompt-cache/compiled-system-prompt.builder';
 
 const actor: Actor = {
   id: crypto.randomUUID(),
@@ -90,6 +91,36 @@ function createMessageRepository(input?: {
   };
 }
 
+function createPromptContext(input?: {
+  advisorPromptText?: string;
+  dnaDigestText?: string;
+  promptSnapshotHash?: string;
+  promptDocRevision?: string;
+  dnaDigestVersion?: string;
+  onLoad?: () => void;
+}) {
+  return {
+    getForAdvisor: async () => {
+      input?.onLoad?.();
+      const advisorPromptText =
+        input?.advisorPromptText ?? 'System instructions';
+      const dnaDigestText = input?.dnaDigestText ?? 'shared dna digest';
+      const compiled = new CompiledSystemPromptBuilder().build({
+        advisorPromptText,
+        dnaDigestText
+      });
+
+      return {
+        systemPrompt: compiled.text,
+        systemPromptHash: compiled.hash,
+        promptSnapshotHash: input?.promptSnapshotHash ?? 'prompt-hash',
+        promptDocRevision: input?.promptDocRevision ?? 'prompt-revision',
+        dnaDigestVersion: input?.dnaDigestVersion ?? 'dna-hash'
+      };
+    }
+  };
+}
+
 describe('messages service', () => {
   test('uses shared DNA digest independent of actor and advisor', async () => {
     const requests: LlmChatRequest[] = [];
@@ -119,23 +150,15 @@ describe('messages service', () => {
             updatedAt: new Date().toISOString()
           })
         } as never,
-        {
-          fetchPrompt: async () => ({
-            text: `System instructions for ${advisorId}`,
-            revision: 'prompt-revision',
-            hash: `prompt:${advisorId}`
-          })
-        },
-        {
-          getDigest: async () => {
+        createPromptContext({
+          advisorPromptText: `System instructions for ${advisorId}`,
+          dnaDigestText: 'shared dna digest',
+          promptSnapshotHash: `prompt:${advisorId}`,
+          dnaDigestVersion: 'dna:digest:shared',
+          onLoad: () => {
             dnaCalls += 1;
-            return {
-              digest: 'shared dna digest',
-              version: 'dna-v1',
-              hash: 'dna:digest:shared'
-            };
           }
-        },
+        }),
         {
           complete: async (request: LlmChatRequest) => {
             requests.push(request);
@@ -170,8 +193,24 @@ describe('messages service', () => {
 
     expect(dnaCalls).toBe(2);
     expect(requests.map((request) => request.messages[0]?.content)).toEqual([
-      'shared dna digest\nSystem instructions for data-dashboard',
-      'shared dna digest\nSystem instructions for ssot-memo'
+      [
+        '<eskwelabs_dna_digest>',
+        'shared dna digest',
+        '</eskwelabs_dna_digest>',
+        '',
+        '<advisor_instructions>',
+        'System instructions for data-dashboard',
+        '</advisor_instructions>'
+      ].join('\n'),
+      [
+        '<eskwelabs_dna_digest>',
+        'shared dna digest',
+        '</eskwelabs_dna_digest>',
+        '',
+        '<advisor_instructions>',
+        'System instructions for ssot-memo',
+        '</advisor_instructions>'
+      ].join('\n')
     ]);
   });
 
@@ -200,20 +239,10 @@ describe('messages service', () => {
           updatedAt: new Date().toISOString()
         })
       } as never,
-      {
-        fetchPrompt: async () => ({
-          text: 'System instructions',
-          revision: 'prompt-revision',
-          hash: 'prompt-hash'
-        })
-      },
-      {
-        getDigest: async () => ({
-          digest: 'DNA digest',
-          version: 'dna-v1',
-          hash: 'dna-hash'
-        })
-      },
+      createPromptContext({
+        advisorPromptText: 'System instructions',
+        dnaDigestText: 'DNA digest'
+      }),
       {
         complete: async () => ({
           content: 'Draft response for the learner.',
@@ -265,20 +294,10 @@ describe('messages service', () => {
           updatedAt: new Date().toISOString()
         })
       } as never,
-      {
-        fetchPrompt: async () => ({
-          text: 'System instructions',
-          revision: 'prompt-revision',
-          hash: 'prompt-hash'
-        })
-      },
-      {
-        getDigest: async () => ({
-          digest: 'DNA digest',
-          version: 'dna-v1',
-          hash: 'dna-hash'
-        })
-      },
+      createPromptContext({
+        advisorPromptText: 'System instructions',
+        dnaDigestText: 'DNA digest'
+      }),
       {
         complete: async () => {
           throw new Error('complete should not be called');
@@ -370,20 +389,10 @@ describe('messages service', () => {
           updatedAt: new Date().toISOString()
         })
       } as never,
-      {
-        fetchPrompt: async () => ({
-          text: 'System instructions',
-          revision: 'prompt-revision',
-          hash: 'prompt-hash'
-        })
-      },
-      {
-        getDigest: async () => ({
-          digest: 'shared dna digest',
-          version: 'dna-v1',
-          hash: 'dna-hash'
-        })
-      },
+      createPromptContext({
+        advisorPromptText: 'System instructions',
+        dnaDigestText: 'shared dna digest'
+      }),
       {
         complete: async (request: LlmChatRequest) => {
           capturedRequest = request;
@@ -410,7 +419,15 @@ describe('messages service', () => {
 
     expect(capturedRequest?.messages.map((message) => message.content)).toEqual(
       [
-        'shared dna digest\nSystem instructions',
+        [
+          '<eskwelabs_dna_digest>',
+          'shared dna digest',
+          '</eskwelabs_dna_digest>',
+          '',
+          '<advisor_instructions>',
+          'System instructions',
+          '</advisor_instructions>'
+        ].join('\n'),
         ...Array.from({ length: 20 }, (_, index) => `history-${index + 5}`),
         'newest'
       ]
@@ -443,20 +460,10 @@ describe('messages service', () => {
           updatedAt: new Date().toISOString()
         })
       } as never,
-      {
-        fetchPrompt: async () => ({
-          text: 'System instructions',
-          revision: 'prompt-revision',
-          hash: 'prompt-hash'
-        })
-      },
-      {
-        getDigest: async () => ({
-          digest: 'shared dna digest',
-          version: 'dna-v1',
-          hash: 'dna-hash'
-        })
-      },
+      createPromptContext({
+        advisorPromptText: 'System instructions',
+        dnaDigestText: 'shared dna digest'
+      }),
       {
         complete: async () => {
           throw new Error('complete should not be called');
@@ -522,20 +529,10 @@ describe('messages service', () => {
           updatedAt: new Date().toISOString()
         })
       } as never,
-      {
-        fetchPrompt: async () => ({
-          text: 'System instructions',
-          revision: 'prompt-revision',
-          hash: 'prompt-hash'
-        })
-      },
-      {
-        getDigest: async () => ({
-          digest: 'shared dna digest',
-          version: 'dna-v1',
-          hash: 'dna-hash'
-        })
-      },
+      createPromptContext({
+        advisorPromptText: 'System instructions',
+        dnaDigestText: 'shared dna digest'
+      }),
       {
         complete: async () => ({
           content: 'ok',
@@ -599,14 +596,9 @@ describe('messages service', () => {
         })
       } as never,
       {
-        fetchPrompt: async () => {
+        getForAdvisor: async () => {
           promptCalls += 1;
-          throw new Error('prompt should not be fetched');
-        }
-      },
-      {
-        getDigest: async () => {
-          throw new Error('dna should not be generated');
+          throw new Error('prompt context should not be loaded');
         }
       },
       {
@@ -665,20 +657,10 @@ describe('messages service', () => {
           updatedAt: new Date().toISOString()
         })
       } as never,
-      {
-        fetchPrompt: async () => ({
-          text: 'System instructions',
-          revision: 'prompt-revision',
-          hash: 'prompt-hash'
-        })
-      },
-      {
-        getDigest: async () => ({
-          digest: 'shared dna digest',
-          version: 'dna-v1',
-          hash: 'dna-hash'
-        })
-      },
+      createPromptContext({
+        advisorPromptText: 'System instructions',
+        dnaDigestText: 'shared dna digest'
+      }),
       {
         complete: async () => {
           throw new HttpException(502, 'Provider failed', 'provider_error');
@@ -743,14 +725,9 @@ describe('messages service', () => {
         })
       } as never,
       {
-        fetchPrompt: async () => {
+        getForAdvisor: async () => {
           promptCalls += 1;
-          throw new Error('prompt should not be fetched');
-        }
-      },
-      {
-        getDigest: async () => {
-          throw new Error('dna should not be generated');
+          throw new Error('prompt context should not be loaded');
         }
       },
       {
