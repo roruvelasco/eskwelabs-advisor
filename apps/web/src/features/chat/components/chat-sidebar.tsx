@@ -54,7 +54,7 @@ function RecentConversationButton({
 
 export function ChatSidebar() {
   const router = useRouter();
-  const { data, isLoading, isError } = useQuery(conversationsQuery());
+  const { data, isError } = useQuery(conversationsQuery());
 
   const conversations = (data?.data ?? []) as Array<{
     id: string;
@@ -86,18 +86,21 @@ export function ChatSidebar() {
             Recents
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            {isLoading ? (
-              <p className="text-muted-foreground px-3 text-sm">
-                Loading conversations...
-              </p>
-            ) : isError ? (
+            {isError ? (
               <p className="text-muted-foreground px-3 text-sm">
                 Could not load conversations.
               </p>
             ) : conversations.length === 0 ? (
-              <p className="text-muted-foreground px-3 text-sm">
-                No recent conversations yet.
-              </p>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    disabled
+                    className="text-muted-foreground cursor-default text-sm"
+                  >
+                    No recent conversations yet.
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
             ) : (
               <SidebarMenu>
                 {conversations.map((conversation) => (

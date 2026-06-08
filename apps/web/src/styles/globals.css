@@ -145,9 +145,26 @@
   }
 
   ::-webkit-scrollbar {
-    height: 5px;
-    scrollbar-color: transparent transparent;
-    scrollbar-width: thin;
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #1a4a35;
+    border-radius: 10px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #143d2b;
+  }
+
+  * {
+    scrollbar-width: auto;
+    scrollbar-color: #1a4a35 transparent;
   }
 
   ::-webkit-scrollbar-track {

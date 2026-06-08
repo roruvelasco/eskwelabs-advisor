@@ -51,7 +51,7 @@ export function ChatComposer({ onSend }: ChatComposerProps) {
   return (
     <div
       className={cn(
-        'bg-card flex w-full max-w-2xl items-end gap-2 rounded-xl border px-3 py-2 transition-all duration-200 ease-in-out',
+        'bg-card mx-auto flex w-full max-w-2xl items-center gap-2 rounded-xl border px-3 py-2 transition-all duration-200 ease-in-out',
         hasText ? 'border-border/60' : 'border-primary/70 hover:border-primary'
       )}
     >
