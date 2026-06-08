@@ -1,0 +1,257 @@
+import { describe, expect, test } from 'bun:test';
+import { createHash } from 'node:crypto';
+
+import { CompiledSystemPromptBuilder } from '../compiled-system-prompt.builder';
+import { PromptContextService } from '../prompt-context.service';
+import { PromptIngestionService } from '../prompt-ingestion.service';
+import type { DnaDigestRow } from '../dna-digests.schema';
+import type { PromptSnapshotRow } from '../prompt-snapshots.schema';
+
+function createRedis() {
+  const values = new Map<string, unknown>();
+  return {
+    values,
+    get: async <T>(key: string) => (values.get(key) as T | undefined) ?? null,
+    set: async <T>(key: string, value: T) => {
+      values.set(key, value);
+    },
+    delByPrefix: async (...prefixes: string[]) => {
+      for (const key of values.keys()) {
+        if (prefixes.some((prefix) => key.startsWith(prefix))) {
+          values.delete(key);
+        }
+      }
+    }
+  };
+}
+
+function promptSnapshot(input?: Partial<PromptSnapshotRow>): PromptSnapshotRow {
+  return {
+    id: crypto.randomUUID(),
+    advisorId: 'data-dashboard',
+    docId: 'prompt-doc',
+    revision: 'prompt-revision',
+    contentText: 'Advisor prompt',
+    hash: 'prompt-hash',
+    isActive: true,
+    createdAt: new Date(),
+    ...input
+  };
+}
+
+function dnaDigest(input?: Partial<DnaDigestRow>): DnaDigestRow {
+  return {
+    id: crypto.randomUUID(),
+    docId: 'dna-doc',
+    revision: 'dna-revision',
+    sourceHash: 'dna-source-hash',
+    digestText: 'DNA digest',
+    hash: 'dna-hash',
+    isActive: true,
+    createdAt: new Date(),
+    ...input
+  };
+}
+
+function sha256(value: string) {
+  return createHash('sha256').update(value.trim()).digest('hex');
+}
+
+describe('compiled system prompt builder', () => {
+  test('builds a structured stable system prompt', () => {
+    const compiled = new CompiledSystemPromptBuilder().build({
+      dnaDigestText: ' DNA digest ',
+      advisorPromptText: ' Advisor prompt '
+    });
+
+    expect(compiled.text).toBe(
+      [
+        '<eskwelabs_dna_digest>',
+        'DNA digest',
+        '</eskwelabs_dna_digest>',
+        '',
+        '<advisor_instructions>',
+        'Advisor prompt',
+        '</advisor_instructions>'
+      ].join('\n')
+    );
+    expect(compiled.hash).toHaveLength(64);
+  });
+});
+
+describe('prompt context service', () => {
+  test('loads active Postgres snapshots and rehydrates Redis without upstream calls', async () => {
+    const redis = createRedis();
+    let promptLookups = 0;
+    let dnaLookups = 0;
+
+    const service = new PromptContextService(
+      {
+        findActive: async () => {
+          promptLookups += 1;
+          return promptSnapshot();
+        }
+      } as never,
+      {
+        findActive: async () => {
+          dnaLookups += 1;
+          return dnaDigest();
+        }
+      } as never,
+      redis as never,
+      new CompiledSystemPromptBuilder()
+    );
+
+    const context = await service.getForAdvisor('data-dashboard');
+
+    expect(promptLookups).toBe(1);
+    expect(dnaLookups).toBe(1);
+    expect(context.promptDocRevision).toBe('prompt-revision');
+    expect(context.dnaDigestVersion).toBe('dna-hash');
+    expect(redis.values.has('prompt-context:advisor:data-dashboard')).toBe(
+      true
+    );
+    expect(redis.values.has('prompt-context:dna')).toBe(true);
+  });
+
+  test('fails safely without upstream calls when active snapshots are missing', async () => {
+    const redis = createRedis();
+
+    const service = new PromptContextService(
+      { findActive: async () => undefined } as never,
+      { findActive: async () => undefined } as never,
+      redis as never,
+      new CompiledSystemPromptBuilder()
+    );
+
+    await expect(service.getForAdvisor('data-dashboard')).rejects.toMatchObject(
+      { code: 'prompt_context_unavailable' }
+    );
+  });
+});
+
+describe('prompt ingestion service', () => {
+  test('failed refresh does not deactivate or overwrite active snapshots', async () => {
+    const redis = createRedis();
+    const activePrompt = promptSnapshot({ contentText: 'Last good prompt' });
+    const activeDna = dnaDigest({ digestText: 'Last good DNA' });
+    let promptWrites = 0;
+    let dnaWrites = 0;
+
+    const service = new PromptIngestionService(
+      {
+        list: async () => [
+          {
+            id: 'data-dashboard',
+            name: 'Data Dashboard',
+            description: null,
+            promptDocId: 'prompt-doc',
+            isActive: true,
+            createdAt: new Date().toISOString()
+          }
+        ],
+        getActive: async () => ({
+          id: 'data-dashboard',
+          name: 'Data Dashboard',
+          description: null,
+          promptDocId: 'prompt-doc',
+          isActive: true,
+          createdAt: new Date().toISOString()
+        })
+      } as never,
+      {
+        fetchDocument: async () => {
+          throw Object.assign(new Error('docs failed'), {
+            code: 'docs_fetch_failed'
+          });
+        }
+      } as never,
+      {
+        summarize: async () => {
+          throw new Error('summarizer should not be called');
+        }
+      },
+      {
+        findActive: async () => activePrompt,
+        createActive: async () => {
+          promptWrites += 1;
+          throw new Error('prompt should not be overwritten');
+        }
+      } as never,
+      {
+        findActive: async () => activeDna,
+        createActive: async () => {
+          dnaWrites += 1;
+          throw new Error('dna should not be overwritten');
+        }
+      } as never,
+      redis as never,
+      { GOOGLE_DOCS_DNA_DOC_ID: 'dna-doc' } as never
+    );
+
+    const result = await service.refreshAll();
+
+    expect(result.advisorPrompts).toEqual([
+      {
+        advisorId: 'data-dashboard',
+        status: 'failed',
+        code: 'docs_fetch_failed'
+      }
+    ]);
+    expect(result.dnaDigest).toEqual({
+      status: 'failed',
+      code: 'docs_fetch_failed'
+    });
+    expect(promptWrites).toBe(0);
+    expect(dnaWrites).toBe(0);
+    expect(activePrompt.contentText).toBe('Last good prompt');
+    expect(activeDna.digestText).toBe('Last good DNA');
+  });
+
+  test('skips Gemini when the raw DNA document hash is unchanged', async () => {
+    const redis = createRedis();
+    const text = 'Same DNA source';
+    const activeDna = dnaDigest({
+      revision: 'dna-revision',
+      sourceHash: sha256(text)
+    });
+    let summarizeCalls = 0;
+
+    const service = new PromptIngestionService(
+      {
+        list: async () => [],
+        getActive: async () => {
+          throw new Error('unexpected advisor lookup');
+        }
+      } as never,
+      {
+        fetchDocument: async () => ({
+          text,
+          revision: 'dna-revision'
+        })
+      } as never,
+      {
+        summarize: async () => {
+          summarizeCalls += 1;
+          return 'new digest';
+        }
+      },
+      { findActive: async () => undefined } as never,
+      {
+        findActive: async () => activeDna,
+        createActive: async () => {
+          throw new Error('digest should not be recreated');
+        }
+      } as never,
+      redis as never,
+      { GOOGLE_DOCS_DNA_DOC_ID: 'dna-doc' } as never
+    );
+
+    await expect(service.ingestDnaDigest()).resolves.toMatchObject({
+      digest: activeDna,
+      status: 'unchanged'
+    });
+    expect(summarizeCalls).toBe(0);
+    expect(redis.values.get('prompt-context:dna')).toBe(activeDna);
+  });
+});
