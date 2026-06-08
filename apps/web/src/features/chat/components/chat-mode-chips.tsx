@@ -12,14 +12,15 @@ const MODES = [
 
 export function ChatModeChips() {
   return (
-    <div className="flex flex-wrap justify-center gap-2">
+    <div className="flex flex-wrap justify-center gap-1.5">
       {MODES.map(({ label, icon: Icon }) => (
         <Button
           key={label}
           variant="outline"
-          className="motion-press text-muted-foreground hover:text-foreground gap-1.5 rounded-full text-sm"
+          size="sm"
+          className="motion-press border-border/50 text-muted-foreground hover:text-foreground hover:border-primary h-7 gap-1.5 rounded-full px-3 text-xs font-normal transition-colors duration-300 ease-in-out"
         >
-          <Icon size={14} aria-hidden="true" />
+          <Icon size={12} aria-hidden="true" />
           {label}
         </Button>
       ))}

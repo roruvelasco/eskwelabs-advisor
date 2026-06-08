@@ -1,19 +1,25 @@
 'use client';
 
-import { useRef } from 'react';
-import { ArrowUp, Plus } from 'lucide-react';
-import {
-  Button,
-  Card,
-  CardContent,
-  Textarea,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger
-} from '@eskwelabs-advisor/ui';
+import { useRef, useState } from 'react';
+import { SendHorizonal } from 'lucide-react';
+import { Button, Textarea } from '@eskwelabs-advisor/ui';
+import { cn } from '@/lib/utils';
 
-export function ChatComposer() {
+interface ChatComposerProps {
+  onSend?: (text: string) => void;
+}
+
+export function ChatComposer({ onSend }: ChatComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [value, setValue] = useState('');
+
+  const hasText = value.trim().length > 0;
+
+  const resetHeight = () => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+  };
 
   const handleInput = () => {
     const el = textareaRef.current;
@@ -22,54 +28,61 @@ export function ChatComposer() {
     el.style.height = `${el.scrollHeight}px`;
   };
 
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setValue(e.target.value);
+    handleInput();
+  };
+
+  const submit = () => {
+    const text = value.trim();
+    if (!text) return;
+    onSend?.(text);
+    setValue('');
+    resetHeight();
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      submit();
     }
   };
 
   return (
-    <Card className="motion-lift border-border/70 bg-card/95 w-full max-w-2xl shadow-md">
-      <CardContent className="p-0">
-        <Textarea
-          ref={textareaRef}
-          rows={1}
-          placeholder="Ask your advisor anything..."
-          aria-label="Message"
-          className="max-h-40 resize-none overflow-y-auto border-0 p-4 text-base shadow-none focus-visible:ring-0"
-          onInput={handleInput}
-          onKeyDown={handleKeyDown}
-        />
-        <div className="flex items-center justify-between px-3 pb-3">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Add attachment"
-                type="button"
-              >
-                <Plus size={18} aria-hidden="true" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Add attachment</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="default"
-                size="icon"
-                className="rounded-full"
-                aria-label="Send message"
-                type="button"
-              >
-                <ArrowUp size={18} aria-hidden="true" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Send message</TooltipContent>
-          </Tooltip>
-        </div>
-      </CardContent>
-    </Card>
+    <div
+      className={cn(
+        'bg-card flex w-full max-w-2xl items-end gap-2 rounded-xl border px-3 py-2 transition-all duration-200 ease-in-out',
+        hasText ? 'border-border/60' : 'border-primary/70 hover:border-primary'
+      )}
+    >
+      <Textarea
+        ref={textareaRef}
+        rows={1}
+        value={value}
+        placeholder="Ask your advisor anything..."
+        aria-label="Message"
+        className={cn(
+          'placeholder:text-muted-foreground/50 min-h-0 flex-1 resize-none border-0 bg-transparent p-0 text-base leading-relaxed shadow-none focus-visible:ring-0',
+          hasText ? 'max-h-40' : 'max-h-[1.75rem]'
+        )}
+        onChange={handleChange}
+        onKeyDown={handleKeyDown}
+      />
+
+      <Button
+        variant="default"
+        size="icon"
+        aria-label="Send message"
+        type="button"
+        disabled={!hasText}
+        onClick={submit}
+        className={cn(
+          'motion-press mb-0.5 shrink-0 transition-all duration-150 active:scale-95',
+          hasText ? 'size-8 rounded-full' : 'size-8 rounded-lg'
+        )}
+      >
+        <SendHorizonal size={15} aria-hidden="true" />
+      </Button>
+    </div>
   );
 }

@@ -1,5 +1,5 @@
-import { ChatShell } from '@/features/chat/components/chat-shell';
+import { NewChatShell } from '@/features/chat/components/new-chat-shell';
 
 export default function ChatPage() {
-  return <ChatShell />;
+  return <NewChatShell />;
 }

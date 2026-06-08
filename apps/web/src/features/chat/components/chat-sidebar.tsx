@@ -1,6 +1,8 @@
 'use client';
 
-import { MessageSquareText, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import {
   AppBrand,
   Avatar,
@@ -16,39 +18,33 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarRail,
-  SidebarSeparator,
   SidebarTrigger,
   useSidebar
 } from '@eskwelabs-advisor/ui';
+import { conversationsQuery } from '@/lib/domains/conversations/queries';
 
-const RECENT_CONVERSATIONS = [
-  'How to structure my data science portfcdddddddddddddddddddddddolio',
-  'Understanding the EIF program requirements',
-  'Python pandas groupby explained',
-  'Resume review for data roles',
-  'Bootcamp capstone project ideas',
-  'SQL window functions deep dive',
-  'How to negotiate my first tech offer',
-  'Data storytelling with Tableau'
-];
-
-function RecentConversationButton({ title }: { title: string }) {
+function RecentConversationButton({
+  conversation,
+  onClick
+}: {
+  conversation: { id: string; title: string; advisorId: string };
+  onClick: () => void;
+}) {
   const { isMobile, setOpenMobile } = useSidebar();
 
-  const closeMobileSidebar = () => {
+  const handleClick = () => {
     if (isMobile) {
       setOpenMobile(false);
     }
+    onClick();
   };
 
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton asChild tooltip={title}>
-        <button type="button" onClick={closeMobileSidebar}>
-          <MessageSquareText aria-hidden="true" />
+      <SidebarMenuButton asChild tooltip={conversation.title}>
+        <button type="button" onClick={handleClick}>
           <span className="block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
-            {title}
+            {conversation.title}
           </span>
         </button>
       </SidebarMenuButton>
@@ -57,21 +53,32 @@ function RecentConversationButton({ title }: { title: string }) {
 }
 
 export function ChatSidebar() {
+  const router = useRouter();
+  const { data, isLoading, isError } = useQuery(conversationsQuery());
+
+  const conversations = (data?.data ?? []) as Array<{
+    id: string;
+    title: string;
+    advisorId: string;
+  }>;
+
   return (
-    <Sidebar id="chat-sidebar" collapsible="offcanvas">
+    <Sidebar id="chat-sidebar" collapsible="offcanvas" className="!border-r-0">
       <SidebarHeader className="gap-4 p-4">
         <div className="flex items-center justify-between gap-2">
           <AppBrand />
           <SidebarTrigger aria-label="Close sidebar" className="size-9" />
         </div>
 
-        <Button variant="default" className="w-full gap-2" type="button">
-          <Plus size={16} aria-hidden="true" />
-          New Chat
+        <Button
+          variant="ghost"
+          className="text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent w-full justify-start gap-2 font-normal"
+          type="button"
+        >
+          <Plus size={15} aria-hidden="true" />
+          New chat
         </Button>
       </SidebarHeader>
-
-      <SidebarSeparator />
 
       <SidebarContent>
         <SidebarGroup>
@@ -79,11 +86,31 @@ export function ChatSidebar() {
             Recents
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>
-              {RECENT_CONVERSATIONS.map((title) => (
-                <RecentConversationButton key={title} title={title} />
-              ))}
-            </SidebarMenu>
+            {isLoading ? (
+              <p className="text-muted-foreground px-3 text-sm">
+                Loading conversations...
+              </p>
+            ) : isError ? (
+              <p className="text-muted-foreground px-3 text-sm">
+                Could not load conversations.
+              </p>
+            ) : conversations.length === 0 ? (
+              <p className="text-muted-foreground px-3 text-sm">
+                No recent conversations yet.
+              </p>
+            ) : (
+              <SidebarMenu>
+                {conversations.map((conversation) => (
+                  <RecentConversationButton
+                    key={conversation.id}
+                    conversation={conversation}
+                    onClick={() =>
+                      router.push(`/chat?conversation=${conversation.id}`)
+                    }
+                  />
+                ))}
+              </SidebarMenu>
+            )}
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
@@ -98,8 +125,6 @@ export function ChatSidebar() {
           </span>
         </div>
       </SidebarFooter>
-
-      <SidebarRail />
     </Sidebar>
   );
 }
