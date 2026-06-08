@@ -8,6 +8,12 @@ export function getAdminUsage() {
   return apiClient.admin.usage.$get().then((response) => response.json());
 }
 
+export function listUsageCounters() {
+  return apiClient.admin['usage-counters']
+    .$get()
+    .then((response) => response.json());
+}
+
 export function listModelConfig() {
   return apiClient.admin['model-config']
     .$get()
@@ -32,6 +38,12 @@ export function updateModelConfig(
 export function refreshPromptCache() {
   return apiClient.admin['prompt-cache'].refresh
     .$post()
+    .then((response) => response.json());
+}
+
+export function listPromptCache() {
+  return apiClient.admin['prompt-cache']
+    .$get()
     .then((response) => response.json());
 }
 
