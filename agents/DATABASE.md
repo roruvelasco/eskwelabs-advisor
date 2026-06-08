@@ -19,6 +19,8 @@ export * from '../conversations/conversations.schema';
 export * from '../messages/messages.schema';
 export * from '../model-config/model-config.schema';
 export * from '../prompt-cache/prompt-cache.schema';
+export * from '../prompt-cache/prompt-snapshots.schema';
+export * from '../prompt-cache/dna-digests.schema';
 export * from '../usage-counters/usage-counters.schema';
 export * from '../telemetry/telemetry.schema';
 ```
@@ -120,6 +122,40 @@ Type: `ModelConfig`
 
 Type: `PromptCacheEntry`
 
+### `prompt_snapshots` (`promptSnapshotsTable` in code, `prompt_snapshots` in DB)
+
+| Column         | Type                | Constraints                     |
+| -------------- | ------------------- | ------------------------------- |
+| `id`           | `uuid`              | PK, default `gen_random_uuid()` |
+| `advisor_id`   | `text`              | NOT NULL                        |
+| `doc_id`       | `text`              | NOT NULL                        |
+| `revision`     | `text`              | NOT NULL                        |
+| `content_text` | `text`              | NOT NULL, server-only           |
+| `hash`         | `text`              | NOT NULL                        |
+| `is_active`    | `boolean`           | NOT NULL, default `true`        |
+| `created_at`   | `timestamp with tz` | NOT NULL, default `now()`       |
+
+Indexes: partial unique index on `advisor_id` where `is_active = true`.
+
+Type: `PromptSnapshotRow`
+
+### `dna_digests` (`dnaDigestsTable` in code, `dna_digests` in DB)
+
+| Column        | Type                | Constraints                     |
+| ------------- | ------------------- | ------------------------------- |
+| `id`          | `uuid`              | PK, default `gen_random_uuid()` |
+| `doc_id`      | `text`              | NOT NULL                        |
+| `revision`    | `text`              | NOT NULL                        |
+| `source_hash` | `text`              | NOT NULL, default `''`          |
+| `digest_text` | `text`              | NOT NULL, server-only           |
+| `hash`        | `text`              | NOT NULL                        |
+| `is_active`   | `boolean`           | NOT NULL, default `true`        |
+| `created_at`  | `timestamp with tz` | NOT NULL, default `now()`       |
+
+Indexes: partial unique index where `is_active = true`.
+
+Type: `DnaDigestRow`
+
 ### `usage_counters` (`usageCountersTable` in code, `usage_counters` in DB)
 
 | Column                      | Type      | Constraints             |
@@ -162,7 +198,7 @@ advisors ──1:1── model_config
 advisors ──1:N── conversations
 ```
 
-`prompt_cache` and `telemetry_events` are standalone tables (not directly FK-referenced).
+`prompt_cache`, `prompt_snapshots`, `dna_digests`, and `telemetry_events` are standalone tables (not directly FK-referenced). Prompt/DNA text fields are server-only and must not be serialized to clients.
 
 ## Current Status
 

@@ -64,17 +64,17 @@ When asked to build a new feature, fix a bug, or make any code change:
 
 ### Backend Domains (`packages/server/src/<domain>/`)
 
-| Domain           | Files                                                                                                          | Key DI Tokens                                                         |
-| ---------------- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `admin`          | controller, service, repository, serializer, schema (stub), access-policy, use-cases, dto, tests               | AdminController, AdminService, AdminRepository                        |
-| `advisors`       | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                      | AdvisorController, AdvisorsService, AdvisorsRepository                |
-| `conversations`  | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                      | ConversationController, ConversationsService, ConversationsRepository |
-| `messages`       | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                      | MessageController, MessagesService, MessagesRepository                |
-| `model-config`   | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                      | ModelConfigController, ModelConfigService, ModelConfigRepository      |
-| `prompt-cache`   | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                      | PromptCacheController, PromptCacheService, PromptCacheRepository      |
-| `usage-counters` | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests (+ cost-cap.service) | UsageCounterController, UsageCountersService, UsageCountersRepository |
-| `telemetry`      | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                      | TelemetryController, TelemetryService, TelemetryRepository            |
-| `users`          | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                      | UsersController, UsersService, UsersRepository                        |
+| Domain           | Files                                                                                                            | Key DI Tokens                                                                                                  |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `admin`          | controller, service, repository, serializer, schema (stub), access-policy, use-cases, dto, tests                 | AdminController, AdminService, AdminRepository                                                                 |
+| `advisors`       | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                        | AdvisorController, AdvisorsService, AdvisorsRepository                                                         |
+| `conversations`  | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                        | ConversationController, ConversationsService, ConversationsRepository                                          |
+| `messages`       | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                        | MessageController, MessagesService, MessagesRepository                                                         |
+| `model-config`   | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                        | ModelConfigController, ModelConfigService, ModelConfigRepository                                               |
+| `prompt-cache`   | controller, ingestion/context services, repositories, serializers, schemas, access-policy, use-cases, dto, tests | PromptCacheController, PromptCacheService, PromptCacheRepository, PromptIngestionService, PromptContextService |
+| `usage-counters` | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests (+ cost-cap.service)   | UsageCounterController, UsageCountersService, UsageCountersRepository                                          |
+| `telemetry`      | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                        | TelemetryController, TelemetryService, TelemetryRepository                                                     |
+| `users`          | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                        | UsersController, UsersService, UsersRepository                                                                 |
 
 Cross-cutting: `auth/` (auth-request.ts, auth.service.ts), `cache/` (redis.service.ts), `rate-limit/` (rate-limit.service.ts), `config/` (env.ts), `adapters/` (advisor-adapters.ts), `db/` (drizzle.service.ts), `di/` (container.ts), `common/factories/` (controller.factory.ts, repository.factory.ts), `common/middleware/` (auth.middleware.ts, error.middleware.ts, rate-limit.middleware.ts, security.middleware.ts, validation.middleware.ts), `common/http/` (http-exception.ts), `common/utils/` (client-ip.ts, day-ph.ts, hono.ts)
 
@@ -103,7 +103,7 @@ Cross-cutting: `auth/` (auth-request.ts, auth.service.ts), `cache/` (redis.servi
 
 ### Database Tables
 
-`advisors`, `users`, `conversations`, `messages`, `model_config`, `prompt_cache`, `usage_counters`, `telemetry_events` — see [DATABASE.md](agents/DATABASE.md).
+`advisors`, `users`, `conversations`, `messages`, `model_config`, `prompt_cache`, `prompt_snapshots`, `dna_digests`, `usage_counters`, `telemetry_events` — see [DATABASE.md](agents/DATABASE.md).
 
 ## Design System
 
@@ -129,7 +129,7 @@ To change the look, edit the CSS variables — not component files. See [UI-PRAC
 ## Key Env Vars
 
 Defined in `packages/server/src/config/env.ts` via zod schema. All declared in `turbo.json` `globalPassThroughEnv`:
-`DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `GOOGLE_DOCS_SERVICE_ACCOUNT_JSON`, `OPENAI_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_DOCS_PROMPT_DOC_ID`, `GOOGLE_DOCS_DNA_DOC_ID`, `GOOGLE_DOCS_API_KEY`, `GEMINI_API_KEY`, `DAILY_MESSAGE_LIMIT`, `DAILY_TOKEN_LIMIT`, `DAILY_SPEND_LIMIT_USD`, `DEFAULT_MAX_OUTPUT_TOKENS`, `RATE_LIMIT_WINDOW_SECONDS`, `RATE_LIMIT_MAX_REQUESTS`
+`DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `GOOGLE_DOCS_SERVICE_ACCOUNT_JSON`, `OPENAI_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_DOCS_DNA_DOC_ID`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `DAILY_MESSAGE_LIMIT`, `DAILY_TOKEN_LIMIT`, `DAILY_SPEND_LIMIT_USD`, `DEFAULT_MAX_OUTPUT_TOKENS`, `RATE_LIMIT_WINDOW_SECONDS`, `RATE_LIMIT_MAX_REQUESTS`
 
 ## Code Style
 

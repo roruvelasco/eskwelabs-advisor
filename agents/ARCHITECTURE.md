@@ -107,10 +107,17 @@ Every backend domain at `packages/server/src/<domain>/` follows the same layout:
 ### Dependency Injection
 
 - **Container**: `packages/server/src/di/container.ts` — `createContainer()` returns a `Container` from `@needle-di/core`
-- **Injection Tokens**: Created for non-class deps (`SERVER_ENV`, `PROMPT_FETCHER`, `DNA_DIGEST_GENERATOR`, `LLM_PROVIDER`)
+- **Injection Tokens**: Created for non-class deps (`SERVER_ENV`, `DNA_DIGEST_SUMMARIZER`, `PROMPT_CONTEXT_LOADER`, `LLM_PROVIDER`)
 - **Registration pattern**: `.bind({ provide: XxxService, useFactory: (c) => new XxxService(c.get(XxxRepository)) })`
 - **Controller binding**: Controllers get service + serializer + (optionally) env
 - **Application wiring**: `ApplicationController` receives all controllers + cross-cutting deps, calls `.registerControllers()` which chains `.basePath('/api')` + routes
+
+### Prompt Context Flow
+
+- Google Docs remains the prompt/DNA authoring source of truth.
+- `PromptIngestionService` runs only from admin refresh/rollback paths: it reads Google Docs, hashes raw DNA before Gemini, stores durable active rows in `prompt_snapshots` and `dna_digests`, and warms Redis.
+- `PromptContextService` serves chat turns from Redis first, then active Postgres snapshots. If no active snapshot exists, chat fails safely with `prompt_context_unavailable`; it never fetches Google Docs or calls Gemini.
+- `MessagesService.prepareTurn()` receives compiled-ready context via `PROMPT_CONTEXT_LOADER`, builds the LLM request, and records the prompt snapshot hash and DNA digest hash used for the turn.
 
 ### Middleware Stack (order in `application.controller.ts`)
 

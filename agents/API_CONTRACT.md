@@ -116,10 +116,16 @@ Response (single): `{ data: Conversation }`
 **Controller**: `PromptCacheController` (`packages/server/src/prompt-cache/`)
 **Auth**: `requireActor(['admin'])`
 
-| Method | Path                              | Description               |
-| ------ | --------------------------------- | ------------------------- |
-| `GET`  | `/api/admin/prompt-cache`         | List prompt cache entries |
-| `POST` | `/api/admin/prompt-cache/refresh` | Refresh prompt cache      |
+| Method | Path                                                                         | Description                                      |
+| ------ | ---------------------------------------------------------------------------- | ------------------------------------------------ |
+| `GET`  | `/api/admin/prompt-cache`                                                    | List legacy prompt cache metadata                |
+| `POST` | `/api/admin/prompt-cache/refresh`                                            | Ingest prompt/DNA snapshots and warm Redis cache |
+| `GET`  | `/api/admin/prompt-cache/advisors/:advisorId/snapshots`                      | List advisor prompt snapshot metadata            |
+| `POST` | `/api/admin/prompt-cache/advisors/:advisorId/snapshots/:snapshotId/activate` | Roll back an advisor to a prior prompt snapshot  |
+| `GET`  | `/api/admin/prompt-cache/dna-digests`                                        | List DNA digest metadata                         |
+| `POST` | `/api/admin/prompt-cache/dna-digests/:digestId/activate`                     | Roll back to a prior DNA digest                  |
+
+Prompt cache admin endpoints return metadata only. They never return advisor prompt text or DNA digest text. Refresh does not invalidate Redis first; it writes and warms new context and lets old keys expire naturally.
 
 ---
 
