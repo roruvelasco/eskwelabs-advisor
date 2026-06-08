@@ -8,6 +8,12 @@ export type ModelRate = {
 const MODEL_RATES: ModelRate[] = [
   {
     provider: 'gemini',
+    model: 'gemini-2.0-flash',
+    inputUsdPerMillionTokens: 0.1,
+    outputUsdPerMillionTokens: 0.4
+  },
+  {
+    provider: 'gemini',
     model: 'gemini-2.5-flash-lite',
     inputUsdPerMillionTokens: 0.1,
     outputUsdPerMillionTokens: 0.4
@@ -17,6 +23,18 @@ const MODEL_RATES: ModelRate[] = [
     model: 'gemini-2.5-flash',
     inputUsdPerMillionTokens: 0.3,
     outputUsdPerMillionTokens: 2.5
+  },
+  {
+    provider: 'groq',
+    model: 'llama-3.3-70b-versatile',
+    inputUsdPerMillionTokens: 0.59,
+    outputUsdPerMillionTokens: 0.79
+  },
+  {
+    provider: 'groq',
+    model: 'llama-3.1-8b-instant',
+    inputUsdPerMillionTokens: 0.05,
+    outputUsdPerMillionTokens: 0.08
   },
   {
     provider: 'deterministic',

@@ -460,6 +460,310 @@ export class GeminiLlmProvider implements LlmProvider {
   }
 }
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+type GroqChatResponse = {
+  id: string;
+  choices: Array<{
+    message: { content: string };
+    finish_reason: string;
+  }>;
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
+};
+
+type GroqStreamChunk = {
+  choices?: Array<{
+    delta?: { content?: string };
+    finish_reason?: string;
+  }>;
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
+};
+
+export class GroqLlmProvider implements LlmProvider {
+  constructor(private env: ServerEnv) {}
+
+  private get baseUrl() {
+    return this.env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1';
+  }
+
+  async complete(request: LlmChatRequest) {
+    if (!this.env.GROQ_API_KEY) {
+      throw new HttpException(
+        503,
+        'Groq API key is not configured',
+        'groq_not_configured'
+      );
+    }
+
+    const startedAt = Date.now();
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      this.env.PROVIDER_TIMEOUT_MS
+    );
+
+    try {
+      const response = await this.fetchWithRetry(request, controller);
+      const body = (await response.json()) as GroqChatResponse;
+      const choice = body.choices?.[0];
+
+      if (!choice?.message?.content) {
+        throw new HttpException(
+          502,
+          'Provider returned an invalid response',
+          'provider_invalid_response'
+        );
+      }
+
+      const promptTokens = body.usage?.prompt_tokens ?? 0;
+      const completionTokens = body.usage?.completion_tokens ?? 0;
+
+      return {
+        content: choice.message.content,
+        promptTokens,
+        completionTokens,
+        latencyMs: Date.now() - startedAt,
+        estimatedCostUsd: formatEstimatedCostUsd(
+          estimateModelCostUsd({
+            provider: request.provider,
+            model: request.model,
+            promptTokens,
+            completionTokens
+          }) ?? 0
+        )
+      };
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      if ((error as Error).name === 'AbortError') {
+        throw new HttpException(
+          504,
+          'Provider request timed out',
+          'provider_timeout'
+        );
+      }
+      throw new HttpException(
+        502,
+        'Provider request failed',
+        'provider_request_failed'
+      );
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  private async fetchWithRetry(
+    request: LlmChatRequest,
+    controller: AbortController
+  ) {
+    const doFetch = () =>
+      fetch(`${this.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.env.GROQ_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: request.model,
+          messages: request.messages.map((m) => ({
+            role: m.role,
+            content: m.content
+          })),
+          max_tokens: this.env.DEFAULT_MAX_OUTPUT_TOKENS,
+          stream: false
+        }),
+        signal: controller.signal
+      });
+
+    let response = await doFetch();
+    if (response.ok) return response;
+
+    const status = response.status;
+    if ([429, 500, 502, 503].includes(status)) {
+      const retryAfter = response.headers.get('retry-after');
+      let delay = 1_000;
+      if (retryAfter) {
+        const parsed = parseInt(retryAfter, 10);
+        if (!isNaN(parsed) && parsed > 0)
+          delay = Math.min(parsed * 1000, 30_000);
+      }
+      await sleep(delay);
+      response = await doFetch();
+      if (response.ok) return response;
+    }
+
+    throw await this.mapError(response);
+  }
+
+  private async mapError(response: Response) {
+    switch (response.status) {
+      case 401:
+      case 403:
+        return new HttpException(
+          502,
+          'Provider authentication failed',
+          'provider_auth_error'
+        );
+      case 404:
+        return new HttpException(
+          502,
+          'Provider model not found',
+          'provider_model_error'
+        );
+      case 429:
+        return new HttpException(
+          502,
+          'Provider rate limit exceeded',
+          'provider_rate_limited'
+        );
+      default:
+        if (response.status >= 500) {
+          return new HttpException(
+            502,
+            'Provider upstream error',
+            'provider_upstream_error'
+          );
+        }
+        return new HttpException(
+          502,
+          'Provider request failed',
+          'provider_request_failed'
+        );
+    }
+  }
+
+  async *stream(request: LlmChatRequest): AsyncGenerator<LlmChatChunk> {
+    if (!this.env.GROQ_API_KEY) {
+      throw new HttpException(
+        503,
+        'Groq API key is not configured',
+        'groq_not_configured'
+      );
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      this.env.PROVIDER_TIMEOUT_MS
+    );
+
+    try {
+      const response = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.env.GROQ_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: request.model,
+          messages: request.messages.map((m) => ({
+            role: m.role,
+            content: m.content
+          })),
+          max_tokens: this.env.DEFAULT_MAX_OUTPUT_TOKENS,
+          stream: true
+        }),
+        signal: controller.signal
+      });
+
+      if (!response.ok || !response.body) {
+        throw new HttpException(
+          502,
+          'Provider stream failed',
+          'provider_stream_failed'
+        );
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let promptTokens = 0;
+      let completionTokens = 0;
+      let finishReason: string | undefined;
+
+      let isDone = false;
+      while (!isDone) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith('data:')) continue;
+          const data = trimmed.slice('data:'.length).trim();
+          if (data === '[DONE]') {
+            isDone = true;
+            break;
+          }
+
+          try {
+            const chunk = JSON.parse(data) as GroqStreamChunk;
+            const delta = chunk.choices?.[0]?.delta?.content;
+            if (delta) {
+              yield { type: 'delta', content: delta };
+            }
+
+            if (chunk.usage) {
+              promptTokens = chunk.usage.prompt_tokens ?? 0;
+              completionTokens = chunk.usage.completion_tokens ?? 0;
+            }
+
+            if (chunk.choices?.[0]?.finish_reason) {
+              finishReason = chunk.choices[0].finish_reason;
+            }
+          } catch {
+            /* skip malformed JSON */
+          }
+        }
+      }
+
+      yield {
+        type: 'done',
+        usage: {
+          promptTokens,
+          completionTokens,
+          totalTokens: promptTokens + completionTokens,
+          estimatedCostUsd: formatEstimatedCostUsd(
+            estimateModelCostUsd({
+              provider: request.provider,
+              model: request.model,
+              promptTokens,
+              completionTokens
+            }) ?? 0
+          )
+        },
+        finishReason: finishReason ?? 'stop'
+      };
+    } catch (error) {
+      if ((error as Error).name === 'AbortError') {
+        throw new HttpException(
+          504,
+          'Provider stream timed out',
+          'provider_timeout'
+        );
+      }
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        502,
+        'Provider stream failed',
+        'provider_stream_failed'
+      );
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+}
+
 export class DeterministicDnaDigestSummarizer implements DnaDigestSummarizer {
   async summarize() {
     return 'DNA digest for all advisors';
@@ -499,5 +803,31 @@ export class DeterministicLlmProvider implements LlmProvider {
       },
       finishReason: 'stop'
     };
+  }
+}
+
+export class RoutingLlmProvider implements LlmProvider {
+  constructor(private readonly providers: Map<string, LlmProvider>) {}
+
+  async complete(request: LlmChatRequest) {
+    const provider = this.resolve(request.provider);
+    return provider.complete(request);
+  }
+
+  async *stream(request: LlmChatRequest): AsyncGenerator<LlmChatChunk> {
+    const provider = this.resolve(request.provider);
+    yield* provider.stream(request);
+  }
+
+  private resolve(providerName: string) {
+    const provider = this.providers.get(providerName);
+    if (!provider) {
+      throw new HttpException(
+        503,
+        `LLM provider "${providerName}" is not configured`,
+        'llm_provider_unavailable'
+      );
+    }
+    return provider;
   }
 }

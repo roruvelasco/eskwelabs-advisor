@@ -10,6 +10,8 @@ import {
   GeminiLlmProvider,
   GoogleDocsClient,
   GoogleDocsGeminiDnaDigestGenerator,
+  GroqLlmProvider,
+  RoutingLlmProvider,
   type DnaDigestSummarizer,
   type LlmProvider
 } from '../adapters/advisor-adapters';
@@ -112,8 +114,21 @@ export function createContainer() {
       provide: LLM_PROVIDER,
       useFactory: (c) => {
         const env = c.get(SERVER_ENV);
-        if (env.GEMINI_API_KEY) return new GeminiLlmProvider(env);
-        return new DeterministicLlmProvider();
+        const providers = new Map<string, LlmProvider>();
+
+        if (env.GROQ_API_KEY) {
+          providers.set('groq', new GroqLlmProvider(env));
+        }
+
+        if (env.GEMINI_API_KEY) {
+          providers.set('gemini', new GeminiLlmProvider(env));
+        }
+
+        if (providers.size === 0) {
+          providers.set('deterministic', new DeterministicLlmProvider());
+        }
+
+        return new RoutingLlmProvider(providers);
       }
     })
     .bind({

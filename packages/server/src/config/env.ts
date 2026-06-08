@@ -18,6 +18,12 @@ export const serverEnvSchema = z.object({
   ANTHROPIC_API_KEY: z.string().optional().default(''),
   GEMINI_API_KEY: z.string().optional().default(''),
   GEMINI_MODEL: z.string().optional().default('gemini-2.5-flash-lite'),
+  GROQ_API_KEY: z.string().optional().default(''),
+  GROQ_BASE_URL: z
+    .string()
+    .optional()
+    .default('https://api.groq.com/openai/v1'),
+  PROVIDER_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
   DAILY_MESSAGE_LIMIT: z.coerce.number().int().positive().default(25),
   DAILY_TOKEN_LIMIT: z.coerce.number().int().positive().default(100_000),
   DAILY_SPEND_LIMIT_USD: z.coerce.number().positive().default(10),

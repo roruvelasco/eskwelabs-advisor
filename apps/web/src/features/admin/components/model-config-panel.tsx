@@ -57,6 +57,10 @@ const PROVIDERS: Record<string, { label: string; models: string[] }> = {
     label: 'Google',
     models: ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
   },
+  groq: {
+    label: 'Groq',
+    models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant']
+  },
   openai: {
     label: 'OpenAI',
     models: ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo']

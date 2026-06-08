@@ -595,7 +595,23 @@ async function main() {
   console.log(`\nAdvisors: ${advisors.length} found`);
   for (const a of advisors) console.log(`  ${a.id} — ${a.name}`);
 
-  console.log('\nDeleting existing conversations and messages...');
+  console.log('\nUpserting model configs...');
+  for (const a of advisors) {
+    await sql`
+      INSERT INTO model_config (advisor_id, provider, model, is_enabled)
+      VALUES (${a.id}, 'groq', 'llama-3.3-70b-versatile', true)
+      ON CONFLICT (advisor_id) DO UPDATE SET
+        provider = EXCLUDED.provider,
+        model = EXCLUDED.model,
+        is_enabled = true,
+        updated_at = NOW()
+    `;
+  }
+  console.log(
+    `  ${advisors.length} model configs upserted (provider=groq, model=llama-3.3-70b-versatile)\n`
+  );
+
+  console.log('Deleting existing conversations and messages...');
   await sql`DELETE FROM messages WHERE conversation_id IN (SELECT id FROM conversations WHERE user_id = ${intern.id})`;
   await sql`DELETE FROM conversations WHERE user_id = ${intern.id}`;
   console.log('  Done — clean slate.\n');
