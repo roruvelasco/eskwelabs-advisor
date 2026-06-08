@@ -22,8 +22,44 @@ export class PromptCacheController extends Controller {
         return c.json(this.promptCacheSerializer.list(rows));
       })
       .post('/admin/prompt-cache/refresh', async (c) => {
-        const result = await this.promptCacheService.refresh();
+        const actor = c.get('actor');
+        const result = await this.promptCacheService.refresh(actor?.id);
         return c.json({ data: result });
+      })
+      .get('/admin/prompt-cache/advisors/:advisorId/snapshots', async (c) => {
+        const rows = await this.promptCacheService.listAdvisorSnapshots(
+          c.req.param('advisorId')
+        );
+        return c.json(this.promptCacheSerializer.promptSnapshots(rows));
+      })
+      .post(
+        '/admin/prompt-cache/advisors/:advisorId/snapshots/:snapshotId/activate',
+        async (c) => {
+          const actor = c.get('actor');
+          const snapshot =
+            await this.promptCacheService.activateAdvisorSnapshot(
+              c.req.param('advisorId'),
+              c.req.param('snapshotId'),
+              actor?.id
+            );
+          return c.json({
+            data: this.promptCacheSerializer.promptSnapshots([snapshot]).data[0]
+          });
+        }
+      )
+      .get('/admin/prompt-cache/dna-digests', async (c) => {
+        const rows = await this.promptCacheService.listDnaDigests();
+        return c.json(this.promptCacheSerializer.dnaDigests(rows));
+      })
+      .post('/admin/prompt-cache/dna-digests/:digestId/activate', async (c) => {
+        const actor = c.get('actor');
+        const digest = await this.promptCacheService.activateDnaDigest(
+          c.req.param('digestId'),
+          actor?.id
+        );
+        return c.json({
+          data: this.promptCacheSerializer.dnaDigests([digest]).data[0]
+        });
       });
   }
 }
