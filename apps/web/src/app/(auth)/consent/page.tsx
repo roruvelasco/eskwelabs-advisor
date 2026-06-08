@@ -1,5 +1,5 @@
-import { ConsentNotice } from '@/features/auth/components/consent-notice';
+import { redirect } from 'next/navigation';
 
 export default function ConsentPage() {
-  return <ConsentNotice />;
+  redirect('/advisors');
 }
