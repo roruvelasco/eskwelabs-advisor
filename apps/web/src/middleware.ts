@@ -160,6 +160,10 @@ async function updateMiddleware(
     return response;
   }
 
+  if (pathname === '/admin/login') {
+    return createResponse(NextResponse.next());
+  }
+
   const isProtected = [
     ...eifRoutes,
     ...adminRoutes,

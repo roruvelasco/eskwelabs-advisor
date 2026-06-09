@@ -17,6 +17,16 @@ import {
   toast
 } from '@eskwelabs-advisor/ui';
 
+const errorMessages: Record<string, string> = {
+  NotAllowlisted: 'Your account is not on the admin allow-list.',
+  AccessDenied: 'Access was denied. Please try again.',
+  OAuthSignin: 'Error connecting to Google. Please try again.',
+  OAuthCallback: 'Error during authentication. Please try again.',
+  AuthServiceUnavailable:
+    'Sign in is temporarily unavailable. Please try again later.',
+  Default: 'An error occurred during sign in. Please try again.'
+};
+
 function GoogleIcon() {
   return (
     <svg
@@ -45,19 +55,6 @@ function GoogleIcon() {
   );
 }
 
-const errorMessages: Record<string, string> = {
-  NotAllowlisted:
-    'Your account is not on the allow-list. Please contact an administrator.',
-  AccessDenied: 'Access was denied. Please try again.',
-  OAuthSignin: 'Error connecting to Google. Please try again.',
-  OAuthCallback: 'Error during authentication. Please try again.',
-  AuthServiceUnavailable:
-    'Sign in is temporarily unavailable. Please try again later.',
-  CredentialsSignin: 'Invalid email or password. Please try again.',
-  EmailSigninError: 'Sign in failed. Please try again.',
-  Default: 'An error occurred during sign in. Please try again.'
-};
-
 function AuthErrorToast() {
   const searchParams = useSearchParams();
   const error = searchParams.get('error');
@@ -71,7 +68,7 @@ function AuthErrorToast() {
   return null;
 }
 
-export function LoginPanel() {
+export function AdminLoginPanel() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
@@ -80,7 +77,7 @@ export function LoginPanel() {
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
     try {
-      await signIn('google', { callbackUrl: '/advisors', redirect: true });
+      await signIn('google', { callbackUrl: '/admin', redirect: true });
     } finally {
       setIsLoading(false);
     }
@@ -93,7 +90,7 @@ export function LoginPanel() {
       await signIn('credentials', {
         email,
         password,
-        callbackUrl: '/advisors',
+        callbackUrl: '/admin',
         redirect: true
       });
     } finally {
@@ -115,10 +112,10 @@ export function LoginPanel() {
         <div className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-10">
           <div className="space-y-2 text-center">
             <h1 className="text-foreground text-balance font-serif text-4xl leading-[1.1] tracking-tight md:text-5xl">
-              Advise with clarity.
+              Admin Portal
             </h1>
             <p className="text-muted-foreground text-sm">
-              Your AI-powered coaching companion for EIF mentorship.
+              Sign in with your admin Google account.
             </p>
           </div>
 
@@ -144,9 +141,9 @@ export function LoginPanel() {
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="admin-email">Email</Label>
                 <Input
-                  id="email"
+                  id="admin-email"
                   type="email"
                   placeholder="you@eskwelabs.com"
                   autoComplete="email"
@@ -156,10 +153,10 @@ export function LoginPanel() {
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="admin-password">Password</Label>
                 <div className="relative">
                   <Input
-                    id="password"
+                    id="admin-password"
                     type={showPassword ? 'text' : 'password'}
                     placeholder="••••••••"
                     className="pr-10"
@@ -195,11 +192,10 @@ export function LoginPanel() {
                 className="text-muted-foreground w-full text-sm"
                 size="sm"
                 onClick={() => {
-                  window.location.href = '/admin/login';
+                  window.location.href = '/login';
                 }}
-                disabled={isLoading}
               >
-                Admin Login
+                Back to user login
               </Button>
             </CardContent>
           </Card>
