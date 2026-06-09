@@ -35,7 +35,7 @@ describe('ModelConfig upsert behavior', () => {
       isEnabled: true
     });
 
-    expect(capturedInsert._updateInfo).toMatchObject({
+    expect(capturedInsert!._updateInfo).toMatchObject({
       provider: 'groq',
       model: 'llama-3.3-70b-versatile'
     });
