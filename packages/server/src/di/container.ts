@@ -381,6 +381,7 @@ export function createContainer() {
         new ApplicationController(
           c.get(UsersService),
           c.get(RateLimitService),
+          c.get(TelemetryService),
           c.get(UsersController),
           c.get(AdvisorController),
           c.get(ConversationController),

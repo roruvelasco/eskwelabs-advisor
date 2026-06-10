@@ -29,7 +29,7 @@ export const serverEnvSchema = z.object({
   DAILY_SPEND_LIMIT_USD: z.coerce.number().positive().default(10),
   DEFAULT_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(2_000),
   RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
-  RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(30)
+  RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(100)
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
