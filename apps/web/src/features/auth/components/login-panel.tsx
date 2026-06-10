@@ -189,18 +189,6 @@ export function LoginPanel() {
               >
                 {isLoading ? 'Signing in...' : 'Continue with email'}
               </Button>
-
-              <Button
-                variant="ghost"
-                className="text-muted-foreground w-full text-sm"
-                size="sm"
-                onClick={() => {
-                  window.location.href = '/admin/login';
-                }}
-                disabled={isLoading}
-              >
-                Admin Login
-              </Button>
             </CardContent>
           </Card>
         </div>
