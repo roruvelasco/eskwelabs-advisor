@@ -5,6 +5,7 @@ import { Eye, EyeOff } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 
+import { roleCallbackUrl } from '@/lib/domains/auth/callback-url';
 import {
   AppBrand,
   Button,
@@ -19,6 +20,8 @@ import {
 
 const errorMessages: Record<string, string> = {
   NotAllowlisted: 'Your account is not on the admin allow-list.',
+  AdminRequired: 'Use an admin account to access the admin portal.',
+  UseAdminLogin: 'Use the admin portal to sign in with this account.',
   AccessDenied: 'Access was denied. Please try again.',
   OAuthSignin: 'Error connecting to Google. Please try again.',
   OAuthCallback: 'Error during authentication. Please try again.',
@@ -69,15 +72,21 @@ function AuthErrorToast() {
 }
 
 export function AdminLoginPanel() {
+  const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const callbackUrl = roleCallbackUrl(
+    searchParams.get('callbackUrl'),
+    '/admin',
+    ['/admin']
+  );
 
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
     try {
-      await signIn('google', { callbackUrl: '/admin', redirect: true });
+      await signIn('google-admin', { callbackUrl, redirect: true });
     } finally {
       setIsLoading(false);
     }
@@ -87,10 +96,10 @@ export function AdminLoginPanel() {
     if (!email || !password) return;
     setIsLoading(true);
     try {
-      await signIn('credentials', {
+      await signIn('credentials-admin', {
         email,
         password,
-        callbackUrl: '/admin',
+        callbackUrl,
         redirect: true
       });
     } finally {

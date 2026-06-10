@@ -2,15 +2,32 @@ import type { NextAuthOptions } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import Google from 'next-auth/providers/google';
 import { createContainer, AuthService } from '@eskwelabs-advisor/server';
+import type { ActorRole } from '@eskwelabs-advisor/server';
 
 type AuthResolver = Pick<
   AuthService,
   'resolveActor' | 'resolveLogin' | 'resolveCredentials'
 >;
 type LoginActor = Awaited<ReturnType<AuthService['resolveLogin']>>;
+type SessionUserWithActor = {
+  id: string;
+  email: string;
+  role?: string;
+  isActive?: boolean;
+};
 
 const defaultAuthService = createContainer().get(AuthService);
-const authServiceUnavailableUrl = '/login?error=AuthServiceUnavailable';
+const roleLogin: Record<ActorRole, string> = {
+  eif: '/login',
+  admin: '/admin/login'
+};
+
+const providerRole: Record<string, ActorRole> = {
+  google: 'eif',
+  credentials: 'eif',
+  'google-admin': 'admin',
+  'credentials-admin': 'admin'
+};
 
 if (!process.env.AUTH_GOOGLE_ID || !process.env.AUTH_GOOGLE_SECRET) {
   console.warn(
@@ -50,7 +67,29 @@ export function createAuthConfig(authService: AuthResolver): NextAuthOptions {
       ...(process.env.NODE_ENV !== 'production'
         ? [
             Credentials({
+              id: 'credentials',
               name: 'credentials',
+              credentials: {
+                email: { label: 'Email', type: 'email' },
+                password: { label: 'Password', type: 'password' }
+              },
+              async authorize(credentials) {
+                if (!credentials?.email || !credentials?.password) return null;
+                const actor = await authService.resolveCredentials(
+                  credentials.email,
+                  credentials.password
+                );
+                if (!actor) return null;
+                return {
+                  id: actor.id,
+                  email: actor.email,
+                  name: actor.email.split('@')[0]
+                };
+              }
+            }),
+            Credentials({
+              id: 'credentials-admin',
+              name: 'admin credentials',
               credentials: {
                 email: { label: 'Email', type: 'email' },
                 password: { label: 'Password', type: 'password' }
@@ -72,6 +111,15 @@ export function createAuthConfig(authService: AuthResolver): NextAuthOptions {
           ]
         : []),
       Google({
+        id: 'google',
+        name: 'Google',
+        clientId: process.env.AUTH_GOOGLE_ID!,
+        clientSecret: process.env.AUTH_GOOGLE_SECRET!,
+        allowDangerousEmailAccountLinking: true
+      }),
+      Google({
+        id: 'google-admin',
+        name: 'Google Admin',
         clientId: process.env.AUTH_GOOGLE_ID!,
         clientSecret: process.env.AUTH_GOOGLE_SECRET!,
         allowDangerousEmailAccountLinking: true
@@ -118,25 +166,32 @@ export function createAuthConfig(authService: AuthResolver): NextAuthOptions {
       },
       async session({ session, token }) {
         if (session.user) {
-          (session.user as { id: string; email: string }).id =
-            token.id as string;
-          (session.user as { id: string; email: string }).email =
-            token.email as string;
+          const sessionUser = session.user as SessionUserWithActor;
+          sessionUser.id = token.id as string;
+          sessionUser.email = token.email as string;
+          sessionUser.role = token.role as string;
+          sessionUser.isActive = token.isActive as boolean;
         }
         return session;
       },
-      async signIn({ user }) {
+      async signIn({ user, account }) {
         const email = user.email?.toLowerCase();
         if (!email) {
           return false;
         }
+        const requiredRole = providerRole[account?.provider ?? ''] ?? 'eif';
         const actor = await resolveLoginForAuth(authService, email, 'signIn');
         if (actor === 'service_unavailable') {
-          return authServiceUnavailableUrl;
+          return `${roleLogin[requiredRole]}?error=AuthServiceUnavailable`;
         }
         if (!actor) {
           console.warn('auth_rejected_not_in_allowlist', { email });
-          return '/login?error=NotAllowlisted';
+          return `${roleLogin[requiredRole]}?error=NotAllowlisted`;
+        }
+        if (actor.role !== requiredRole) {
+          return actor.role === 'admin'
+            ? '/admin/login?error=UseAdminLogin'
+            : '/admin/login?error=AdminRequired';
         }
         return true;
       }

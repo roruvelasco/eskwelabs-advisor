@@ -9,20 +9,29 @@ const actor = {
   isActive: true
 };
 
-function authConfigFor(resolveLogin: () => Promise<typeof actor | null>) {
+const adminActor = {
+  ...actor,
+  email: 'admin@example.com',
+  role: 'admin' as const
+};
+
+function authConfigFor(
+  resolveLogin: () => Promise<typeof actor | typeof adminActor | null>
+) {
   return createAuthConfig({
     resolveLogin,
-    resolveActor: async () => actor
+    resolveActor: async () => actor,
+    resolveCredentials: async () => actor
   });
 }
 
-function signInInput(email?: string) {
+function signInInput(email?: string, provider = 'google') {
   return {
     user: {
       id: 'google-user',
       email
     },
-    account: null,
+    account: { provider },
     profile: undefined,
     email: undefined,
     credentials: undefined
@@ -44,6 +53,30 @@ describe('auth config', () => {
     ).resolves.toBe(true);
   });
 
+  test('allows admin users through the admin provider', async () => {
+    const config = authConfigFor(async () => adminActor);
+
+    await expect(
+      config.callbacks?.signIn?.(signInInput(adminActor.email, 'google-admin'))
+    ).resolves.toBe(true);
+  });
+
+  test('rejects EIF users from the admin provider before session creation', async () => {
+    const config = authConfigFor(async () => actor);
+
+    await expect(
+      config.callbacks?.signIn?.(signInInput(actor.email, 'google-admin'))
+    ).resolves.toBe('/admin/login?error=AdminRequired');
+  });
+
+  test('rejects admin users from the EIF provider before session creation', async () => {
+    const config = authConfigFor(async () => adminActor);
+
+    await expect(
+      config.callbacks?.signIn?.(signInInput(adminActor.email, 'google'))
+    ).resolves.toBe('/admin/login?error=UseAdminLogin');
+  });
+
   test('redirects missing allow-list users to a stable login error', async () => {
     const config = authConfigFor(async () => null);
 
@@ -61,5 +94,16 @@ describe('auth config', () => {
     await expect(
       config.callbacks?.signIn?.(signInInput(actor.email))
     ).resolves.toBe('/login?error=AuthServiceUnavailable');
+  });
+
+  test('redirects admin auth service failures to the admin login', async () => {
+    console.error = () => {};
+    const config = authConfigFor(async () => {
+      throw new Error('connect ECONNREFUSED 127.0.0.1:54322');
+    });
+
+    await expect(
+      config.callbacks?.signIn?.(signInInput(adminActor.email, 'google-admin'))
+    ).resolves.toBe('/admin/login?error=AuthServiceUnavailable');
   });
 });

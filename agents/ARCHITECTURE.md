@@ -129,10 +129,12 @@ Every backend domain at `packages/server/src/<domain>/` follows the same layout:
 ### Auth Flow
 
 1. NextAuth sign-in resolves Google email against the Supabase/Postgres `users` table via `AuthService`; missing/inactive users are rejected.
-2. Next.js middleware (`apps/web/src/middleware.ts`) reads JWT claims, gates routes by `role`/`isActive`, and forwards `x-eskwelabs-actor-*` request headers.
-3. Hono `auth.middleware.ts` validates forwarded id/email against the `users` table and sets `c.set('actor', actor)` from DB role/status.
-4. Route handlers access via `c.get('actor')`.
-5. Guard helper: `requireActor(roles)`.
+2. Login intent is role-specific at the provider layer: `/login` uses `google` / `credentials`, while `/admin/login` uses `google-admin` / `credentials-admin`. The sign-in callback rejects role mismatches before creating a JWT session.
+3. Next.js middleware (`apps/web/src/middleware.ts`) reads JWT claims, gates routes by `role`/`isActive`, and forwards `x-eskwelabs-actor-*` request headers.
+4. Admin and EIF app areas are strictly separated: wrong-role page requests redirect to that role's home, and wrong-role API requests return 403.
+5. Hono `auth.middleware.ts` validates forwarded id/email against the `users` table and sets `c.set('actor', actor)` from DB role/status.
+6. Route handlers access via `c.get('actor')`.
+7. Guard helper: `requireActor(roles)`.
 
 ### Error Handling
 

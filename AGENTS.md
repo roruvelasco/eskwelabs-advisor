@@ -122,7 +122,9 @@ To change the look, edit the CSS variables — not component files. See [UI-PRAC
 ## Auth & CSP
 
 - **Cookie-based auth**: `eskwelabs_actor_email`, `eskwelabs_actor_id`, `eskwelabs_actor_role`, `eskwelabs_actor_active` cookies set by middleware
+- **Role-specific login**: EIF login uses NextAuth provider IDs `google` / `credentials`; admin login uses `google-admin` / `credentials-admin`. The sign-in callback rejects role mismatches before creating a JWT session.
 - **Next.js middleware** (`apps/web/src/middleware.ts`): reads JWT via `getToken()`, gates routes against JWT claims (`role`, `isActive`). Sets `x-eskwelabs-actor-*` request headers from JWT-derived claims. Never queries Postgres.
+- **Strict role split**: Admin sessions are redirected away from EIF app routes to `/admin`; EIF sessions are redirected away from admin pages to `/advisors`. Admin APIs and EIF APIs return 403 for the wrong role.
 - **Hono middleware** (`auth.middleware.ts`): `createAuthMiddleware(usersService)` validates forwarded `id`/`email` against the `users` table via `UsersService`, sets `c.get('actor')` from DB role/status. Two helpers: `requireActor(roles)` for route gating.
 - **Allowlist source**: `users` table (Supabase/Postgres) — `email`, `role`, `is_active`. Bootstrap by inserting the first admin row directly into Supabase before first login.
 - **CSP**: Nonce-based in `middleware.ts`. Layout calls `await headers()` to force dynamic rendering per-request.

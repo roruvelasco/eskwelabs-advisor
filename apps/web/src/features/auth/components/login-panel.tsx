@@ -5,6 +5,7 @@ import { Eye, EyeOff } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 
+import { roleCallbackUrl } from '@/lib/domains/auth/callback-url';
 import {
   AppBrand,
   Button,
@@ -48,6 +49,8 @@ function GoogleIcon() {
 const errorMessages: Record<string, string> = {
   NotAllowlisted:
     'Your account is not on the allow-list. Please contact an administrator.',
+  AdminRequired: 'Use an admin account to access the admin portal.',
+  UseAdminLogin: 'Use the admin portal to sign in with this account.',
   AccessDenied: 'Access was denied. Please try again.',
   OAuthSignin: 'Error connecting to Google. Please try again.',
   OAuthCallback: 'Error during authentication. Please try again.',
@@ -72,15 +75,21 @@ function AuthErrorToast() {
 }
 
 export function LoginPanel() {
+  const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const callbackUrl = roleCallbackUrl(
+    searchParams.get('callbackUrl'),
+    '/advisors',
+    ['/', '/advisors', '/chat', '/history', '/consent']
+  );
 
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
     try {
-      await signIn('google', { callbackUrl: '/advisors', redirect: true });
+      await signIn('google', { callbackUrl, redirect: true });
     } finally {
       setIsLoading(false);
     }
@@ -93,7 +102,7 @@ export function LoginPanel() {
       await signIn('credentials', {
         email,
         password,
-        callbackUrl: '/advisors',
+        callbackUrl,
         redirect: true
       });
     } finally {
