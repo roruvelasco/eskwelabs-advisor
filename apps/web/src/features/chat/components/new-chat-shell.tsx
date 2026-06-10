@@ -44,6 +44,8 @@ function ChatLayoutInner() {
   const { open, isMobile, openMobile } = useSidebar();
   const [liveMessages, setLiveMessages] = useState<Message[]>([]);
   const [liveConversationId, setLiveConversationId] = useState<string>();
+  const [stableSidebarAdvisorId, setStableSidebarAdvisorId] =
+    useState<string>();
 
   useEffect(() => {
     if (!conversationId && !advisorId) router.replace('/advisors');
@@ -67,6 +69,14 @@ function ChatLayoutInner() {
     advisorId ??
     (conversationResponse as { data?: { advisorId?: string } } | undefined)
       ?.data?.advisorId;
+  const sidebarAdvisorId = currentAdvisorId ?? stableSidebarAdvisorId;
+  useEffect(() => {
+    if (currentAdvisorId) {
+      setStableSidebarAdvisorId(currentAdvisorId);
+    }
+  }, [currentAdvisorId]);
+  const isResolvingConversationAdvisor =
+    Boolean(conversationId) && !sidebarAdvisorId;
   const currentAdvisor = (advisorsResponse?.data ?? []).find(
     (advisor) => advisor.id === currentAdvisorId
   );
@@ -205,8 +215,9 @@ function ChatLayoutInner() {
   return (
     <>
       <ChatSidebar
-        currentAdvisorId={currentAdvisorId}
+        currentAdvisorId={sidebarAdvisorId}
         currentConversationId={conversationId ?? undefined}
+        isResolvingConversationAdvisor={isResolvingConversationAdvisor}
       />
 
       <SidebarInset className="bg-background h-dvh overflow-hidden p-3">

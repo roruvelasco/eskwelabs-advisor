@@ -18,7 +18,7 @@ import {
   Separator
 } from '@eskwelabs-advisor/ui';
 
-import { acknowledgeConsent, getConsent } from '@/lib/domains/auth/api';
+import { acknowledgeConsent } from '@/lib/domains/auth/api';
 import { advisorsQuery } from '@/lib/domains/advisors/queries';
 import { getAdvisorMeta } from '@/lib/domains/advisors/meta';
 
@@ -83,6 +83,8 @@ function AdvisorCard({ id, name, description, index }: AdvisorCardProps) {
 }
 
 // ─── ConsentDialog ────────────────────────────────────────────────────────────
+
+const consentSessionKey = 'eskwelabs-advisor:monitoring-notice-seen';
 
 interface ConsentDialogProps {
   open: boolean;
@@ -218,21 +220,30 @@ export function AdvisorSelection() {
   const advisors = advisorsResponse?.data ?? [];
 
   useEffect(() => {
-    getConsent()
-      .then((data) => {
-        if (!data?.consentedAt) setConsentOpen(true);
-      })
-      .catch(() => setConsentOpen(true));
+    try {
+      if (window.sessionStorage.getItem(consentSessionKey) !== 'true') {
+        setConsentOpen(true);
+      }
+    } catch {
+      setConsentOpen(true);
+    }
   }, []);
 
   const handleAcknowledge = async () => {
     setIsAcknowledging(true);
     try {
+      window.sessionStorage.setItem(consentSessionKey, 'true');
+    } catch (error) {
+      void error;
+    }
+
+    try {
       await acknowledgeConsent();
+    } catch (error) {
+      void error;
+    } finally {
       setAcknowledged(true);
       setTimeout(() => setConsentOpen(false), 1100);
-    } catch {
-      setIsAcknowledging(false);
     }
   };
 

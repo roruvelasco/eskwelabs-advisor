@@ -5,7 +5,8 @@ import { getConversation, listConversations } from './api';
 export function conversationsQuery(advisorId?: string) {
   return queryOptions({
     queryKey: ['conversations', advisorId],
-    queryFn: () => listConversations(advisorId)
+    queryFn: () => listConversations(advisorId),
+    staleTime: 30_000
   });
 }
 

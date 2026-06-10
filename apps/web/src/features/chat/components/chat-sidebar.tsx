@@ -1,7 +1,7 @@
 'use client';
 
 import { ChevronUp, LogOut, Plus, UserRound } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import {
   AppBrand,
@@ -26,13 +26,26 @@ import {
   SidebarTrigger,
   useSidebar
 } from '@eskwelabs-advisor/ui';
-import { conversationsQuery } from '@/lib/domains/conversations/queries';
+import {
+  conversationQuery,
+  conversationsQuery
+} from '@/lib/domains/conversations/queries';
+
+type SidebarConversation = {
+  id: string;
+  userId: string;
+  title: string;
+  advisorId: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+};
 
 function RecentConversationButton({
   conversation,
   onClick
 }: {
-  conversation: { id: string; title: string; advisorId: string };
+  conversation: SidebarConversation;
   onClick: () => void;
 }) {
   const { isMobile, setOpenMobile } = useSidebar();
@@ -59,20 +72,22 @@ function RecentConversationButton({
 
 export function ChatSidebar({
   currentAdvisorId,
-  currentConversationId
+  currentConversationId,
+  isResolvingConversationAdvisor = false
 }: {
   currentAdvisorId?: string;
   currentConversationId?: string;
+  isResolvingConversationAdvisor?: boolean;
 }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { isMobile, setOpenMobile } = useSidebar();
-  const { data, isError } = useQuery(conversationsQuery());
+  const { data, isError, isLoading } = useQuery({
+    ...conversationsQuery(currentAdvisorId),
+    enabled: Boolean(currentAdvisorId) && !isResolvingConversationAdvisor
+  });
 
-  const conversations = (data?.data ?? []) as Array<{
-    id: string;
-    title: string;
-    advisorId: string;
-  }>;
+  const conversations = (data?.data ?? []) as SidebarConversation[];
   const newChatAdvisorId =
     currentAdvisorId ??
     conversations.find(
@@ -95,6 +110,13 @@ export function ChatSidebar({
   const handleAdvisorSelection = () => {
     closeMobileSidebar();
     router.push('/advisors');
+  };
+
+  const handleConversationSelection = (conversation: SidebarConversation) => {
+    queryClient.setQueryData(conversationQuery(conversation.id).queryKey, {
+      data: conversation
+    });
+    router.push(`/chat?conversation=${conversation.id}`);
   };
 
   const handleLogout = async () => {
@@ -129,7 +151,11 @@ export function ChatSidebar({
             Recents
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            {isError ? (
+            {isResolvingConversationAdvisor || isLoading ? (
+              <p className="text-muted-foreground px-3 text-sm">
+                Loading conversations...
+              </p>
+            ) : isError ? (
               <p className="text-muted-foreground px-3 text-sm">
                 Could not load conversations.
               </p>
@@ -150,9 +176,7 @@ export function ChatSidebar({
                   <RecentConversationButton
                     key={conversation.id}
                     conversation={conversation}
-                    onClick={() =>
-                      router.push(`/chat?conversation=${conversation.id}`)
-                    }
+                    onClick={() => handleConversationSelection(conversation)}
                   />
                 ))}
               </SidebarMenu>
