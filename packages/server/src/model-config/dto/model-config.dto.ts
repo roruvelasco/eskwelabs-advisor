@@ -27,7 +27,7 @@ export const updateModelConfigDto = createUpdateSchema(modelConfigTable, {
   provider: (s) => s.min(1),
   model: (s) => s.min(1)
 })
-  .pick({ provider: true, model: true })
-  .required();
+  .pick({ provider: true, model: true, isEnabled: true })
+  .required({ provider: true, model: true });
 
 export type UpdateModelConfigDto = z.infer<typeof updateModelConfigDto>;

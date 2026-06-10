@@ -43,19 +43,71 @@ export class PromptCacheService {
   }
 
   private async cachePrompt(snapshot: PromptSnapshotRow) {
+    const now = new Date();
     await this.redisService.set(
       `prompt-context:advisor:${snapshot.advisorId}`,
       snapshot,
       PROMPT_CONTEXT_TTL_SECONDS
     );
+    await this.promptCacheRepository.upsert({
+      key: `prompt-context:advisor:${snapshot.advisorId}`,
+      valueHash: snapshot.hash,
+      docRevision: snapshot.revision,
+      dnaDigestVersion: null,
+      lastGoodAt: now,
+      expiresAt: new Date(now.getTime() + PROMPT_CONTEXT_TTL_SECONDS * 1000)
+    });
   }
 
   private async cacheDna(digest: DnaDigestRow) {
+    const now = new Date();
     await this.redisService.set(
       'prompt-context:dna',
       digest,
       PROMPT_CONTEXT_TTL_SECONDS
     );
+    await this.promptCacheRepository.upsert({
+      key: 'prompt-context:dna',
+      valueHash: digest.hash,
+      docRevision: digest.revision,
+      dnaDigestVersion: digest.hash,
+      lastGoodAt: now,
+      expiresAt: new Date(now.getTime() + PROMPT_CONTEXT_TTL_SECONDS * 1000)
+    });
+  }
+
+  private async recordWarmedMetadata(
+    warmed: Awaited<ReturnType<PromptIngestionService['refreshAll']>>
+  ) {
+    const now = new Date();
+    const expiresAt = new Date(
+      now.getTime() + PROMPT_CONTEXT_TTL_SECONDS * 1000
+    );
+
+    await Promise.all([
+      ...warmed.advisorPrompts
+        .filter((prompt) => prompt.hash && prompt.revision)
+        .map((prompt) =>
+          this.promptCacheRepository.upsert({
+            key: `prompt-context:advisor:${prompt.advisorId}`,
+            valueHash: prompt.hash!,
+            docRevision: prompt.revision!,
+            dnaDigestVersion: null,
+            lastGoodAt: now,
+            expiresAt
+          })
+        ),
+      warmed.dnaDigest.hash && warmed.dnaDigest.revision
+        ? this.promptCacheRepository.upsert({
+            key: 'prompt-context:dna',
+            valueHash: warmed.dnaDigest.hash,
+            docRevision: warmed.dnaDigest.revision,
+            dnaDigestVersion: warmed.dnaDigest.hash,
+            lastGoodAt: now,
+            expiresAt
+          })
+        : Promise.resolve()
+    ]);
   }
 
   async refresh(actorId?: string) {
@@ -69,6 +121,8 @@ export class PromptCacheService {
     }
 
     const warmed = await this.promptIngestionService.refreshAll();
+    await this.recordWarmedMetadata(warmed);
+
     const hasFailure =
       warmed.dnaDigest.status === 'failed' ||
       warmed.advisorPrompts.some((prompt) => prompt.status === 'failed');

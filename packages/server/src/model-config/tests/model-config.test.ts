@@ -26,4 +26,44 @@ describe('model config service', () => {
       })
     ]);
   });
+
+  test('updates enabled state with model configuration', async () => {
+    const updates: unknown[] = [];
+    const service = new ModelConfigService({
+      upsert: async (advisorId: string, input: unknown) => {
+        updates.push({ advisorId, input });
+        return {
+          advisorId,
+          provider: 'groq',
+          model: 'llama-3.3-70b-versatile',
+          isEnabled: false,
+          updatedBy: 'admin-id',
+          updatedAt: new Date()
+        };
+      }
+    } as never);
+
+    await expect(
+      service.update('data-dashboard', {
+        provider: 'groq',
+        model: 'llama-3.3-70b-versatile',
+        isEnabled: false,
+        updatedBy: 'admin-id'
+      })
+    ).resolves.toMatchObject({
+      advisorId: 'data-dashboard',
+      isEnabled: false
+    });
+    expect(updates).toEqual([
+      {
+        advisorId: 'data-dashboard',
+        input: {
+          provider: 'groq',
+          model: 'llama-3.3-70b-versatile',
+          isEnabled: false,
+          updatedBy: 'admin-id'
+        }
+      }
+    ]);
+  });
 });

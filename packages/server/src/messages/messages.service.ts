@@ -85,11 +85,6 @@ export class MessagesService {
     const config = await this.modelConfigService.getForAdvisor(advisorId);
 
     if (!config?.isEnabled) {
-      await this.createBlockedMessage(
-        actor,
-        input.conversationId,
-        'model_disabled'
-      );
       throw new HttpException(
         429,
         'Advisor model is disabled',
@@ -143,19 +138,29 @@ export class MessagesService {
     };
   }
 
-  private async createBlockedMessage(
+  private async createBlockedTurn(
     actor: Actor,
     conversationId: string,
+    content: string,
     blockReason: string
   ) {
-    return this.messagesRepository.create({
-      conversationId,
-      userId: actor.id,
-      role: 'assistant',
-      content: 'Request blocked.',
-      status: 'blocked',
-      blockReason
-    });
+    return this.messagesRepository.createErroredTurn(
+      this.userMessageInput(actor, conversationId, content),
+      {
+        conversationId,
+        userId: actor.id,
+        role: 'assistant',
+        content: 'Request blocked.',
+        status: 'blocked',
+        blockReason
+      }
+    );
+  }
+
+  private blockTelemetryReason(code: string) {
+    if (code.includes('spend') || code.includes('budget')) return 'budget';
+    if (code.includes('limit') || code.includes('disabled')) return 'cap';
+    return code;
   }
 
   private async recordTelemetry(
@@ -322,16 +327,20 @@ export class MessagesService {
           code: blockReason
         });
       } else if (error instanceof HttpException) {
-        if (error.code !== 'model_disabled') {
-          await this.createBlockedMessage(
-            actor,
-            input.conversationId,
-            error.code
-          );
-        }
+        await this.createBlockedTurn(
+          actor,
+          input.conversationId,
+          input.content,
+          error.code
+        );
         await this.recordTelemetry('chat_turn_blocked', actor, 'warning', {
           conversationId: input.conversationId,
           code: error.code
+        });
+        await this.recordTelemetry('request_blocked', actor, 'warning', {
+          conversationId: input.conversationId,
+          code: error.code,
+          reason: this.blockTelemetryReason(error.code)
         });
       }
       throw error;
@@ -419,9 +428,10 @@ export class MessagesService {
           code: blockReason
         });
       } else if (error instanceof HttpException) {
-        await this.createBlockedMessage(
+        await this.createBlockedTurn(
           actor,
           input.conversationId,
+          input.content,
           error.code
         );
         await this.recordTelemetry(
@@ -433,6 +443,11 @@ export class MessagesService {
             code: error.code
           }
         );
+        await this.recordTelemetry('request_blocked', actor, 'warning', {
+          conversationId: input.conversationId,
+          code: error.code,
+          reason: this.blockTelemetryReason(error.code)
+        });
       }
 
       throw error;

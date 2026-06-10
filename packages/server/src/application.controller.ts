@@ -16,6 +16,7 @@ import { securityHeadersMiddleware } from './common/middleware/security.middlewa
 
 import type { HonoEnv } from './common/utils/hono';
 import type { RateLimitService } from './rate-limit/rate-limit.service';
+import type { TelemetryService } from './telemetry/telemetry.service';
 import type { UsersService } from './users/users.service';
 
 export class ApplicationController {
@@ -24,6 +25,7 @@ export class ApplicationController {
   constructor(
     private usersService: UsersService,
     private rateLimitService: RateLimitService,
+    private telemetryService: TelemetryService,
     private usersController: UsersController,
     private advisorController: AdvisorController,
     private conversationController: ConversationController,
@@ -41,7 +43,10 @@ export class ApplicationController {
     this.app.use('*', createAuthMiddleware(this.usersService));
 
     if (this.rateLimitService) {
-      this.app.use('/api/*', createRateLimitMiddleware(this.rateLimitService));
+      this.app.use(
+        '/api/*',
+        createRateLimitMiddleware(this.rateLimitService, this.telemetryService)
+      );
     }
 
     return this.app

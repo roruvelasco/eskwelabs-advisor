@@ -17,7 +17,7 @@ export class UsersController extends Controller {
   }
 
   routes() {
-    this.controller.use('/consent', requireActor(['eif', 'admin']));
+    this.controller.use('/consent', requireActor(['eif']));
     this.controller.use('/admin/users/*', requireActor(['admin']));
     this.controller.use('/admin/users', requireActor(['admin']));
 

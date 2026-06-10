@@ -556,6 +556,7 @@ describe('messages service', () => {
   test('blocks unknown model rates before prompt and provider work', async () => {
     let promptCalls = 0;
     let providerCalls = 0;
+    const telemetry: Array<{ eventName: string; payload: unknown }> = [];
     const createdMessages: MessageRow[] = [];
     const service = new MessagesService(
       createMessageRepository({ createdMessages }) as never,
@@ -594,7 +595,16 @@ describe('messages service', () => {
       },
       { assertAllowed: async () => undefined } as never,
       { incrementTurn: async () => undefined } as never,
-      { record: async () => undefined } as never,
+      {
+        record: async (
+          eventName: string,
+          _actorId: string,
+          _severity: string,
+          payload: unknown
+        ) => {
+          telemetry.push({ eventName, payload });
+        }
+      } as never,
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never
     );
 
@@ -607,11 +617,23 @@ describe('messages service', () => {
 
     expect(promptCalls).toBe(0);
     expect(providerCalls).toBe(0);
-    expect(createdMessages).toHaveLength(1);
+    expect(createdMessages).toHaveLength(2);
     expect(createdMessages[0]).toMatchObject({
+      role: 'user',
+      status: 'ok',
+      content: 'blocked'
+    });
+    expect(createdMessages[1]).toMatchObject({
       role: 'assistant',
       status: 'blocked',
       blockReason: 'model_rate_not_configured'
+    });
+    expect(telemetry).toContainEqual({
+      eventName: 'request_blocked',
+      payload: expect.objectContaining({
+        code: 'model_rate_not_configured',
+        reason: 'model_rate_not_configured'
+      })
     });
   });
 
@@ -685,6 +707,7 @@ describe('messages service', () => {
   test('blocks before prompt and provider work when caps fail', async () => {
     let promptCalls = 0;
     let providerCalls = 0;
+    const telemetry: Array<{ eventName: string; payload: unknown }> = [];
     const createdMessages: MessageRow[] = [];
     const service = new MessagesService(
       createMessageRepository({ createdMessages }) as never,
@@ -736,7 +759,16 @@ describe('messages service', () => {
       {
         incrementTurn: async () => undefined
       } as never,
-      { record: async () => undefined } as never,
+      {
+        record: async (
+          eventName: string,
+          _actorId: string,
+          _severity: string,
+          payload: unknown
+        ) => {
+          telemetry.push({ eventName, payload });
+        }
+      } as never,
       {
         DEFAULT_MAX_OUTPUT_TOKENS: 2000
       } as never
@@ -751,10 +783,23 @@ describe('messages service', () => {
 
     expect(promptCalls).toBe(0);
     expect(providerCalls).toBe(0);
-    expect(createdMessages).toHaveLength(1);
+    expect(createdMessages).toHaveLength(2);
     expect(createdMessages[0]).toMatchObject({
+      role: 'user',
+      status: 'ok',
+      content: 'blocked'
+    });
+    expect(createdMessages[1]).toMatchObject({
+      role: 'assistant',
       status: 'blocked',
       blockReason: 'daily_message_limit'
+    });
+    expect(telemetry).toContainEqual({
+      eventName: 'request_blocked',
+      payload: expect.objectContaining({
+        code: 'daily_message_limit',
+        reason: 'cap'
+      })
     });
   });
 });

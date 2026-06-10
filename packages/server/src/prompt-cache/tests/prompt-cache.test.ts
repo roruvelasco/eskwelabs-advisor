@@ -31,8 +31,14 @@ describe('prompt cache service', () => {
 
   test('refresh leaves prompt context hot cache intact when warming fails', async () => {
     const deletedPrefixes: string[] = [];
+    const metadataWrites: unknown[] = [];
     const service = new PromptCacheService(
-      { list: async () => [] } as never,
+      {
+        list: async () => [],
+        upsert: async (input: unknown) => {
+          metadataWrites.push(input);
+        }
+      } as never,
       {
         delByPrefix: async (...prefixes: string[]) => {
           deletedPrefixes.push(...prefixes);
@@ -63,5 +69,53 @@ describe('prompt cache service', () => {
       }
     });
     expect(deletedPrefixes).toEqual([]);
+    expect(metadataWrites).toEqual([]);
+  });
+
+  test('refresh records warmed prompt and dna metadata for the admin panel', async () => {
+    const metadataWrites: unknown[] = [];
+    const service = new PromptCacheService(
+      {
+        list: async () => [],
+        upsert: async (input: unknown) => {
+          metadataWrites.push(input);
+        }
+      } as never,
+      {} as never,
+      {
+        refreshAll: async () => ({
+          advisorPrompts: [
+            {
+              advisorId: 'data-dashboard',
+              status: 'refreshed',
+              revision: 'prompt-revision',
+              hash: 'prompt-hash'
+            }
+          ],
+          dnaDigest: {
+            status: 'refreshed',
+            revision: 'dna-revision',
+            hash: 'dna-hash'
+          }
+        })
+      } as never
+    );
+
+    await expect(service.refresh()).resolves.toMatchObject({
+      status: 'refreshed'
+    });
+    expect(metadataWrites).toEqual([
+      expect.objectContaining({
+        key: 'prompt-context:advisor:data-dashboard',
+        valueHash: 'prompt-hash',
+        docRevision: 'prompt-revision'
+      }),
+      expect.objectContaining({
+        key: 'prompt-context:dna',
+        valueHash: 'dna-hash',
+        docRevision: 'dna-revision',
+        dnaDigestVersion: 'dna-hash'
+      })
+    ]);
   });
 });
