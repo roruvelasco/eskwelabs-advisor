@@ -104,10 +104,10 @@ Response (single): `{ data: Conversation }`
 **Controller**: `ModelConfigController` (`packages/server/src/model-config/`)
 **Auth**: `requireActor(['admin'])`
 
-| Method | Path                                 | Body                                  | Description                     |
-| ------ | ------------------------------------ | ------------------------------------- | ------------------------------- |
-| `GET`  | `/api/admin/model-config`            | —                                     | List all model configs          |
-| `PUT`  | `/api/admin/model-config/:advisorId` | `{ provider: string, model: string }` | Update model config for advisor |
+| Method | Path                                 | Body                                                       | Description                     |
+| ------ | ------------------------------------ | ---------------------------------------------------------- | ------------------------------- |
+| `GET`  | `/api/admin/model-config`            | —                                                          | List all model configs          |
+| `PUT`  | `/api/admin/model-config/:advisorId` | `{ provider: string, model: string, isEnabled?: boolean }` | Update model config for advisor |
 
 ---
 

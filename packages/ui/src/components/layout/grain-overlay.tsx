@@ -30,13 +30,14 @@ export const GrainOverlay = React.forwardRef<HTMLDivElement, GrainOverlayProps>(
         {children}
         <svg
           aria-hidden="true"
+          suppressHydrationWarning
           className={cn(
             'pointer-events-none absolute inset-0 h-full w-full mix-blend-multiply',
             intensityOpacity[intensity]
           )}
           xmlns="http://www.w3.org/2000/svg"
         >
-          <filter id={filterId}>
+          <filter id={filterId} suppressHydrationWarning>
             <feTurbulence
               type="fractalNoise"
               baseFrequency="0.85"
@@ -44,7 +45,12 @@ export const GrainOverlay = React.forwardRef<HTMLDivElement, GrainOverlayProps>(
               stitchTiles="stitch"
             />
           </filter>
-          <rect width="100%" height="100%" filter={`url(#${filterId})`} />
+          <rect
+            suppressHydrationWarning
+            width="100%"
+            height="100%"
+            filter={`url(#${filterId})`}
+          />
         </svg>
       </div>
     );
