@@ -27,20 +27,21 @@ When asked to build a new feature, fix a bug, or make any code change:
 
 ## Commands
 
-| Command                        | What it does                                    | Notes                                                               |
-| ------------------------------ | ----------------------------------------------- | ------------------------------------------------------------------- |
-| `bun run dev`                  | `turbo dev` — dev servers for all packages      |                                                                     |
-| `bun run dev:web`              | `turbo dev --filter=@eskwelabs-advisor/web`     | Next.js on port 3000                                                |
-| `bun run build`                | `turbo build` — builds all packages             |                                                                     |
-| `bun run check`                | `turbo check` → `tsc --noEmit` per package      | Type-checking, NOT a build                                          |
-| `bun run lint`                 | `turbo lint` → ESLint 9 flat config             |                                                                     |
-| `bun run format:fix`           | Prettier at monorepo root                       | Single quotes, no trailing comma                                    |
-| `bun run test`                 | `turbo test`                                    | Test depends on `^build` in turbo pipeline                          |
-| `bun test`                     | Bun test runner (per-package)                   | Not Jest/Vitest                                                     |
-| `bun run db:generate`          | `drizzle-kit generate`                          | Root config, schema at `packages/server/src/db/drizzle-schema.ts`   |
-| `bun run db:migrate`           | `drizzle-kit migrate`                           | Migrations in `packages/server/drizzle/`                            |
-| `bun run db:start` / `db:stop` | `supabase start` / `supabase stop`              |                                                                     |
-| `bun run prepare`              | `husky` — installs Git hooks into `.git/hooks/` | Runs automatically on `bun install`; run manually after first clone |
+| Command                        | What it does                                     | Notes                                                               |
+| ------------------------------ | ------------------------------------------------ | ------------------------------------------------------------------- |
+| `bun run dev`                  | `turbo dev` — dev servers for all packages       |                                                                     |
+| `bun run dev:web`              | `turbo dev --filter=@eskwelabs-advisor/web`      | Next.js on port 3000                                                |
+| `bun run build`                | `turbo build` — builds all packages              |                                                                     |
+| `bun run check`                | `turbo check` → `tsc --noEmit` per package       | Type-checking, NOT a build                                          |
+| `bun run lint`                 | `turbo lint` → ESLint 9 flat config              |                                                                     |
+| `bun run format:fix`           | Prettier at monorepo root                        | Single quotes, no trailing comma                                    |
+| `bun run test`                 | `turbo test`                                     | Test depends on `^build` in turbo pipeline                          |
+| `bun test`                     | Bun test runner (per-package)                    | Not Jest/Vitest                                                     |
+| `bun run db:generate`          | `drizzle-kit generate`                           | Root config, schema at `packages/server/src/db/drizzle-schema.ts`   |
+| `bun run db:migrate`           | `drizzle-kit migrate`                            | Migrations in `packages/server/drizzle/`                            |
+| `bun run db:sync-advisors`     | Upserts active advisor registry + prompt Doc IDs | Also retires legacy `advisor-3` in favor of `data-modeling`         |
+| `bun run db:start` / `db:stop` | `supabase start` / `supabase stop`               |                                                                     |
+| `bun run prepare`              | `husky` — installs Git hooks into `.git/hooks/`  | Runs automatically on `bun install`; run manually after first clone |
 
 ## Project Map
 

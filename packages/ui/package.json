@@ -24,6 +24,7 @@
     "lucide-react": "^0.468.0",
     "radix-ui": "^1.4.3",
     "sonner": "^1.7.1",
+    "streamdown": "^2.5.0",
     "tailwind-merge": "^2.6.0",
     "vaul": "^1.1.2"
   },

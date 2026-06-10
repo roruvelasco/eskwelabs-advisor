@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -16,15 +16,35 @@ import { ChatSidebar } from './chat-sidebar';
 import { ChatComposer } from './chat-composer';
 import { ChatMessages, type Message } from './chat-messages';
 import { messagesQuery } from '@/lib/domains/chat/queries';
-import { createChatTurn } from '@/lib/domains/chat/api';
+import { streamChatTurn } from '@/lib/domains/chat/api';
 import { createConversation } from '@/lib/domains/conversations/api';
+
+type StreamFinalData = {
+  userMessage: {
+    id: string;
+    role: string;
+    content: string;
+  };
+  assistantMessage: {
+    id: string;
+    role: string;
+    content: string;
+  };
+};
 
 function ChatLayoutInner() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const conversationId = searchParams.get('conversation');
+  const advisorId = searchParams.get('advisor');
   const { open, isMobile, openMobile } = useSidebar();
+  const [liveMessages, setLiveMessages] = useState<Message[]>([]);
+  const [liveConversationId, setLiveConversationId] = useState<string>();
+
+  useEffect(() => {
+    if (!conversationId && !advisorId) router.replace('/advisors');
+  }, [advisorId, conversationId, router]);
 
   const {
     data: messagesResponse,
@@ -39,17 +59,97 @@ function ChatLayoutInner() {
     mutationFn: async (content: string) => {
       let cid = conversationId;
       if (!cid) {
+        if (!advisorId) throw new Error('Advisor is required');
         const result = await createConversation({
-          advisorId: 'data-dashboard'
+          advisorId
         });
         cid = (result as { data: { id: string } }).data.id;
         router.replace(`/chat?conversation=${cid}`);
       }
-      await createChatTurn({ conversationId: cid, content });
+
+      setLiveConversationId(cid);
+      const userTempId = `user:${crypto.randomUUID()}`;
+      const assistantTempId = `assistant:${crypto.randomUUID()}`;
+      setLiveMessages((current) => [
+        ...current,
+        { id: userTempId, role: 'user', content, status: 'complete' },
+        {
+          id: assistantTempId,
+          role: 'advisor',
+          content: '',
+          status: 'thinking'
+        }
+      ]);
+
+      let finalData: StreamFinalData | undefined;
+      await streamChatTurn({ conversationId: cid, content }, (event) => {
+        if (event.type === 'chunk') {
+          setLiveMessages((current) =>
+            current.map((message) =>
+              message.id === assistantTempId
+                ? {
+                    ...message,
+                    content: message.content + event.content,
+                    status: 'streaming'
+                  }
+                : message
+            )
+          );
+          return;
+        }
+
+        if (event.type === 'final') {
+          finalData = event.data as StreamFinalData;
+          setLiveMessages((current) =>
+            current.map((message) => {
+              if (message.id === userTempId) {
+                return {
+                  id: finalData!.userMessage.id,
+                  role: 'user',
+                  content: finalData!.userMessage.content,
+                  status: 'complete'
+                };
+              }
+
+              if (message.id === assistantTempId) {
+                return {
+                  id: finalData!.assistantMessage.id,
+                  role: 'advisor',
+                  content: finalData!.assistantMessage.content,
+                  status: 'complete'
+                };
+              }
+
+              return message;
+            })
+          );
+          return;
+        }
+
+        throw new Error('Chat stream failed');
+      });
+
+      if (!finalData) throw new Error('Chat stream ended without final data');
       return cid;
     },
-    onSuccess: (cid) => {
-      queryClient.invalidateQueries({ queryKey: ['messages', cid] });
+    onSuccess: async (cid) => {
+      await queryClient.invalidateQueries({ queryKey: ['messages', cid] });
+      setLiveMessages([]);
+      setLiveConversationId(undefined);
+    },
+    onError: () => {
+      setLiveMessages((current) =>
+        current.map((message) =>
+          message.role === 'advisor' &&
+          (message.status === 'thinking' || message.status === 'streaming')
+            ? {
+                ...message,
+                content: message.content || 'Request failed.',
+                status: 'error'
+              }
+            : message
+        )
+      );
     }
   });
 
@@ -65,7 +165,13 @@ function ChatLayoutInner() {
     content: msg.content
   }));
 
-  const messages = conversationId ? loadedMessages : [];
+  const liveBelongsToCurrent =
+    liveConversationId &&
+    (!conversationId || liveConversationId === conversationId);
+  const messages = [
+    ...(conversationId ? loadedMessages : []),
+    ...(liveBelongsToCurrent ? liveMessages : [])
+  ];
   const triggerHidden = isMobile ? openMobile : open;
   const hasMessages = messages.length > 0 || sendMutation.isPending;
 
@@ -116,7 +222,10 @@ function ChatLayoutInner() {
             <>
               <ChatMessages messages={messages} />
               <div className="border-border/50 shrink-0 border-t p-3">
-                <ChatComposer onSend={handleSend} />
+                <ChatComposer
+                  disabled={sendMutation.isPending}
+                  onSend={handleSend}
+                />
               </div>
             </>
           ) : (
@@ -131,7 +240,10 @@ function ChatLayoutInner() {
                   </p>
                 </div>
 
-                <ChatComposer onSend={handleSend} />
+                <ChatComposer
+                  disabled={sendMutation.isPending}
+                  onSend={handleSend}
+                />
               </Container>
             </div>
           )}

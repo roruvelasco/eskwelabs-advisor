@@ -192,26 +192,16 @@ describe('messages service', () => {
     );
 
     expect(dnaCalls).toBe(2);
-    expect(requests.map((request) => request.messages[0]?.content)).toEqual([
-      [
-        '<eskwelabs_dna_digest>',
-        'shared dna digest',
-        '</eskwelabs_dna_digest>',
-        '',
-        '<advisor_instructions>',
-        'System instructions for data-dashboard',
-        '</advisor_instructions>'
-      ].join('\n'),
-      [
-        '<eskwelabs_dna_digest>',
-        'shared dna digest',
-        '</eskwelabs_dna_digest>',
-        '',
-        '<advisor_instructions>',
-        'System instructions for ssot-memo',
-        '</advisor_instructions>'
-      ].join('\n')
-    ]);
+    const systemPrompts = requests.map(
+      (request) => request.messages[0]?.content ?? ''
+    );
+    expect(systemPrompts[0]).toContain('<scope_policy>');
+    expect(systemPrompts[0]).toContain('shared dna digest');
+    expect(systemPrompts[0]).toContain(
+      'System instructions for data-dashboard'
+    );
+    expect(systemPrompts[1]).toContain('shared dna digest');
+    expect(systemPrompts[1]).toContain('System instructions for ssot-memo');
   });
 
   test('runs a chat turn without leaking system prompt content', async () => {
@@ -417,21 +407,15 @@ describe('messages service', () => {
       content: 'newest'
     });
 
-    expect(capturedRequest?.messages.map((message) => message.content)).toEqual(
-      [
-        [
-          '<eskwelabs_dna_digest>',
-          'shared dna digest',
-          '</eskwelabs_dna_digest>',
-          '',
-          '<advisor_instructions>',
-          'System instructions',
-          '</advisor_instructions>'
-        ].join('\n'),
-        ...Array.from({ length: 20 }, (_, index) => `history-${index + 5}`),
-        'newest'
-      ]
-    );
+    const messageContents =
+      capturedRequest?.messages.map((message) => message.content) ?? [];
+    expect(messageContents[0]).toContain('<scope_policy>');
+    expect(messageContents[0]).toContain('shared dna digest');
+    expect(messageContents[0]).toContain('System instructions');
+    expect(messageContents.slice(1)).toEqual([
+      ...Array.from({ length: 20 }, (_, index) => `history-${index + 5}`),
+      'newest'
+    ]);
     expect(JSON.stringify(capturedRequest)).not.toContain('blocked-history');
   });
 

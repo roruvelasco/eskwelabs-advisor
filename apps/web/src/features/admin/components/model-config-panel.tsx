@@ -48,7 +48,7 @@ interface ModelConfigRow {
 const ADVISOR_LABELS: Record<string, string> = {
   'data-dashboard': 'Data Dashboard Advisor',
   'ssot-memo': 'SSOT Memo Advisor',
-  'advisor-3': 'Advisor 3',
+  'data-modeling': 'Data Modeling Advisor',
   'dna-digest': 'DNA Digest Summarizer'
 };
 

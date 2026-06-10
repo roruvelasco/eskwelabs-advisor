@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
 
 import {
   Badge,
@@ -21,17 +22,18 @@ import {
 } from '@eskwelabs-advisor/ui';
 
 import { acknowledgeConsent, getConsent } from '@/lib/domains/auth/api';
-
-const advisors = [
-  { id: 'data-dashboard', name: 'Data Dashboard Advisor' },
-  { id: 'ssot-memo', name: 'SSOT Memo Advisor' },
-  { id: 'advisor-3', name: 'Advisor 3' }
-];
+import { advisorsQuery } from '@/lib/domains/advisors/queries';
 
 export function AdvisorSelection() {
   const [consentOpen, setConsentOpen] = useState(false);
   const [isAcknowledging, setIsAcknowledging] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
+  const {
+    data: advisorsResponse,
+    isLoading,
+    isError
+  } = useQuery(advisorsQuery);
+  const advisors = advisorsResponse?.data ?? [];
 
   useEffect(() => {
     getConsent()
@@ -172,23 +174,43 @@ export function AdvisorSelection() {
         </header>
 
         <section className="grid gap-4 md:grid-cols-3">
-          {advisors.map((advisor) => (
-            <Card
-              key={advisor.id}
-              className="motion-lift transition-shadow hover:shadow-md"
-            >
-              <CardHeader>
-                <CardTitle className="text-base font-medium">
-                  {advisor.name}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Button asChild variant="outline" className="motion-press">
-                  <Link href={`/chat?advisor=${advisor.id}`}>Open chat</Link>
-                </Button>
+          {isLoading ? (
+            <Card className="md:col-span-3">
+              <CardContent className="text-muted-foreground py-8 text-sm">
+                Loading advisors...
               </CardContent>
             </Card>
-          ))}
+          ) : isError ? (
+            <Card className="md:col-span-3">
+              <CardContent className="text-muted-foreground py-8 text-sm">
+                Could not load advisors.
+              </CardContent>
+            </Card>
+          ) : advisors.length === 0 ? (
+            <Card className="md:col-span-3">
+              <CardContent className="text-muted-foreground py-8 text-sm">
+                No advisors are available.
+              </CardContent>
+            </Card>
+          ) : (
+            advisors.map((advisor) => (
+              <Card
+                key={advisor.id}
+                className="motion-lift transition-shadow hover:shadow-md"
+              >
+                <CardHeader>
+                  <CardTitle className="text-base font-medium">
+                    {advisor.name}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Button asChild variant="outline" className="motion-press">
+                    <Link href={`/chat?advisor=${advisor.id}`}>Open chat</Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            ))
+          )}
         </section>
       </main>
     </>

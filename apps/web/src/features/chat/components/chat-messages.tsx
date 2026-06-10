@@ -1,12 +1,20 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { DotWave } from 'ldrs/react';
+import 'ldrs/react/DotWave.css';
 import { cn } from '@/lib/utils';
+import {
+  Message as AiMessage,
+  MessageContent,
+  MessageResponse
+} from '@eskwelabs-advisor/ui';
 
 export type Message = {
   id: string;
   role: 'user' | 'advisor';
   content: string;
+  status?: 'streaming' | 'thinking' | 'complete' | 'error';
 };
 
 export function ChatMessages({ messages }: { messages: Message[] }) {
@@ -19,24 +27,36 @@ export function ChatMessages({ messages }: { messages: Message[] }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-4 py-6">
       {messages.map((msg) => (
-        <div
+        <AiMessage
           key={msg.id}
-          className={cn(
-            'flex w-full',
-            msg.role === 'user' ? 'justify-end' : 'justify-start'
-          )}
+          className={cn(msg.role === 'user' ? 'justify-end' : 'justify-start')}
         >
-          <div
+          <MessageContent
             className={cn(
-              'max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed',
               msg.role === 'user'
                 ? 'bg-primary text-primary-foreground rounded-br-sm'
-                : 'bg-muted text-foreground rounded-bl-sm'
+                : 'bg-muted text-foreground rounded-bl-sm',
+              msg.status === 'error' && 'border-destructive/30 border'
             )}
           >
-            {msg.content}
-          </div>
-        </div>
+            {msg.role === 'advisor' ? (
+              msg.status === 'thinking' && !msg.content ? (
+                <div
+                  aria-label="Advisor is thinking"
+                  className="flex h-5 items-center"
+                >
+                  <DotWave size={28} speed={1} color="currentColor" />
+                </div>
+              ) : (
+                <MessageResponse isAnimating={msg.status === 'streaming'}>
+                  {msg.content}
+                </MessageResponse>
+              )
+            ) : (
+              msg.content
+            )}
+          </MessageContent>
+        </AiMessage>
       ))}
       <div ref={bottomRef} />
     </div>

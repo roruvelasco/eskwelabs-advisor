@@ -418,6 +418,21 @@ export class MessagesService {
           conversationId: input.conversationId,
           code: blockReason
         });
+      } else if (error instanceof HttpException) {
+        await this.createBlockedMessage(
+          actor,
+          input.conversationId,
+          error.code
+        );
+        await this.recordTelemetry(
+          'chat_turn_stream_blocked',
+          actor,
+          'warning',
+          {
+            conversationId: input.conversationId,
+            code: error.code
+          }
+        );
       }
 
       throw error;

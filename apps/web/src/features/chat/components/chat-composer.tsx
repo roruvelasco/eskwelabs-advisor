@@ -7,9 +7,10 @@ import { cn } from '@/lib/utils';
 
 interface ChatComposerProps {
   onSend?: (text: string) => void;
+  disabled?: boolean;
 }
 
-export function ChatComposer({ onSend }: ChatComposerProps) {
+export function ChatComposer({ disabled = false, onSend }: ChatComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [value, setValue] = useState('');
 
@@ -35,7 +36,7 @@ export function ChatComposer({ onSend }: ChatComposerProps) {
 
   const submit = () => {
     const text = value.trim();
-    if (!text) return;
+    if (!text || disabled) return;
     onSend?.(text);
     setValue('');
     resetHeight();
@@ -61,6 +62,7 @@ export function ChatComposer({ onSend }: ChatComposerProps) {
         value={value}
         placeholder="Ask your advisor anything..."
         aria-label="Message"
+        disabled={disabled}
         className={cn(
           'placeholder:text-muted-foreground/50 min-h-0 flex-1 resize-none border-0 bg-transparent p-0 text-base leading-relaxed shadow-none focus-visible:ring-0',
           hasText ? 'max-h-40' : 'max-h-[1.75rem]'
@@ -74,7 +76,7 @@ export function ChatComposer({ onSend }: ChatComposerProps) {
         size="icon"
         aria-label="Send message"
         type="button"
-        disabled={!hasText}
+        disabled={!hasText || disabled}
         onClick={submit}
         className={cn(
           'motion-press mb-0.5 shrink-0 transition-all duration-150 active:scale-95',

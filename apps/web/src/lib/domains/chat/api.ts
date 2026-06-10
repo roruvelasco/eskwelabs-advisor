@@ -78,7 +78,10 @@ export async function streamChatTurn(
         .trim();
       const data = lines
         .filter((line) => line.startsWith('data:'))
-        .map((line) => line.slice('data:'.length).trim())
+        .map((line) => {
+          const value = line.slice('data:'.length);
+          return value.startsWith(' ') ? value.slice(1) : value;
+        })
         .join('\n');
 
       if (type === 'chunk') {

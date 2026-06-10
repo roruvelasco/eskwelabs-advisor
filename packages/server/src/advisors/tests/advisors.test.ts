@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { AdvisorsSerializer } from '../advisors.serializer';
 import { AdvisorsService } from '../advisors.service';
+import { advisorRegistry, sharedDnaDocId } from '../advisor-registry';
 
 describe('advisors service', () => {
   test('lists active public advisors from the repository', async () => {
@@ -40,5 +41,17 @@ describe('advisors serializer', () => {
       id: 'data-dashboard',
       name: 'Data Dashboard Advisor'
     });
+  });
+});
+
+describe('advisor registry', () => {
+  test('contains the three active doc-backed advisors', () => {
+    expect(advisorRegistry.map((advisor) => advisor.id)).toEqual([
+      'data-dashboard',
+      'ssot-memo',
+      'data-modeling'
+    ]);
+    expect(advisorRegistry.every((advisor) => advisor.promptDocId)).toBe(true);
+    expect(sharedDnaDocId).toBe('1jQCF3lhyjAKbyEnK1fwDIalW05l8W5TJTZnaKZ9Tktw');
   });
 });

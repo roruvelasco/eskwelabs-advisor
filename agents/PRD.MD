@@ -119,9 +119,9 @@ Eskwelabs runs EIF (intern) mentoring on third-party Custom GPTs and Google Gems
 - **Prompt source (per advisor):** one Google Doc per advisor (3 total). The Doc body is the advisor-specific system prompt.
 - **No vector RAG at MVP.** Advisors rely on DNA digest + advisor prompt + conversation context.
 - **Advisor registry:** server-side config mapping advisorId → { name, docId, model }; not exposed to EIFs beyond display name.
-  - Data Dashboard Advisor Doc: `{{prompt_1_url}}`
-  - SSOT Memo Advisor Doc: `{{prompt_2_url}}`
-  - Advisor 3 Doc (TBD): `{{prompt_3_url}}`
+  - Data Dashboard Advisor Doc: `https://docs.google.com/document/d/1mZX8QwMhHDYG_jjH2CMCCr5oqChjrlJo1muVdmhxki0/edit?usp=sharing`
+  - SSOT Memo Advisor Doc: `https://docs.google.com/document/d/1FX1A1399qjTNLT397HVqSpFHvBVpnKFSpJClTrap2JA/edit?usp=sharing`
+  - Data Modeling Advisor Doc: `https://docs.google.com/document/d/1JjqZoSoX1PuFFFzpDLB7A7YE2k8--0UzmMTO2bGggJw/edit?usp=sharing`
 
 #### DNA Digest Handling (FR-14)
 
@@ -143,12 +143,12 @@ The digest is held server-side only and prepended to the system message ahead of
 
 ### 4.1) Prompt Registry
 
-| Prompt                 | URL                | Purpose                                                                                           | Owner | Version                       | Parameters                                           |
-| ---------------------- | ------------------ | ------------------------------------------------------------------------------------------------- | ----- | ----------------------------- | ---------------------------------------------------- |
-| Eskwelabs DNA (shared) | `{{dna_doc_url}}`  | Brand/voice/lexicon grounding prepended to all advisors (as summarized digest)                    | Admin | Doc revision + digest version | Applies to every advisor                             |
-| Data Dashboard Advisor | `{{prompt_1_url}}` | Looker Studio/UX mentoring; advisory only — guides apprentice to build a decision-ready dashboard | Admin | Doc revision                  | Model: admin-set per advisor; temp: default/Doc hint |
-| SSOT Memo Advisor      | `{{prompt_2_url}}` | KM/strategy mentoring; templates & interview guides toward an SSOT memo; advisory only            | Admin | Doc revision                  | Model: admin-set per advisor; temp: default/Doc hint |
-| Advisor 3 (TBD)        | `{{prompt_3_url}}` | Open question — purpose & opening prompt not yet provided                                         | Admin | Doc revision                  | Model: admin-set per advisor                         |
+| Prompt                 | URL                                                                                                | Purpose                                                                                           | Owner | Version                       | Parameters                                           |
+| ---------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ----- | ----------------------------- | ---------------------------------------------------- |
+| Eskwelabs DNA (shared) | `https://docs.google.com/document/d/1jQCF3lhyjAKbyEnK1fwDIalW05l8W5TJTZnaKZ9Tktw/edit?usp=sharing` | Brand/voice/lexicon grounding prepended to all advisors (as summarized digest)                    | Admin | Doc revision + digest version | Applies to every advisor                             |
+| Data Dashboard Advisor | `https://docs.google.com/document/d/1mZX8QwMhHDYG_jjH2CMCCr5oqChjrlJo1muVdmhxki0/edit?usp=sharing` | Looker Studio/UX mentoring; advisory only — guides apprentice to build a decision-ready dashboard | Admin | Doc revision                  | Model: admin-set per advisor; temp: default/Doc hint |
+| SSOT Memo Advisor      | `https://docs.google.com/document/d/1FX1A1399qjTNLT397HVqSpFHvBVpnKFSpJClTrap2JA/edit?usp=sharing` | KM/strategy mentoring; templates & interview guides toward an SSOT memo; advisory only            | Admin | Doc revision                  | Model: admin-set per advisor; temp: default/Doc hint |
+| Data Modeling Advisor  | `https://docs.google.com/document/d/1JjqZoSoX1PuFFFzpDLB7A7YE2k8--0UzmMTO2bGggJw/edit?usp=sharing` | Data modeling, schema design, and analytics architecture mentoring; advisory only                 | Admin | Doc revision                  | Model: admin-set per advisor                         |
 
 #### Prompt/DNA Loading Rules
 
@@ -294,13 +294,13 @@ flowchart TD
 
 #### `conversations` — one row per thread
 
-| Column                      | Type              | Description                            |
-| --------------------------- | ----------------- | -------------------------------------- |
-| `id`                        | uuid (pk)         | Conversation id                        |
-| `user_id`                   | uuid (fk → users) | Owner (RLS scope)                      |
-| `advisor_id`                | text              | data-dashboard / ssot-memo / advisor-3 |
-| `title`                     | text              | Auto/first-message derived             |
-| `created_at` / `updated_at` | timestamptz       | For history ordering / resume          |
+| Column                      | Type              | Description                                |
+| --------------------------- | ----------------- | ------------------------------------------ |
+| `id`                        | uuid (pk)         | Conversation id                            |
+| `user_id`                   | uuid (fk → users) | Owner (RLS scope)                          |
+| `advisor_id`                | text              | data-dashboard / ssot-memo / data-modeling |
+| `title`                     | text              | Auto/first-message derived                 |
+| `created_at` / `updated_at` | timestamptz       | For history ordering / resume              |
 
 #### `messages` — one row per turn (chat history + analytics)
 

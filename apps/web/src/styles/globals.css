@@ -180,6 +180,67 @@
     width: 50vw !important;
   }
 
+  .ai-message-response {
+    overflow-wrap: anywhere;
+  }
+
+  .ai-message-response > :first-child {
+    margin-top: 0;
+  }
+
+  .ai-message-response > :last-child {
+    margin-bottom: 0;
+  }
+
+  .ai-message-response p,
+  .ai-message-response ul,
+  .ai-message-response ol,
+  .ai-message-response pre,
+  .ai-message-response blockquote {
+    margin: 0.65rem 0;
+  }
+
+  .ai-message-response ul,
+  .ai-message-response ol {
+    padding-left: 1.15rem;
+  }
+
+  .ai-message-response ul {
+    list-style: disc;
+  }
+
+  .ai-message-response ol {
+    list-style: decimal;
+  }
+
+  .ai-message-response li + li {
+    margin-top: 0.3rem;
+  }
+
+  .ai-message-response code {
+    background: color-mix(in oklch, var(--foreground) 8%, transparent);
+    border-radius: 0.25rem;
+    font-size: 0.86em;
+    padding: 0.1rem 0.25rem;
+  }
+
+  .ai-message-response pre {
+    background: color-mix(in oklch, var(--foreground) 8%, transparent);
+    border-radius: 0.5rem;
+    overflow-x: auto;
+    padding: 0.75rem;
+  }
+
+  .ai-message-response pre code {
+    background: transparent;
+    border-radius: 0;
+    padding: 0;
+  }
+
+  .ai-message-response strong {
+    font-weight: 650;
+  }
+
   ::-webkit-scrollbar-thumb:hover {
     background: rgba(0, 0, 0, 0.5);
   }
