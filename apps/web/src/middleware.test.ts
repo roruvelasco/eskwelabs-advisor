@@ -160,6 +160,11 @@ describe('admin token', () => {
     expect(res.status).toBe(200);
   });
 
+  test('denies /api/consent', async () => {
+    const res = await mw(adminToken)(req('/api/consent'));
+    expect(res.status).toBe(403);
+  });
+
   test('redirects /advisors to /admin', async () => {
     const res = await mw(adminToken)(req('/advisors'));
     expect(isRedirect(res.status)).toBe(true);

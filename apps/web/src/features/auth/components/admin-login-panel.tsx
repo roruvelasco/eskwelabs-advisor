@@ -1,9 +1,10 @@
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
+import { z } from 'zod';
 
 import { roleCallbackUrl } from '@/lib/domains/auth/callback-url';
 import {
@@ -17,6 +18,13 @@ import {
   Separator,
   toast
 } from '@eskwelabs-advisor/ui';
+
+const loginSchema = z.object({
+  email: z.string().email('Enter a valid email address.'),
+  password: z.string().min(8, 'Password must be at least 8 characters.')
+});
+
+type LoginErrors = Partial<Record<keyof z.infer<typeof loginSchema>, string>>;
 
 const errorMessages: Record<string, string> = {
   NotAllowlisted: 'Your account is not on the admin allow-list.',
@@ -73,28 +81,42 @@ function AuthErrorToast() {
 
 export function AdminLoginPanel() {
   const searchParams = useSearchParams();
-  const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [isEmailLoading, setIsEmailLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [errors, setErrors] = useState<LoginErrors>({});
   const callbackUrl = roleCallbackUrl(
     searchParams.get('callbackUrl'),
     '/admin',
     ['/admin']
   );
 
+  const isAnyLoading = isGoogleLoading || isEmailLoading;
+
   const handleGoogleSignIn = async () => {
-    setIsLoading(true);
+    setIsGoogleLoading(true);
     try {
       await signIn('google-admin', { callbackUrl, redirect: true });
     } finally {
-      setIsLoading(false);
+      setIsGoogleLoading(false);
     }
   };
 
   const handleEmailSignIn = async () => {
-    if (!email || !password) return;
-    setIsLoading(true);
+    const result = loginSchema.safeParse({ email, password });
+    if (!result.success) {
+      const fieldErrors: LoginErrors = {};
+      for (const issue of result.error.issues) {
+        const field = issue.path[0] as keyof LoginErrors;
+        if (!fieldErrors[field]) fieldErrors[field] = issue.message;
+      }
+      setErrors(fieldErrors);
+      return;
+    }
+    setErrors({});
+    setIsEmailLoading(true);
     try {
       await signIn('credentials-admin', {
         email,
@@ -103,7 +125,7 @@ export function AdminLoginPanel() {
         redirect: true
       });
     } finally {
-      setIsLoading(false);
+      setIsEmailLoading(false);
     }
   };
 
@@ -135,10 +157,14 @@ export function AdminLoginPanel() {
                 className="w-full gap-2.5"
                 size="lg"
                 onClick={handleGoogleSignIn}
-                disabled={isLoading}
+                disabled={isAnyLoading}
               >
-                <GoogleIcon />
-                {isLoading ? 'Signing in...' : 'Continue with Google'}
+                {isGoogleLoading ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <GoogleIcon />
+                )}
+                {isGoogleLoading ? 'Signing in...' : 'Continue with Google'}
               </Button>
 
               <div className="flex items-center gap-3">
@@ -157,8 +183,15 @@ export function AdminLoginPanel() {
                   placeholder="you@eskwelabs.com"
                   autoComplete="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (errors.email)
+                      setErrors((p) => ({ ...p, email: undefined }));
+                  }}
                 />
+                {errors.email && (
+                  <p className="text-destructive text-xs">{errors.email}</p>
+                )}
               </div>
 
               <div className="space-y-1.5">
@@ -171,7 +204,11 @@ export function AdminLoginPanel() {
                     className="pr-10"
                     autoComplete="current-password"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (errors.password)
+                        setErrors((p) => ({ ...p, password: undefined }));
+                    }}
                   />
                   <Button
                     type="button"
@@ -185,26 +222,19 @@ export function AdminLoginPanel() {
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </Button>
                 </div>
+                {errors.password && (
+                  <p className="text-destructive text-xs">{errors.password}</p>
+                )}
               </div>
 
               <Button
-                className="w-full"
+                className="w-full gap-2.5"
                 size="lg"
                 onClick={handleEmailSignIn}
-                disabled={isLoading}
+                disabled={isAnyLoading}
               >
-                {isLoading ? 'Signing in...' : 'Continue with email'}
-              </Button>
-
-              <Button
-                variant="ghost"
-                className="text-muted-foreground w-full text-sm"
-                size="sm"
-                onClick={() => {
-                  window.location.href = '/login';
-                }}
-              >
-                Back to user login
+                {isEmailLoading && <Loader2 className="size-4 animate-spin" />}
+                {isEmailLoading ? 'Signing in...' : 'Continue with email'}
               </Button>
             </CardContent>
           </Card>
