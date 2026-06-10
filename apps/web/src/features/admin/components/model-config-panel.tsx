@@ -2,14 +2,13 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ChevronsUpDown } from 'lucide-react';
 
 import {
   Badge,
   Button,
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
   Dialog,
   DialogContent,
   DialogFooter,
@@ -22,8 +21,8 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  Separator,
   Skeleton,
+  Switch,
   Table,
   TableBody,
   TableCell,
@@ -85,15 +84,34 @@ function formatDate(iso: string) {
   });
 }
 
+function SortHead({
+  children,
+  className
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <TableHead className={className}>
+      <span className="flex items-center gap-1.5 text-xs uppercase tracking-widest">
+        {children}
+        <ChevronsUpDown className="text-muted-foreground/40 size-3 shrink-0" />
+      </span>
+    </TableHead>
+  );
+}
+
 function EditModelDialog({ row }: { row: ModelConfigRow }) {
   const [open, setOpen] = useState(false);
   const [provider, setProvider] = useState(row.provider);
   const [model, setModel] = useState(row.model);
+  const [isEnabled, setIsEnabled] = useState(row.isEnabled);
   const queryClient = useQueryClient();
   const models = PROVIDERS[provider]?.models ?? [model].filter(Boolean);
 
   const { mutate, isPending } = useMutation({
-    mutationFn: () => updateModelConfig(row.advisorId, { provider, model }),
+    mutationFn: () =>
+      updateModelConfig(row.advisorId, { provider, model, isEnabled }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'model-config'] });
       queryClient.invalidateQueries({ queryKey: ['admin', 'usage'] });
@@ -113,7 +131,7 @@ function EditModelDialog({ row }: { row: ModelConfigRow }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
+        <Button variant="ghost" size="sm" className="text-muted-foreground">
           Edit
         </Button>
       </DialogTrigger>
@@ -159,6 +177,15 @@ function EditModelDialog({ row }: { row: ModelConfigRow }) {
               </SelectContent>
             </Select>
           </div>
+
+          <div className="flex items-center justify-between gap-4 rounded-lg border px-3 py-2">
+            <Label htmlFor={`enabled-${row.advisorId}`}>Enabled</Label>
+            <Switch
+              id={`enabled-${row.advisorId}`}
+              checked={isEnabled}
+              onCheckedChange={setIsEnabled}
+            />
+          </div>
         </div>
 
         <DialogFooter showCloseButton>
@@ -188,61 +215,54 @@ export function ModelConfigPanel() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Advisor Models</CardTitle>
-      </CardHeader>
-      <Separator />
-      <CardContent className="p-0">
+    <Card className="flex flex-1 flex-col">
+      <CardContent className="flex flex-1 flex-col p-0">
         {isLoading ? (
-          <div className="space-y-2 px-6 py-6">
+          <div className="space-y-3 px-8 py-8">
             {Array.from({ length: 3 }).map((_, index) => (
               <Skeleton key={index} className="h-10 w-full" />
             ))}
           </div>
         ) : rows.length === 0 ? (
-          <p className="text-muted-foreground px-6 py-6 text-sm">
-            No model configuration rows found.
-          </p>
+          <div className="flex flex-1 items-center justify-center">
+            <p className="text-muted-foreground text-sm">
+              No model configuration rows found.
+            </p>
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Advisor</TableHead>
-                  <TableHead>Provider</TableHead>
-                  <TableHead>Model</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Last Updated</TableHead>
+                  <SortHead className="pl-6">Advisor</SortHead>
+                  <SortHead>Provider</SortHead>
+                  <SortHead>Model</SortHead>
+                  <SortHead>Status</SortHead>
+                  <SortHead>Last Updated</SortHead>
                   <TableHead />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rows.map((row) => (
                   <TableRow key={row.advisorId}>
-                    <TableCell className="font-medium">
+                    <TableCell className="py-4 pl-6 font-medium">
                       {ADVISOR_LABELS[row.advisorId] ?? row.advisorId}
                     </TableCell>
-                    <TableCell className="capitalize">{row.provider}</TableCell>
-                    <TableCell className="font-mono text-xs">
+                    <TableCell className="py-4 capitalize">
+                      {row.provider}
+                    </TableCell>
+                    <TableCell className="py-4 font-mono text-xs">
                       {row.model}
                     </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={row.isEnabled ? 'default' : 'outline'}
-                        className={
-                          row.isEnabled
-                            ? 'bg-success text-success-foreground'
-                            : ''
-                        }
-                      >
+                    <TableCell className="py-4">
+                      <Badge variant={row.isEnabled ? 'secondary' : 'outline'}>
                         {row.isEnabled ? 'Enabled' : 'Disabled'}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-muted-foreground text-xs">
+                    <TableCell className="text-muted-foreground py-4 text-xs">
                       {formatDate(row.updatedAt)}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="py-4 pr-6 text-right">
                       <EditModelDialog row={row} />
                     </TableCell>
                   </TableRow>

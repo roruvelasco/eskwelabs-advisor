@@ -1,6 +1,10 @@
 import { apiClient } from '@/lib/api/client';
 
-type ModelConfigUpdateInput = { provider: string; model: string };
+type ModelConfigUpdateInput = {
+  provider: string;
+  model: string;
+  isEnabled?: boolean;
+};
 type CreateUserInput = { email: string; role: 'eif' | 'admin' };
 type UpdateUserInput = { role?: 'eif' | 'admin'; isActive?: boolean };
 

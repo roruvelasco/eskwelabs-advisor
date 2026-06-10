@@ -1,14 +1,13 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { ChevronsUpDown } from 'lucide-react';
 
 import {
   Badge,
   Button,
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
   Skeleton,
   Table,
   TableBody,
@@ -40,7 +39,7 @@ const SEVERITY_VARIANTS: Record<
 
 function formatDate(iso: string) {
   const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '-';
+  if (Number.isNaN(date.getTime())) return '—';
   return date.toLocaleString('en-PH', {
     timeZone: 'Asia/Manila',
     dateStyle: 'short',
@@ -49,15 +48,29 @@ function formatDate(iso: string) {
 }
 
 function actorLabel(actorId: string | null) {
-  if (!actorId) return '-';
+  if (!actorId) return '—';
   return actorId.length > 8 ? `${actorId.slice(0, 8)}...` : actorId;
 }
 
+function SortHead({
+  children,
+  className
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <TableHead className={className}>
+      <span className="flex items-center gap-1.5 text-xs uppercase tracking-widest">
+        {children}
+        <ChevronsUpDown className="text-muted-foreground/40 size-3 shrink-0" />
+      </span>
+    </TableHead>
+  );
+}
+
 export function TelemetryPanel() {
-  const { data, isLoading, error, refetch } = useQuery({
-    ...telemetryQuery,
-    refetchInterval: 10_000
-  });
+  const { data, isLoading, error, refetch } = useQuery(telemetryQuery);
 
   const events =
     (data as { data: TelemetryEventRow[] } | undefined)?.data ?? [];
@@ -78,54 +91,52 @@ export function TelemetryPanel() {
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-base">Event Log</CardTitle>
-        <span className="text-muted-foreground text-xs">10 sec refresh</span>
-      </CardHeader>
-      <CardContent className="p-0">
+    <Card className="flex flex-1 flex-col">
+      <CardContent className="flex flex-1 flex-col p-0">
         {isLoading ? (
-          <div className="space-y-2 px-6 pb-6">
+          <div className="space-y-3 px-8 py-8">
             {Array.from({ length: 4 }).map((_, index) => (
               <Skeleton key={index} className="h-10 w-full" />
             ))}
           </div>
         ) : events.length === 0 ? (
-          <p className="text-muted-foreground px-6 pb-6 text-sm">
-            No events recorded yet.
-          </p>
+          <div className="flex flex-1 items-center justify-center">
+            <p className="text-muted-foreground text-sm">
+              No events recorded yet.
+            </p>
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Event</TableHead>
-                  <TableHead>Severity</TableHead>
-                  <TableHead>Actor</TableHead>
-                  <TableHead>Payload</TableHead>
-                  <TableHead>Timestamp</TableHead>
+                  <SortHead className="pl-6">Event</SortHead>
+                  <SortHead>Severity</SortHead>
+                  <SortHead>Actor</SortHead>
+                  <SortHead>Payload</SortHead>
+                  <SortHead>Timestamp</SortHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {events.map((event) => (
                   <TableRow key={event.id}>
-                    <TableCell className="font-mono text-xs font-medium">
+                    <TableCell className="py-4 pl-6 font-mono text-xs font-medium">
                       {event.eventName}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="py-4">
                       <Badge variant={SEVERITY_VARIANTS[event.severity]}>
                         {event.severity}
                       </Badge>
                     </TableCell>
-                    <TableCell className="font-mono text-xs">
+                    <TableCell className="py-4 font-mono text-xs">
                       {actorLabel(event.actorId)}
                     </TableCell>
-                    <TableCell className="max-w-xs">
+                    <TableCell className="max-w-xs py-4">
                       <pre className="text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap text-xs">
                         {JSON.stringify(event.payload)}
                       </pre>
                     </TableCell>
-                    <TableCell className="text-muted-foreground text-xs">
+                    <TableCell className="text-muted-foreground py-4 pr-6 text-xs">
                       {formatDate(event.createdAt)}
                     </TableCell>
                   </TableRow>

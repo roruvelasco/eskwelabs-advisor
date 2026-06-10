@@ -2,16 +2,13 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { RefreshCwIcon } from 'lucide-react';
+import { ChevronsUpDown, RefreshCwIcon } from 'lucide-react';
 
 import {
   Badge,
   Button,
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -19,7 +16,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  Separator,
   Skeleton,
   Table,
   TableBody,
@@ -50,9 +46,9 @@ interface RefreshResult {
 }
 
 function formatDate(iso: string | null) {
-  if (!iso) return '-';
+  if (!iso) return '—';
   const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '-';
+  if (Number.isNaN(date.getTime())) return '—';
   return date.toLocaleString('en-PH', {
     timeZone: 'Asia/Manila',
     dateStyle: 'medium',
@@ -61,8 +57,25 @@ function formatDate(iso: string | null) {
 }
 
 function shortHash(value: string | null) {
-  if (!value) return '-';
+  if (!value) return '—';
   return value.length > 12 ? `${value.slice(0, 12)}...` : value;
+}
+
+function SortHead({
+  children,
+  className
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <TableHead className={className}>
+      <span className="flex items-center gap-1.5 text-xs uppercase tracking-widest">
+        {children}
+        <ChevronsUpDown className="text-muted-foreground/40 size-3 shrink-0" />
+      </span>
+    </TableHead>
+  );
 }
 
 function RefreshDialog() {
@@ -94,9 +107,13 @@ function RefreshDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="text-muted-foreground hover:text-foreground absolute right-4 top-3 size-8"
+          aria-label="Refresh cache"
+        >
           <RefreshCwIcon className="size-4" />
-          Refresh
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-sm">
@@ -135,70 +152,65 @@ export function CachePanel() {
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="space-y-1">
-          <CardTitle className="text-base">Prompt Cache</CardTitle>
-          <CardDescription>TTL is 5 minutes.</CardDescription>
-        </div>
-        <RefreshDialog />
-      </CardHeader>
-      <Separator />
-      <CardContent className="p-0">
+    <Card className="relative flex flex-1 flex-col">
+      <RefreshDialog />
+      <CardContent className="flex flex-1 flex-col p-0">
         {isLoading ? (
-          <div className="space-y-2 px-6 py-6">
+          <div className="space-y-3 px-8 py-8">
             {Array.from({ length: 3 }).map((_, index) => (
               <Skeleton key={index} className="h-10 w-full" />
             ))}
           </div>
         ) : entries.length === 0 ? (
-          <p className="text-muted-foreground px-6 py-6 text-sm">
-            No cache entries found.
-          </p>
+          <div className="flex flex-1 items-center justify-center">
+            <p className="text-muted-foreground text-sm">
+              No cache entries found.
+            </p>
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Key</TableHead>
-                  <TableHead>Value Hash</TableHead>
-                  <TableHead>Doc Revision</TableHead>
-                  <TableHead>DNA Digest</TableHead>
-                  <TableHead>Last Good</TableHead>
-                  <TableHead>Expires</TableHead>
+                  <SortHead className="pl-6">Key</SortHead>
+                  <SortHead>Value Hash</SortHead>
+                  <SortHead>Doc Revision</SortHead>
+                  <SortHead>DNA Digest</SortHead>
+                  <SortHead>Last Good</SortHead>
+                  <SortHead>Expires</SortHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {entries.map((entry) => (
                   <TableRow key={entry.key}>
-                    <TableCell className="font-mono text-xs">
+                    <TableCell className="py-4 pl-6 font-mono text-xs">
                       {entry.key}
                     </TableCell>
-                    <TableCell className="font-mono text-xs">
+                    <TableCell className="py-4 font-mono text-xs">
                       {shortHash(entry.valueHash)}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="py-4">
                       {entry.docRevision ? (
                         <Badge variant="outline" className="font-mono text-xs">
                           {shortHash(entry.docRevision)}
                         </Badge>
                       ) : (
-                        <span className="text-muted-foreground">-</span>
+                        <span className="text-muted-foreground">—</span>
                       )}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="py-4">
                       {entry.dnaDigestVersion ? (
                         <Badge variant="outline" className="font-mono text-xs">
                           {shortHash(entry.dnaDigestVersion)}
                         </Badge>
                       ) : (
-                        <span className="text-muted-foreground">-</span>
+                        <span className="text-muted-foreground">—</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-muted-foreground text-xs">
+                    <TableCell className="text-muted-foreground py-4 text-xs">
                       {formatDate(entry.lastGoodAt)}
                     </TableCell>
-                    <TableCell className="text-muted-foreground text-xs">
+                    <TableCell className="text-muted-foreground py-4 pr-6 text-xs">
                       {formatDate(entry.expiresAt)}
                     </TableCell>
                   </TableRow>

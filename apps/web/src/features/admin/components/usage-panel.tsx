@@ -1,12 +1,13 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { ChevronsUpDown } from 'lucide-react';
 
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
-  CardTitle,
   Skeleton,
   Table,
   TableBody,
@@ -43,9 +44,9 @@ function StatCard({
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-muted-foreground text-xs font-medium uppercase">
+        <CardDescription className="text-xs uppercase tracking-widest">
           {label}
-        </CardTitle>
+        </CardDescription>
       </CardHeader>
       <CardContent>
         {loading ? (
@@ -55,6 +56,23 @@ function StatCard({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function SortHead({
+  children,
+  className
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <TableHead className={className ?? ''}>
+      <span className="flex items-center gap-1.5 text-xs uppercase tracking-widest">
+        {children}
+        <ChevronsUpDown className="text-muted-foreground/40 size-3 shrink-0" />
+      </span>
+    </TableHead>
   );
 }
 
@@ -93,8 +111,8 @@ export function UsagePanel() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+    <div className="flex flex-1 flex-col gap-6">
+      <div className="grid shrink-0 grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard
           label="Messages Today"
           value={totalMessages.toLocaleString()}
@@ -112,48 +130,49 @@ export function UsagePanel() {
         />
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Per-User Breakdown</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
+      <Card className="flex flex-1 flex-col">
+        <CardContent className="flex flex-1 flex-col p-0">
           {isLoading ? (
-            <div className="space-y-2 px-6 pb-6">
+            <div className="space-y-3 px-8 py-8">
               {Array.from({ length: 3 }).map((_, index) => (
                 <Skeleton key={index} className="h-10 w-full" />
               ))}
             </div>
           ) : counters.length === 0 ? (
-            <p className="text-muted-foreground px-6 pb-6 text-sm">
-              No usage recorded for today.
-            </p>
+            <div className="flex flex-1 items-center justify-center">
+              <p className="text-muted-foreground text-sm">
+                No usage recorded for today.
+              </p>
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>User</TableHead>
-                    <TableHead>Day</TableHead>
-                    <TableHead className="text-right">Messages</TableHead>
-                    <TableHead className="text-right">Tokens</TableHead>
-                    <TableHead className="text-right">Est. Spend</TableHead>
+                    <SortHead className="pl-6">User</SortHead>
+                    <SortHead>Day</SortHead>
+                    <SortHead>Messages</SortHead>
+                    <SortHead>Tokens</SortHead>
+                    <SortHead>Est. Spend</SortHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {counters.map((row) => (
                     <TableRow key={`${row.userId}-${row.dayPh}`}>
-                      <TableCell className="font-mono text-xs">
+                      <TableCell className="py-4 pl-6 font-medium">
                         {emailById.get(row.userId) ??
                           `${row.userId.slice(0, 8)}...`}
                       </TableCell>
-                      <TableCell>{row.dayPh}</TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell className="text-muted-foreground py-4 text-sm">
+                        {row.dayPh}
+                      </TableCell>
+                      <TableCell className="py-4 tabular-nums">
                         {row.messagesToday.toLocaleString()}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell className="py-4 tabular-nums">
                         {row.tokensToday.toLocaleString()}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell className="py-4 pr-6 tabular-nums">
                         ${Number(row.estimatedSpendTodayUsd).toFixed(4)}
                       </TableCell>
                     </TableRow>
