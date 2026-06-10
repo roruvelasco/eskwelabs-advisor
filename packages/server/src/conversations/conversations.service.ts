@@ -35,7 +35,7 @@ export class ConversationsService {
     const advisor = await this.advisorsService.getActive(input.advisorId);
     const config = await this.modelConfigService.getForAdvisor(input.advisorId);
 
-    if (!advisor.promptDocId || !config?.isEnabled) {
+    if (!advisor.promptDocId || config?.isEnabled === false) {
       throw new HttpException(
         422,
         'Advisor is not ready for chat',

@@ -3,9 +3,9 @@ export class AdvisorsSerializer {
     rows: Array<{
       id: string;
       name: string;
-      description?: string;
-      isActive?: boolean;
-      createdAt?: Date | string;
+      description: string;
+      isActive: boolean;
+      createdAt: Date;
     }>
   ) {
     return {

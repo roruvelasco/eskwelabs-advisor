@@ -1,25 +1,36 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
-export async function POST(request: NextRequest) {
-  try {
-    // Proxy sign-out request to NextAuth signout endpoint so NextAuth clears its cookies.
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/auth/signout`,
-      {
-        method: 'POST',
-        headers: {
-          cookie: request.headers.get('cookie') || ''
-        }
-      }
-    );
+const sessionCookieNames = [
+  'next-auth.session-token',
+  '__Secure-next-auth.session-token',
+  'next-auth.csrf-token',
+  '__Host-next-auth.csrf-token',
+  'next-auth.callback-url',
+  '__Secure-next-auth.callback-url',
+  'authjs.session-token',
+  '__Secure-authjs.session-token',
+  'authjs.csrf-token',
+  '__Host-authjs.csrf-token',
+  'authjs.callback-url',
+  '__Secure-authjs.callback-url',
+  'eskwelabs_actor_id',
+  'eskwelabs_actor_email',
+  'eskwelabs_actor_role',
+  'eskwelabs_actor_active'
+];
 
-    if (!res.ok) {
-      throw new Error('Failed to sign out via NextAuth');
-    }
+export async function POST() {
+  const response = NextResponse.json({ success: true });
 
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error('Error signing out:', error);
-    return NextResponse.json({ error: 'Failed to sign out' }, { status: 500 });
+  for (const name of sessionCookieNames) {
+    response.cookies.set(name, '', {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      expires: new Date(0),
+      path: '/'
+    });
   }
+
+  return response;
 }

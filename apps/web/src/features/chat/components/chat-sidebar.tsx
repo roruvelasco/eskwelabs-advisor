@@ -1,6 +1,6 @@
 'use client';
 
-import { Plus } from 'lucide-react';
+import { ChevronUp, LogOut, Plus, UserRound } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import {
@@ -8,6 +8,11 @@ import {
   Avatar,
   AvatarFallback,
   Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
   Sidebar,
   SidebarContent,
   SidebarFooter,
@@ -52,8 +57,15 @@ function RecentConversationButton({
   );
 }
 
-export function ChatSidebar() {
+export function ChatSidebar({
+  currentAdvisorId,
+  currentConversationId
+}: {
+  currentAdvisorId?: string;
+  currentConversationId?: string;
+}) {
   const router = useRouter();
+  const { isMobile, setOpenMobile } = useSidebar();
   const { data, isError } = useQuery(conversationsQuery());
 
   const conversations = (data?.data ?? []) as Array<{
@@ -61,6 +73,36 @@ export function ChatSidebar() {
     title: string;
     advisorId: string;
   }>;
+  const newChatAdvisorId =
+    currentAdvisorId ??
+    conversations.find(
+      (conversation) => conversation.id === currentConversationId
+    )?.advisorId;
+
+  const closeMobileSidebar = () => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  };
+
+  const handleNewChat = () => {
+    closeMobileSidebar();
+    router.push(
+      newChatAdvisorId ? `/chat?advisor=${newChatAdvisorId}` : '/advisors'
+    );
+  };
+
+  const handleAdvisorSelection = () => {
+    closeMobileSidebar();
+    router.push('/advisors');
+  };
+
+  const handleLogout = async () => {
+    closeMobileSidebar();
+    await fetch('/api/signout', { method: 'POST' });
+    router.replace('/login');
+    router.refresh();
+  };
 
   return (
     <Sidebar id="chat-sidebar" collapsible="offcanvas" className="!border-r-0">
@@ -74,6 +116,7 @@ export function ChatSidebar() {
           variant="ghost"
           className="text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent w-full justify-start gap-2 font-normal"
           type="button"
+          onClick={handleNewChat}
         >
           <Plus size={15} aria-hidden="true" />
           New chat
@@ -119,14 +162,38 @@ export function ChatSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="p-4">
-        <div className="flex items-center gap-2 rounded-md px-2 py-1.5">
-          <Avatar className="size-8">
-            <AvatarFallback>N</AvatarFallback>
-          </Avatar>
-          <span className="text-muted-foreground min-w-0 truncate text-sm">
-            Mentor workspace
-          </span>
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              className="hover:bg-sidebar-accent h-auto w-full justify-between gap-2 px-2 py-1.5"
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                <Avatar className="size-8">
+                  <AvatarFallback>MW</AvatarFallback>
+                </Avatar>
+                <span className="text-muted-foreground min-w-0 truncate text-sm font-normal">
+                  Mentor workspace
+                </span>
+              </span>
+              <ChevronUp className="text-muted-foreground size-4 shrink-0" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" side="top" className="w-56">
+            <DropdownMenuItem onSelect={handleAdvisorSelection}>
+              <UserRound className="size-4" />
+              Advisor selection
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              variant="destructive"
+              onSelect={() => void handleLogout()}
+            >
+              <LogOut className="size-4" />
+              Logout
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </SidebarFooter>
     </Sidebar>
   );

@@ -29,7 +29,7 @@
     "db:reset": "bun run scripts/nuke-db.ts && bun run db:migrate && bun run db:sync-advisors && bun run db:seed",
     "db:push": "drizzle-kit push",
     "db:studio": "node -e \"console.log('Supabase Studio: http://127.0.0.1:54323')\"",
-    "db:start": "supabase start",
+    "db:start": "supabase start && drizzle-kit migrate && bun run scripts/sync-advisors.ts",
     "db:stop": "supabase stop",
     "prepare": "husky"
   },

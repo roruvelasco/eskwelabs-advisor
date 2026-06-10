@@ -11,6 +11,7 @@ import {
   SidebarTrigger,
   useSidebar
 } from '@eskwelabs-advisor/ui';
+import { AdvisorChip } from './advisor-chip';
 import { cn } from '@/lib/utils';
 import { ChatSidebar } from './chat-sidebar';
 import { ChatComposer } from './chat-composer';
@@ -18,6 +19,8 @@ import { ChatMessages, type Message } from './chat-messages';
 import { messagesQuery } from '@/lib/domains/chat/queries';
 import { streamChatTurn } from '@/lib/domains/chat/api';
 import { createConversation } from '@/lib/domains/conversations/api';
+import { conversationQuery } from '@/lib/domains/conversations/queries';
+import { advisorsQuery } from '@/lib/domains/advisors/queries';
 
 type StreamFinalData = {
   userMessage: {
@@ -54,6 +57,20 @@ function ChatLayoutInner() {
     ...messagesQuery(conversationId ?? ''),
     enabled: Boolean(conversationId)
   });
+  const { data: conversationResponse } = useQuery({
+    ...conversationQuery(conversationId ?? ''),
+    enabled: Boolean(conversationId)
+  });
+  const { data: advisorsResponse } = useQuery(advisorsQuery);
+
+  const currentAdvisorId =
+    advisorId ??
+    (conversationResponse as { data?: { advisorId?: string } } | undefined)
+      ?.data?.advisorId;
+  const currentAdvisor = (advisorsResponse?.data ?? []).find(
+    (advisor) => advisor.id === currentAdvisorId
+  );
+  const currentAdvisorName = currentAdvisor?.name ?? 'Advisor';
 
   const sendMutation = useMutation({
     mutationFn: async (content: string) => {
@@ -61,7 +78,8 @@ function ChatLayoutInner() {
       if (!cid) {
         if (!advisorId) throw new Error('Advisor is required');
         const result = await createConversation({
-          advisorId
+          advisorId,
+          title: content.slice(0, 80)
         });
         cid = (result as { data: { id: string } }).data.id;
         router.replace(`/chat?conversation=${cid}`);
@@ -134,6 +152,7 @@ function ChatLayoutInner() {
     },
     onSuccess: async (cid) => {
       await queryClient.invalidateQueries({ queryKey: ['messages', cid] });
+      await queryClient.invalidateQueries({ queryKey: ['conversations'] });
       setLiveMessages([]);
       setLiveConversationId(undefined);
     },
@@ -168,8 +187,9 @@ function ChatLayoutInner() {
   const liveBelongsToCurrent =
     liveConversationId &&
     (!conversationId || liveConversationId === conversationId);
+  const liveIds = new Set(liveMessages.map((m) => m.id));
   const messages = [
-    ...(conversationId ? loadedMessages : []),
+    ...(conversationId ? loadedMessages.filter((m) => !liveIds.has(m.id)) : []),
     ...(liveBelongsToCurrent ? liveMessages : [])
   ];
   const triggerHidden = isMobile ? openMobile : open;
@@ -184,26 +204,34 @@ function ChatLayoutInner() {
 
   return (
     <>
-      <ChatSidebar />
+      <ChatSidebar
+        currentAdvisorId={currentAdvisorId}
+        currentConversationId={conversationId ?? undefined}
+      />
 
       <SidebarInset className="bg-background h-dvh overflow-hidden p-3">
         <GrainOverlay
           intensity="subtle"
           className="bg-card border-border flex h-full min-h-0 flex-col overflow-hidden rounded-xl border"
         >
-          <header
-            className={cn(
-              'flex h-14 shrink-0 items-center px-4 transition-opacity duration-300 ease-in-out',
-              triggerHidden
-                ? 'pointer-events-none invisible opacity-0'
-                : 'opacity-100'
+          <header className="flex h-14 shrink-0 items-center justify-between px-4">
+            <div
+              className={cn(
+                'transition-opacity duration-300 ease-in-out',
+                triggerHidden
+                  ? 'pointer-events-none invisible opacity-0'
+                  : 'opacity-100'
+              )}
+            >
+              <SidebarTrigger
+                aria-controls="chat-sidebar"
+                aria-label="Open sidebar"
+                className="size-9"
+              />
+            </div>
+            {currentAdvisorId && (
+              <AdvisorChip id={currentAdvisorId} name={currentAdvisorName} />
             )}
-          >
-            <SidebarTrigger
-              aria-controls="chat-sidebar"
-              aria-label="Open sidebar"
-              className="size-9"
-            />
           </header>
 
           {isLoading ? (

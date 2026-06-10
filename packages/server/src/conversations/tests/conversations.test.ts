@@ -55,6 +55,38 @@ describe('conversations service', () => {
     ).rejects.toBeInstanceOf(HttpException);
   });
 
+  test('allows conversation creation when no model config row exists', async () => {
+    const service = new ConversationsService(
+      {
+        create: async () => ({
+          id: crypto.randomUUID(),
+          userId: actor.id,
+          advisorId: 'data-dashboard',
+          title: 'Test',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+      } as never,
+      {
+        getActive: async () => ({
+          id: 'data-dashboard',
+          name: 'Data Dashboard Advisor',
+          description: 'Dashboard mentoring',
+          promptDocId: 'prompt-doc-id',
+          isActive: true,
+          createdAt: new Date()
+        })
+      } as never,
+      {
+        getForAdvisor: async () => undefined
+      } as never
+    );
+
+    await expect(
+      service.create(actor, { advisorId: 'data-dashboard' })
+    ).resolves.toBeDefined();
+  });
+
   test('rejects conversation creation when model config is disabled', async () => {
     const service = new ConversationsService(
       {
