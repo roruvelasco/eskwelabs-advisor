@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
+import { authSecret } from '@/lib/domains/auth/token-actor';
 
 export const runtime = 'nodejs';
 
@@ -270,13 +271,21 @@ export function createMiddleware(
   };
 }
 
-export const middleware = createMiddleware(
-  (req) =>
-    getToken({ req, secret: process.env.AUTH_SECRET }) as Promise<Record<
-      string,
-      unknown
-    > | null>
-);
+export const middleware = createMiddleware(async (req) => {
+  const token = (await getToken({
+    req,
+    secret: authSecret()
+  })) as Record<string, unknown> | null;
+
+  // probe — remove after confirming fix
+  console.info('middleware_actor_probe', {
+    path: req.nextUrl.pathname,
+    actorResolved: Boolean(token),
+    role: token?.role ?? null
+  });
+
+  return token;
+});
 
 export const config = {
   matcher: ['/((?!_next/static|_next/image|favicon.ico).*)']

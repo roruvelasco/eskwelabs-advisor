@@ -3,6 +3,9 @@ import { NextRequest } from 'next/server';
 
 import { middleware } from './middleware';
 
+// Real middleware calls authSecret() which requires a secret to be set
+process.env.NEXTAUTH_SECRET = 'test-secret';
+
 describe('web app', () => {
   test('has a smoke test placeholder', () => {
     expect('eskwelabs-advisor').toContain('advisor');

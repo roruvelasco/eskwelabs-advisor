@@ -1,23 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolvePostLoginDestination } from '@/lib/auth/redirect-policy';
+import { getVerifiedTokenActor } from '@/lib/domains/auth/token-actor';
 
 export async function GET(request: NextRequest) {
-  const id = request.headers.get('x-eskwelabs-actor-id');
-  const email = request.headers.get('x-eskwelabs-actor-email');
-  const role = request.headers.get('x-eskwelabs-actor-role');
-  const active = request.headers.get('x-eskwelabs-actor-active');
+  const actor = await getVerifiedTokenActor(request);
 
-  if (!id || !email || !role || active !== 'true') {
-    return NextResponse.redirect(new URL('/login', request.url));
-  }
+  console.info('continue_actor_probe', {
+    actorResolved: Boolean(actor),
+    role: actor?.role ?? null
+  });
 
-  if (role !== 'admin' && role !== 'eif') {
+  if (!actor) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
   const destination = resolvePostLoginDestination(
     request.nextUrl.searchParams.get('returnTo'),
-    role
+    actor.role
   );
 
   return NextResponse.redirect(new URL(destination, request.url));
