@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState, type FormEvent } from 'react';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
@@ -104,7 +104,8 @@ export function AdminLoginPanel() {
     }
   };
 
-  const handleEmailSignIn = async () => {
+  const handleEmailSignIn = async (event?: FormEvent<HTMLFormElement>) => {
+    event?.preventDefault();
     const result = loginSchema.safeParse({ email, password });
     if (!result.success) {
       const fieldErrors: LoginErrors = {};
@@ -175,67 +176,76 @@ export function AdminLoginPanel() {
                 <Separator className="flex-1" />
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="admin-email">Email</Label>
-                <Input
-                  id="admin-email"
-                  type="email"
-                  placeholder="you@eskwelabs.com"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value);
-                    if (errors.email)
-                      setErrors((p) => ({ ...p, email: undefined }));
-                  }}
-                />
-                {errors.email && (
-                  <p className="text-destructive text-xs">{errors.email}</p>
-                )}
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="admin-password">Password</Label>
-                <div className="relative">
+              <form
+                className="space-y-4"
+                onSubmit={(event) => void handleEmailSignIn(event)}
+              >
+                <div className="space-y-1.5">
+                  <Label htmlFor="admin-email">Email</Label>
                   <Input
-                    id="admin-password"
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="••••••••"
-                    className="pr-10"
-                    autoComplete="current-password"
-                    value={password}
+                    id="admin-email"
+                    type="email"
+                    placeholder="you@eskwelabs.com"
+                    autoComplete="email"
+                    value={email}
                     onChange={(e) => {
-                      setPassword(e.target.value);
-                      if (errors.password)
-                        setErrors((p) => ({ ...p, password: undefined }));
+                      setEmail(e.target.value);
+                      if (errors.email)
+                        setErrors((p) => ({ ...p, email: undefined }));
                     }}
                   />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="absolute right-0 top-0 h-full w-auto px-3"
-                    onClick={() => setShowPassword((p) => !p)}
-                    aria-label={
-                      showPassword ? 'Hide password' : 'Show password'
-                    }
-                  >
-                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </Button>
+                  {errors.email && (
+                    <p className="text-destructive text-xs">{errors.email}</p>
+                  )}
                 </div>
-                {errors.password && (
-                  <p className="text-destructive text-xs">{errors.password}</p>
-                )}
-              </div>
 
-              <Button
-                className="w-full gap-2.5"
-                size="lg"
-                onClick={handleEmailSignIn}
-                disabled={isAnyLoading}
-              >
-                {isEmailLoading && <Loader2 className="size-4 animate-spin" />}
-                {isEmailLoading ? 'Signing in...' : 'Continue with email'}
-              </Button>
+                <div className="space-y-1.5">
+                  <Label htmlFor="admin-password">Password</Label>
+                  <div className="relative">
+                    <Input
+                      id="admin-password"
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="••••••••"
+                      className="pr-10"
+                      autoComplete="current-password"
+                      value={password}
+                      onChange={(e) => {
+                        setPassword(e.target.value);
+                        if (errors.password)
+                          setErrors((p) => ({ ...p, password: undefined }));
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="absolute right-0 top-0 h-full w-auto px-3"
+                      onClick={() => setShowPassword((p) => !p)}
+                      aria-label={
+                        showPassword ? 'Hide password' : 'Show password'
+                      }
+                    >
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </Button>
+                  </div>
+                  {errors.password && (
+                    <p className="text-destructive text-xs">
+                      {errors.password}
+                    </p>
+                  )}
+                </div>
+
+                <Button
+                  type="submit"
+                  className="w-full gap-2.5"
+                  size="lg"
+                  disabled={isAnyLoading}
+                >
+                  {isEmailLoading && (
+                    <Loader2 className="size-4 animate-spin" />
+                  )}
+                  {isEmailLoading ? 'Signing in...' : 'Continue with email'}
+                </Button>
+              </form>
             </CardContent>
           </Card>
         </div>
