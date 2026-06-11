@@ -29,4 +29,54 @@ export class UsageCountersService {
       estimatedSpendUsd: input.estimatedCostUsd
     });
   }
+
+  async reserveTurn(
+    userId: string,
+    input: {
+      estimatedTokens: number;
+      estimatedCostUsd: number;
+      maxMessages: number;
+      maxTokens: number;
+      maxSpendUsd: number;
+    }
+  ) {
+    return this.usageCountersRepository.reserveWithinLimits(userId, {
+      messages: 1,
+      tokens: input.estimatedTokens,
+      estimatedSpendUsd: input.estimatedCostUsd,
+      maxMessages: input.maxMessages,
+      maxTokens: input.maxTokens,
+      maxSpendUsd: input.maxSpendUsd
+    });
+  }
+
+  async finalizeReservation(
+    userId: string,
+    input: {
+      estimatedTokens: number;
+      actualTokens: number;
+      estimatedCostUsd: number;
+      actualCostUsd: number;
+    }
+  ) {
+    return this.usageCountersRepository.adjust(userId, {
+      messages: 0,
+      tokens: input.actualTokens - input.estimatedTokens,
+      estimatedSpendUsd: input.actualCostUsd - input.estimatedCostUsd
+    });
+  }
+
+  async releaseReservation(
+    userId: string,
+    input: {
+      estimatedTokens: number;
+      estimatedCostUsd: number;
+    }
+  ) {
+    return this.usageCountersRepository.adjust(userId, {
+      messages: -1,
+      tokens: -input.estimatedTokens,
+      estimatedSpendUsd: -input.estimatedCostUsd
+    });
+  }
 }
