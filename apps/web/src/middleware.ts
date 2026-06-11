@@ -82,12 +82,21 @@ function withSecurityHeaders(response: NextResponse, nonce: string) {
 // Redirect helpers — each has a single, named purpose
 // ---------------------------------------------------------------------------
 
+function returnToParam(request: NextRequest) {
+  const returnTo = `${request.nextUrl.pathname}${request.nextUrl.search}`;
+  return `?returnTo=${encodeURIComponent(returnTo)}`;
+}
+
 function redirectToAdminLogin(request: NextRequest, nonce: string) {
-  return redirectToPath(request, nonce, '/admin/login');
+  return redirectToPath(
+    request,
+    nonce,
+    `/admin/login${returnToParam(request)}`
+  );
 }
 
 function redirectToEifLogin(request: NextRequest, nonce: string) {
-  return redirectToPath(request, nonce, '/login');
+  return redirectToPath(request, nonce, `/login${returnToParam(request)}`);
 }
 
 function redirectToPath(request: NextRequest, nonce: string, pathname: string) {
@@ -118,16 +127,16 @@ interface ValidToken {
 function buildActorResponse(
   request: NextRequest,
   actor: ValidToken,
-  nonce: string
+  nonce: string,
+  cleanHeaders: Headers
 ) {
-  const requestHeaders = new Headers(request.headers);
-  requestHeaders.set('x-eskwelabs-actor-id', actor.id);
-  requestHeaders.set('x-eskwelabs-actor-email', actor.email);
-  requestHeaders.set('x-eskwelabs-actor-role', actor.role);
-  requestHeaders.set('x-eskwelabs-actor-active', 'true');
-  requestHeaders.set('x-nonce', nonce);
+  cleanHeaders.set('x-eskwelabs-actor-id', actor.id);
+  cleanHeaders.set('x-eskwelabs-actor-email', actor.email);
+  cleanHeaders.set('x-eskwelabs-actor-role', actor.role);
+  cleanHeaders.set('x-eskwelabs-actor-active', 'true');
+  cleanHeaders.set('x-nonce', nonce);
 
-  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  const response = NextResponse.next({ request: { headers: cleanHeaders } });
   const cookieOpts = {
     httpOnly: true,
     sameSite: 'lax' as const,
@@ -150,19 +159,26 @@ function buildActorResponse(
 function handleUnauthenticated(
   request: NextRequest,
   kind: RouteKind,
-  nonce: string
+  nonce: string,
+  cleanHeaders: Headers
 ): NextResponse {
   const isApi = request.nextUrl.pathname.startsWith('/api');
 
   if (kind === 'adminLogin' || kind === 'eifLogin')
-    return withSecurityHeaders(NextResponse.next(), nonce);
+    return withSecurityHeaders(
+      NextResponse.next({ request: { headers: cleanHeaders } }),
+      nonce
+    );
   if (kind === 'adminArea')
     return isApi
       ? denyApi(request, nonce)
       : redirectToAdminLogin(request, nonce);
   if (kind === 'eifArea')
     return isApi ? denyApi(request, nonce) : redirectToEifLogin(request, nonce);
-  return withSecurityHeaders(NextResponse.next(), nonce); // public
+  return withSecurityHeaders(
+    NextResponse.next({ request: { headers: cleanHeaders } }),
+    nonce
+  ); // public
 }
 
 // ---------------------------------------------------------------------------
@@ -173,7 +189,8 @@ function handleAuthenticated(
   request: NextRequest,
   token: Record<string, unknown>,
   kind: RouteKind,
-  nonce: string
+  nonce: string,
+  cleanHeaders: Headers
 ): NextResponse {
   const id = token.id as string | undefined;
   const email = token.email as string | undefined;
@@ -182,7 +199,7 @@ function handleAuthenticated(
 
   // Treat tokens missing required fields as unauthenticated
   if (!id || !email || !role || isActive !== true) {
-    return handleUnauthenticated(request, kind, nonce);
+    return handleUnauthenticated(request, kind, nonce, cleanHeaders);
   }
 
   const actor: ValidToken = {
@@ -211,7 +228,7 @@ function handleAuthenticated(
         ? denyApi(request, nonce)
         : redirectToPath(request, nonce, '/advisors');
     }
-    return buildActorResponse(request, actor, nonce);
+    return buildActorResponse(request, actor, nonce, cleanHeaders);
   }
 
   if (kind === 'eifArea' && isAdmin) {
@@ -220,12 +237,21 @@ function handleAuthenticated(
       : redirectToPath(request, nonce, '/admin');
   }
 
-  return buildActorResponse(request, actor, nonce);
+  return buildActorResponse(request, actor, nonce, cleanHeaders);
 }
 
 // ---------------------------------------------------------------------------
 // Middleware factory (token resolver injected for testability)
 // ---------------------------------------------------------------------------
+
+function stripActorHeaders(headers: Headers) {
+  const clean = new Headers(headers);
+  clean.delete('x-eskwelabs-actor-id');
+  clean.delete('x-eskwelabs-actor-email');
+  clean.delete('x-eskwelabs-actor-role');
+  clean.delete('x-eskwelabs-actor-active');
+  return clean;
+}
 
 export function createMiddleware(
   getTokenFn: (req: NextRequest) => Promise<Record<string, unknown> | null>
@@ -233,12 +259,14 @@ export function createMiddleware(
   return async function middlewareFn(
     request: NextRequest
   ): Promise<NextResponse> {
+    const cleanHeaders = stripActorHeaders(request.headers);
     const token = await getTokenFn(request);
     const nonce = crypto.randomUUID().replaceAll('-', '');
     const kind = classifyRoute(request.nextUrl.pathname);
 
-    if (!token) return handleUnauthenticated(request, kind, nonce);
-    return handleAuthenticated(request, token, kind, nonce);
+    if (!token)
+      return handleUnauthenticated(request, kind, nonce, cleanHeaders);
+    return handleAuthenticated(request, token, kind, nonce, cleanHeaders);
   };
 }
 

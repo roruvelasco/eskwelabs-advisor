@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState, type FormEvent } from 'react';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import { z } from 'zod';
 
@@ -79,21 +79,22 @@ function AuthErrorToast() {
 }
 
 export function AdminLoginPanel() {
-  const router = useRouter();
+  const searchParams = useSearchParams();
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isEmailLoading, setIsEmailLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<LoginErrors>({});
-  const callbackUrl = '/admin';
+  const rawReturnTo = searchParams.get('returnTo');
+  const continueUrl = `/auth/continue?returnTo=${encodeURIComponent(rawReturnTo ?? '')}`;
 
   const isAnyLoading = isGoogleLoading || isEmailLoading;
 
   const handleGoogleSignIn = async () => {
     setIsGoogleLoading(true);
     try {
-      await signIn('google-admin', { callbackUrl, redirect: true });
+      await signIn('google-admin', { callbackUrl: continueUrl });
     } finally {
       setIsGoogleLoading(false);
     }
@@ -117,13 +118,12 @@ export function AdminLoginPanel() {
       const response = await signIn('credentials-admin', {
         email,
         password,
-        callbackUrl,
+        callbackUrl: continueUrl,
         redirect: false
       });
 
-      if (response?.ok) {
-        router.replace(callbackUrl);
-        router.refresh();
+      if (response?.ok && response.url) {
+        window.location.href = response.url;
         return;
       }
 
