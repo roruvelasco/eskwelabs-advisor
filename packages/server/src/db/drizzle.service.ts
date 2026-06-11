@@ -12,7 +12,11 @@ export class DrizzleService {
     this.client = postgres(
       env?.DATABASE_URL ??
         process.env.DATABASE_URL ??
-        'postgresql://postgres:postgres@127.0.0.1:54322/postgres'
+        'postgresql://postgres:postgres@127.0.0.1:54322/postgres',
+      {
+        prepare: false,
+        ssl: 'require'
+      }
     );
     this.db = drizzle(this.client, { schema, casing: 'snake_case' });
   }
