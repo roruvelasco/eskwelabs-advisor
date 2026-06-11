@@ -64,52 +64,48 @@ async function resolveActorForAuth(
 export function createAuthConfig(authService: AuthResolver): NextAuthOptions {
   return {
     providers: [
-      ...(process.env.NODE_ENV !== 'production'
-        ? [
-            Credentials({
-              id: 'credentials',
-              name: 'credentials',
-              credentials: {
-                email: { label: 'Email', type: 'email' },
-                password: { label: 'Password', type: 'password' }
-              },
-              async authorize(credentials) {
-                if (!credentials?.email || !credentials?.password) return null;
-                const actor = await authService.resolveCredentials(
-                  credentials.email,
-                  credentials.password
-                );
-                if (!actor) return null;
-                return {
-                  id: actor.id,
-                  email: actor.email,
-                  name: actor.email.split('@')[0]
-                };
-              }
-            }),
-            Credentials({
-              id: 'credentials-admin',
-              name: 'admin credentials',
-              credentials: {
-                email: { label: 'Email', type: 'email' },
-                password: { label: 'Password', type: 'password' }
-              },
-              async authorize(credentials) {
-                if (!credentials?.email || !credentials?.password) return null;
-                const actor = await authService.resolveCredentials(
-                  credentials.email,
-                  credentials.password
-                );
-                if (!actor) return null;
-                return {
-                  id: actor.id,
-                  email: actor.email,
-                  name: actor.email.split('@')[0]
-                };
-              }
-            })
-          ]
-        : []),
+      Credentials({
+        id: 'credentials',
+        name: 'credentials',
+        credentials: {
+          email: { label: 'Email', type: 'email' },
+          password: { label: 'Password', type: 'password' }
+        },
+        async authorize(credentials) {
+          if (!credentials?.email || !credentials?.password) return null;
+          const actor = await authService.resolveCredentials(
+            credentials.email,
+            credentials.password
+          );
+          if (!actor) return null;
+          return {
+            id: actor.id,
+            email: actor.email,
+            name: actor.email.split('@')[0]
+          };
+        }
+      }),
+      Credentials({
+        id: 'credentials-admin',
+        name: 'admin credentials',
+        credentials: {
+          email: { label: 'Email', type: 'email' },
+          password: { label: 'Password', type: 'password' }
+        },
+        async authorize(credentials) {
+          if (!credentials?.email || !credentials?.password) return null;
+          const actor = await authService.resolveCredentials(
+            credentials.email,
+            credentials.password
+          );
+          if (!actor) return null;
+          return {
+            id: actor.id,
+            email: actor.email,
+            name: actor.email.split('@')[0]
+          };
+        }
+      }),
       Google({
         id: 'google',
         name: 'Google',
