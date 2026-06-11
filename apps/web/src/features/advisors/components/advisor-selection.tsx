@@ -18,7 +18,7 @@ import {
   Separator
 } from '@eskwelabs-advisor/ui';
 
-import { acknowledgeConsent } from '@/lib/domains/auth/api';
+import { acknowledgeConsent, getConsent } from '@/lib/domains/auth/api';
 import { advisorsQuery } from '@/lib/domains/advisors/queries';
 import { getAdvisorMeta } from '@/lib/domains/advisors/meta';
 
@@ -90,6 +90,7 @@ interface ConsentDialogProps {
   open: boolean;
   acknowledged: boolean;
   isAcknowledging: boolean;
+  error?: string;
   onAcknowledge: () => void;
 }
 
@@ -97,6 +98,7 @@ function ConsentDialog({
   open,
   acknowledged,
   isAcknowledging,
+  error,
   onAcknowledge
 }: ConsentDialogProps) {
   return (
@@ -185,6 +187,7 @@ function ConsentDialog({
                 Eskwelabs Advisor may be stored, analyzed, and used for platform
                 improvement.
               </p>
+              {error && <p className="text-destructive text-sm">{error}</p>}
             </div>
 
             <DialogFooter className="bg-muted/30 border-t px-6 py-4">
@@ -212,25 +215,49 @@ export function AdvisorSelection() {
   const [consentOpen, setConsentOpen] = useState(false);
   const [isAcknowledging, setIsAcknowledging] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
+  const [consentError, setConsentError] = useState<string>();
   const {
     data: advisorsResponse,
     isLoading,
     isError
   } = useQuery(advisorsQuery);
+  const { data: consentResponse, isLoading: isConsentLoading } = useQuery({
+    queryKey: ['consent'],
+    queryFn: getConsent
+  });
   const advisors = advisorsResponse?.data ?? [];
 
   useEffect(() => {
-    try {
-      if (window.sessionStorage.getItem(consentSessionKey) !== 'true') {
-        setConsentOpen(true);
-      }
-    } catch {
+    if (isConsentLoading) return;
+    const consentedAt = (
+      consentResponse as { consentedAt?: string | null } | undefined
+    )?.consentedAt;
+
+    if (!consentedAt) {
       setConsentOpen(true);
+      return;
     }
-  }, []);
+
+    setConsentOpen(false);
+    try {
+      window.sessionStorage.setItem(consentSessionKey, 'true');
+    } catch {
+      return;
+    }
+  }, [consentResponse, isConsentLoading]);
 
   const handleAcknowledge = async () => {
     setIsAcknowledging(true);
+    setConsentError(undefined);
+    try {
+      await acknowledgeConsent();
+    } catch (error) {
+      void error;
+      setConsentError('Could not record acknowledgement. Please try again.');
+      setIsAcknowledging(false);
+      return;
+    }
+
     try {
       window.sessionStorage.setItem(consentSessionKey, 'true');
     } catch (error) {
@@ -238,12 +265,10 @@ export function AdvisorSelection() {
     }
 
     try {
-      await acknowledgeConsent();
-    } catch (error) {
-      void error;
-    } finally {
       setAcknowledged(true);
       setTimeout(() => setConsentOpen(false), 1100);
+    } finally {
+      setIsAcknowledging(false);
     }
   };
 
@@ -253,6 +278,7 @@ export function AdvisorSelection() {
         open={consentOpen}
         acknowledged={acknowledged}
         isAcknowledging={isAcknowledging}
+        error={consentError}
         onAcknowledge={handleAcknowledge}
       />
 
