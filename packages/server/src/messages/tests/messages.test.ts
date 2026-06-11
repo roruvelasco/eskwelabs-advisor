@@ -802,4 +802,45 @@ describe('messages service', () => {
       })
     });
   });
+
+  test('does not persist blocked rows when conversation ownership fails', async () => {
+    const createdMessages: MessageRow[] = [];
+    const service = new MessagesService(
+      createMessageRepository({ createdMessages }) as never,
+      {
+        assertOwns: async () => {
+          throw new HttpException(403, 'Forbidden', 'forbidden');
+        }
+      } as never,
+      {
+        getForAdvisor: async () => {
+          throw new Error('model config should not be loaded');
+        }
+      } as never,
+      {
+        getForAdvisor: async () => {
+          throw new Error('prompt context should not be loaded');
+        }
+      },
+      {
+        complete: async () => {
+          throw new Error('provider should not be called');
+        },
+        stream: streamShouldNotBeCalled
+      },
+      { assertAllowed: async () => undefined } as never,
+      { incrementTurn: async () => undefined } as never,
+      { record: async () => undefined } as never,
+      { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never
+    );
+
+    await expect(
+      service.chatTurn(actor, {
+        conversationId: crypto.randomUUID(),
+        content: 'wrong owner'
+      })
+    ).rejects.toMatchObject({ code: 'forbidden' });
+
+    expect(createdMessages).toEqual([]);
+  });
 });

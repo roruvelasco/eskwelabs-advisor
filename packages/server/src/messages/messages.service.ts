@@ -13,7 +13,10 @@ import type { ServerEnv } from '../config/env';
 import type { ConversationsService } from '../conversations/conversations.service';
 import type { ModelConfigService } from '../model-config/model-config.service';
 import type { TelemetryService } from '../telemetry/telemetry.service';
-import type { CostCapEnforcer } from '../usage-counters/cost-cap.service';
+import type {
+  CostCapEnforcer,
+  CostReservation
+} from '../usage-counters/cost-cap.service';
 import { estimateModelCostUsd } from '../usage-counters/model-rates';
 import type { UsageCountersService } from '../usage-counters/usage-counters.service';
 import type { PromptContextLoader } from '../prompt-cache/prompt-context.service';
@@ -49,6 +52,77 @@ export class MessagesService {
   async list(actor: Actor, conversationId: string) {
     await this.conversationsService.assertOwns(actor, conversationId);
     return this.messagesRepository.listForConversation(conversationId);
+  }
+
+  private async reserveBudget(input: {
+    userId: string;
+    estimatedTokens: number;
+    estimatedCostUsd: number;
+  }) {
+    const enforcer = this.costCapEnforcer as CostCapEnforcer & {
+      reserveTurn?: (input: {
+        userId: string;
+        estimatedTokens: number;
+        estimatedCostUsd: number;
+      }) => Promise<CostReservation>;
+    };
+
+    if (enforcer.reserveTurn) {
+      return enforcer.reserveTurn(input);
+    }
+
+    await this.costCapEnforcer.assertAllowed(input);
+    return undefined;
+  }
+
+  private async finalizeBudget(
+    actor: Actor,
+    reservation: CostReservation | undefined,
+    completion: {
+      promptTokens: number;
+      completionTokens: number;
+      estimatedCostUsd: string;
+    }
+  ) {
+    const enforcer = this.costCapEnforcer as CostCapEnforcer & {
+      finalizeReservation?: (
+        reservation: CostReservation,
+        input: {
+          promptTokens: number;
+          completionTokens: number;
+          estimatedCostUsd: number;
+        }
+      ) => Promise<void>;
+    };
+
+    if (reservation && enforcer.finalizeReservation) {
+      await enforcer.finalizeReservation(reservation, {
+        promptTokens: completion.promptTokens,
+        completionTokens: completion.completionTokens,
+        estimatedCostUsd: Number(completion.estimatedCostUsd)
+      });
+      return;
+    }
+
+    await this.usageCountersService.incrementTurn(actor.id, {
+      promptTokens: completion.promptTokens,
+      completionTokens: completion.completionTokens,
+      estimatedCostUsd: Number(completion.estimatedCostUsd)
+    });
+  }
+
+  private async releaseBudget(reservation?: CostReservation) {
+    const enforcer = this.costCapEnforcer as CostCapEnforcer & {
+      releaseReservation?: (reservation?: CostReservation) => Promise<void>;
+    };
+
+    if (reservation && enforcer.releaseReservation) {
+      try {
+        await enforcer.releaseReservation(reservation);
+      } catch {
+        return;
+      }
+    }
   }
 
   private estimatedTurnBudget(config: { provider: string; model: string }) {
@@ -92,50 +166,56 @@ export class MessagesService {
       );
     }
 
-    await this.costCapEnforcer.assertAllowed({
+    const reservation = await this.reserveBudget({
       userId: actor.id,
       ...this.estimatedTurnBudget(config)
     });
 
-    const promptContext =
-      await this.promptContextService.getForAdvisor(advisorId);
+    try {
+      const promptContext =
+        await this.promptContextService.getForAdvisor(advisorId);
 
-    const history = (
-      await this.messagesRepository.listForConversation(input.conversationId)
-    )
-      .filter(
-        (message) =>
-          message.status === 'ok' &&
-          (message.role === 'user' || message.role === 'assistant')
+      const history = (
+        await this.messagesRepository.listForConversation(input.conversationId)
       )
-      .slice(-MessagesService.HISTORY_MESSAGE_LIMIT)
-      .map((message) => ({
-        role: message.role,
-        content: message.content
-      }));
+        .filter(
+          (message) =>
+            message.status === 'ok' &&
+            (message.role === 'user' || message.role === 'assistant')
+        )
+        .slice(-MessagesService.HISTORY_MESSAGE_LIMIT)
+        .map((message) => ({
+          role: message.role,
+          content: message.content
+        }));
 
-    const request: LlmChatRequest = {
-      provider: config.provider,
-      model: config.model,
-      messages: [
-        {
-          role: 'system',
-          content: promptContext.systemPrompt
-        },
-        ...history,
-        { role: 'user', content: input.content }
-      ]
-    };
+      const request: LlmChatRequest = {
+        provider: config.provider,
+        model: config.model,
+        messages: [
+          {
+            role: 'system',
+            content: promptContext.systemPrompt
+          },
+          ...history,
+          { role: 'user', content: input.content }
+        ]
+      };
 
-    return {
-      request,
-      provider: config.provider,
-      model: config.model,
-      promptSnapshotHash: promptContext.promptSnapshotHash,
-      promptDocRevision: promptContext.promptDocRevision,
-      dnaDigestVersion: promptContext.dnaDigestVersion,
-      userContent: input.content
-    };
+      return {
+        request,
+        provider: config.provider,
+        model: config.model,
+        promptSnapshotHash: promptContext.promptSnapshotHash,
+        promptDocRevision: promptContext.promptDocRevision,
+        dnaDigestVersion: promptContext.dnaDigestVersion,
+        reservation,
+        userContent: input.content
+      };
+    } catch (error) {
+      await this.releaseBudget(reservation);
+      throw error;
+    }
   }
 
   private async createBlockedTurn(
@@ -161,6 +241,10 @@ export class MessagesService {
     if (code.includes('spend') || code.includes('budget')) return 'budget';
     if (code.includes('limit') || code.includes('disabled')) return 'cap';
     return code;
+  }
+
+  private isAuthorizationFailure(error: HttpException) {
+    return error.status === 401 || error.status === 403 || error.status === 404;
   }
 
   private async recordTelemetry(
@@ -261,11 +345,7 @@ export class MessagesService {
       this.assistantMessageInput(actor, conversationId, prepared, completion)
     );
 
-    await this.usageCountersService.incrementTurn(actor.id, {
-      promptTokens: completion.promptTokens,
-      completionTokens: completion.completionTokens,
-      estimatedCostUsd: Number(completion.estimatedCostUsd)
-    });
+    await this.finalizeBudget(actor, prepared.reservation, completion);
 
     await this.conversationsService.touch(conversationId);
     await this.recordTelemetry('chat_turn_completed', actor, 'info', {
@@ -302,6 +382,7 @@ export class MessagesService {
       );
     } catch (error) {
       if (prepared) {
+        await this.releaseBudget(prepared.reservation);
         const blockReason =
           error instanceof Error && 'code' in error
             ? String(error.code)
@@ -326,7 +407,10 @@ export class MessagesService {
           conversationId: input.conversationId,
           code: blockReason
         });
-      } else if (error instanceof HttpException) {
+      } else if (
+        error instanceof HttpException &&
+        !this.isAuthorizationFailure(error)
+      ) {
         await this.createBlockedTurn(
           actor,
           input.conversationId,
@@ -403,6 +487,7 @@ export class MessagesService {
       };
     } catch (error) {
       if (prepared) {
+        await this.releaseBudget(prepared.reservation);
         const blockReason =
           error instanceof Error && 'code' in error
             ? String(error.code)
@@ -427,7 +512,10 @@ export class MessagesService {
           conversationId: input.conversationId,
           code: blockReason
         });
-      } else if (error instanceof HttpException) {
+      } else if (
+        error instanceof HttpException &&
+        !this.isAuthorizationFailure(error)
+      ) {
         await this.createBlockedTurn(
           actor,
           input.conversationId,
