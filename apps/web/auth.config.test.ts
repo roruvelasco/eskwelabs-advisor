@@ -66,7 +66,7 @@ describe('auth config', () => {
 
     await expect(
       config.callbacks?.signIn?.(signInInput(actor.email, 'google-admin'))
-    ).resolves.toBe('/admin/login?error=AdminRequired');
+    ).resolves.toBe('/admin/login');
   });
 
   test('rejects admin users from the EIF provider before session creation', async () => {
@@ -74,7 +74,7 @@ describe('auth config', () => {
 
     await expect(
       config.callbacks?.signIn?.(signInInput(adminActor.email, 'google'))
-    ).resolves.toBe('/admin/login?error=UseAdminLogin');
+    ).resolves.toBe('/admin/login');
   });
 
   test('redirects missing allow-list users to a stable login error', async () => {
@@ -82,7 +82,7 @@ describe('auth config', () => {
 
     await expect(
       config.callbacks?.signIn?.(signInInput('missing@example.com'))
-    ).resolves.toBe('/login?error=NotAllowlisted');
+    ).resolves.toBe('/login');
   });
 
   test('redirects auth service failures to a safe login error', async () => {
@@ -93,7 +93,7 @@ describe('auth config', () => {
 
     await expect(
       config.callbacks?.signIn?.(signInInput(actor.email))
-    ).resolves.toBe('/login?error=AuthServiceUnavailable');
+    ).resolves.toBe('/login');
   });
 
   test('redirects admin auth service failures to the admin login', async () => {
@@ -104,6 +104,6 @@ describe('auth config', () => {
 
     await expect(
       config.callbacks?.signIn?.(signInInput(adminActor.email, 'google-admin'))
-    ).resolves.toBe('/admin/login?error=AuthServiceUnavailable');
+    ).resolves.toBe('/admin/login');
   });
 });
