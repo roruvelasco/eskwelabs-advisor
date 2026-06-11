@@ -82,26 +82,12 @@ function withSecurityHeaders(response: NextResponse, nonce: string) {
 // Redirect helpers — each has a single, named purpose
 // ---------------------------------------------------------------------------
 
-function safeCallbackUrl(request: NextRequest): string {
-  // Build from the request's own pathname+search only — never from a query param.
-  const { pathname, search } = request.nextUrl;
-  return encodeURIComponent(pathname + search);
-}
-
 function redirectToAdminLogin(request: NextRequest, nonce: string) {
-  const url = new URL(
-    `/admin/login?callbackUrl=${safeCallbackUrl(request)}`,
-    request.url
-  );
-  return withSecurityHeaders(NextResponse.redirect(url), nonce);
+  return redirectToPath(request, nonce, '/admin/login');
 }
 
 function redirectToEifLogin(request: NextRequest, nonce: string) {
-  const url = new URL(
-    `/login?callbackUrl=${safeCallbackUrl(request)}`,
-    request.url
-  );
-  return withSecurityHeaders(NextResponse.redirect(url), nonce);
+  return redirectToPath(request, nonce, '/login');
 }
 
 function redirectToPath(request: NextRequest, nonce: string, pathname: string) {

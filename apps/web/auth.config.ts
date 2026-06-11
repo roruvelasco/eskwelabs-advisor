@@ -61,6 +61,24 @@ async function resolveActorForAuth(
   }
 }
 
+async function authorizeCredentialsForAuth(
+  authService: AuthResolver,
+  email: string,
+  password: string,
+  context: string
+) {
+  try {
+    return await authService.resolveCredentials(email, password);
+  } catch (error) {
+    console.error('auth_credentials_resolution_failed', {
+      context,
+      email,
+      error
+    });
+    return null;
+  }
+}
+
 export function createAuthConfig(authService: AuthResolver): NextAuthOptions {
   return {
     providers: [
@@ -73,9 +91,11 @@ export function createAuthConfig(authService: AuthResolver): NextAuthOptions {
         },
         async authorize(credentials) {
           if (!credentials?.email || !credentials?.password) return null;
-          const actor = await authService.resolveCredentials(
+          const actor = await authorizeCredentialsForAuth(
+            authService,
             credentials.email,
-            credentials.password
+            credentials.password,
+            'credentials'
           );
           if (!actor) return null;
           return {
@@ -94,9 +114,11 @@ export function createAuthConfig(authService: AuthResolver): NextAuthOptions {
         },
         async authorize(credentials) {
           if (!credentials?.email || !credentials?.password) return null;
-          const actor = await authService.resolveCredentials(
+          const actor = await authorizeCredentialsForAuth(
+            authService,
             credentials.email,
-            credentials.password
+            credentials.password,
+            'credentials-admin'
           );
           if (!actor) return null;
           return {
@@ -178,16 +200,14 @@ export function createAuthConfig(authService: AuthResolver): NextAuthOptions {
         const requiredRole = providerRole[account?.provider ?? ''] ?? 'eif';
         const actor = await resolveLoginForAuth(authService, email, 'signIn');
         if (actor === 'service_unavailable') {
-          return `${roleLogin[requiredRole]}?error=AuthServiceUnavailable`;
+          return roleLogin[requiredRole];
         }
         if (!actor) {
           console.warn('auth_rejected_not_in_allowlist', { email });
-          return `${roleLogin[requiredRole]}?error=NotAllowlisted`;
+          return roleLogin[requiredRole];
         }
         if (actor.role !== requiredRole) {
-          return actor.role === 'admin'
-            ? '/admin/login?error=UseAdminLogin'
-            : '/admin/login?error=AdminRequired';
+          return '/admin/login';
         }
         return true;
       }

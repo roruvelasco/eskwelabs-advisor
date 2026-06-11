@@ -2,11 +2,10 @@
 
 import { Suspense, useEffect, useState, type FormEvent } from 'react';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import { z } from 'zod';
 
-import { roleCallbackUrl } from '@/lib/domains/auth/callback-url';
 import {
   AppBrand,
   Button,
@@ -83,18 +82,14 @@ function AuthErrorToast() {
 }
 
 export function LoginPanel() {
-  const searchParams = useSearchParams();
+  const router = useRouter();
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isEmailLoading, setIsEmailLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<LoginErrors>({});
-  const callbackUrl = roleCallbackUrl(
-    searchParams.get('callbackUrl'),
-    '/advisors',
-    ['/advisors', '/chat', '/history', '/consent']
-  );
+  const callbackUrl = '/advisors';
 
   const isAnyLoading = isGoogleLoading || isEmailLoading;
 
@@ -122,12 +117,20 @@ export function LoginPanel() {
     setErrors({});
     setIsEmailLoading(true);
     try {
-      await signIn('credentials', {
+      const response = await signIn('credentials', {
         email,
         password,
         callbackUrl,
-        redirect: true
+        redirect: false
       });
+
+      if (response?.ok) {
+        router.replace(callbackUrl);
+        router.refresh();
+        return;
+      }
+
+      toast.error(errorMessages.CredentialsSignin);
     } finally {
       setIsEmailLoading(false);
     }

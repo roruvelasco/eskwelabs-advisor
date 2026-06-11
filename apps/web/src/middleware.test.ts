@@ -89,20 +89,16 @@ describe('unauthenticated', () => {
     expect(res.status).toBe(200);
   });
 
-  test('redirects /admin to /admin/login with callbackUrl', async () => {
+  test('redirects /admin to /admin/login', async () => {
     const res = await mw(null)(req('/admin'));
     expect(isRedirect(res.status)).toBe(true);
-    expect(res.headers.get('location')).toContain(
-      '/admin/login?callbackUrl=%2Fadmin'
-    );
+    expect(res.headers.get('location')).toContain('/admin/login');
   });
 
-  test('redirects /admin/users to /admin/login with callbackUrl', async () => {
+  test('redirects /admin/users to /admin/login', async () => {
     const res = await mw(null)(req('/admin/users'));
     expect(isRedirect(res.status)).toBe(true);
-    expect(res.headers.get('location')).toContain(
-      '/admin/login?callbackUrl=%2Fadmin%2Fusers'
-    );
+    expect(res.headers.get('location')).toContain('/admin/login');
   });
 
   test('denies /api/admin/* with 403 JSON', async () => {
@@ -112,18 +108,16 @@ describe('unauthenticated', () => {
     expect(body.error.code).toBe('forbidden');
   });
 
-  test('redirects /advisors to /login with callbackUrl', async () => {
+  test('redirects /advisors to /login', async () => {
     const res = await mw(null)(req('/advisors'));
     expect(isRedirect(res.status)).toBe(true);
-    expect(res.headers.get('location')).toContain(
-      '/login?callbackUrl=%2Fadvisors'
-    );
+    expect(res.headers.get('location')).toContain('/login');
   });
 
-  test('redirects / to /login with callbackUrl', async () => {
+  test('redirects / to /login', async () => {
     const res = await mw(null)(req('/'));
     expect(isRedirect(res.status)).toBe(true);
-    expect(res.headers.get('location')).toContain('/login?callbackUrl=%2F');
+    expect(res.headers.get('location')).toContain('/login');
   });
 
   test('denies /api/advisors/* with 403 JSON', async () => {
@@ -226,36 +220,13 @@ describe('invalid token', () => {
   test('no role → treat as unauthenticated for /admin', async () => {
     const res = await mw(makeToken({ role: undefined }))(req('/admin'));
     expect(isRedirect(res.status)).toBe(true);
-    expect(res.headers.get('location')).toContain(
-      '/admin/login?callbackUrl=%2Fadmin'
-    );
+    expect(res.headers.get('location')).toContain('/admin/login');
   });
 
   test('isActive=false → treat as unauthenticated for /advisors', async () => {
     const res = await mw(makeToken({ isActive: false }))(req('/advisors'));
     expect(isRedirect(res.status)).toBe(true);
-    expect(res.headers.get('location')).toContain(
-      '/login?callbackUrl=%2Fadvisors'
-    );
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Open-redirect safety
-// ---------------------------------------------------------------------------
-
-describe('open redirect prevention', () => {
-  test('callbackUrl is built from pathname+search, not from an incoming callbackUrl param', async () => {
-    const res = await mw(null)(req('/admin?callbackUrl=https://evil.com'));
-    expect(isRedirect(res.status)).toBe(true);
-    const location = res.headers.get('location') ?? '';
-    expect(location).toContain('/admin/login?callbackUrl=');
-    // The encoded value must start with %2F (i.e., the path /admin), not with http
-    const encoded = new URL(location, 'http://localhost').searchParams.get(
-      'callbackUrl'
-    );
-    expect(encoded).toMatch(/^\/admin/);
-    expect(encoded).not.toMatch(/^https?:\/\//);
+    expect(res.headers.get('location')).toContain('/login');
   });
 });
 
