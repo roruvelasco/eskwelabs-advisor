@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
-import { authSecret } from '@/lib/domains/auth/token-actor';
 
 export const runtime = 'nodejs';
 
@@ -272,16 +271,35 @@ export function createMiddleware(
 }
 
 export const middleware = createMiddleware(async (req) => {
+  const secret = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET;
+
+  const cookieNames = req.cookies.getAll().map(({ name }) => name);
+
   const token = (await getToken({
     req,
-    secret: authSecret()
+    secret,
+    secureCookie: req.nextUrl.protocol === 'https:'
   })) as Record<string, unknown> | null;
 
-  // probe — remove after confirming fix
-  console.info('middleware_actor_probe', {
+  console.info('middleware_token_probe', {
     path: req.nextUrl.pathname,
-    actorResolved: Boolean(token),
-    role: token?.role ?? null
+
+    cookieNames,
+    hasSessionCookie: cookieNames.some((name) =>
+      name.includes('next-auth.session-token')
+    ),
+
+    hasToken: Boolean(token),
+    tokenRole: token?.role ?? null,
+    tokenIsActive: token?.isActive ?? null,
+    hasTokenId: typeof token?.id === 'string' || typeof token?.sub === 'string',
+
+    hasNextAuthSecret: Boolean(process.env.NEXTAUTH_SECRET),
+    hasAuthSecret: Boolean(process.env.AUTH_SECRET),
+    secretsEqual:
+      Boolean(process.env.NEXTAUTH_SECRET) &&
+      Boolean(process.env.AUTH_SECRET) &&
+      process.env.NEXTAUTH_SECRET === process.env.AUTH_SECRET
   });
 
   return token;
