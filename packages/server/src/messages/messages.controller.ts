@@ -1,5 +1,8 @@
 import { Controller } from '../common/factories/controller.factory';
-import { requireActor } from '../common/middleware/auth.middleware';
+import {
+  requireActor,
+  requireConsent
+} from '../common/middleware/auth.middleware';
 import { parseJsonBody } from '../common/middleware/validation.middleware';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
@@ -25,6 +28,10 @@ export class MessageController extends Controller {
     this.controller.use('/messages', requireActor(['eif', 'admin']));
     this.controller.use('/chat-turn', requireActor(['eif', 'admin']));
     this.controller.use('/chat-turn/stream', requireActor(['eif', 'admin']));
+    this.controller.use('/messages/*', requireConsent());
+    this.controller.use('/messages', requireConsent());
+    this.controller.use('/chat-turn', requireConsent());
+    this.controller.use('/chat-turn/stream', requireConsent());
 
     return this.controller
       .get('/messages', async (c) => {

@@ -1,5 +1,8 @@
 import { Controller } from '../common/factories/controller.factory';
-import { requireActor } from '../common/middleware/auth.middleware';
+import {
+  requireActor,
+  requireConsent
+} from '../common/middleware/auth.middleware';
 import { parseJsonBody } from '../common/middleware/validation.middleware';
 import { z } from 'zod';
 
@@ -22,6 +25,8 @@ export class ConversationController extends Controller {
   routes() {
     this.controller.use('/conversations/*', requireActor(['eif', 'admin']));
     this.controller.use('/conversations', requireActor(['eif', 'admin']));
+    this.controller.use('/conversations/*', requireConsent());
+    this.controller.use('/conversations', requireConsent());
 
     return this.controller
       .get('/conversations', async (c) => {
