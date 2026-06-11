@@ -1,8 +1,8 @@
-export type AppRole = 'admin' | 'intern';
+export type AppRole = 'admin' | 'eif';
 
 export const ROLE_HOME: Record<AppRole, string> = {
   admin: '/admin',
-  intern: '/advisors'
+  eif: '/advisors'
 };
 
 const ROUTE_RULES: Array<{
@@ -10,8 +10,8 @@ const ROUTE_RULES: Array<{
   roles: AppRole[];
 }> = [
   { prefix: '/admin', roles: ['admin'] },
-  { prefix: '/advisors', roles: ['admin', 'intern'] },
-  { prefix: '/chat', roles: ['admin', 'intern'] }
+  { prefix: '/advisors', roles: ['admin', 'eif'] },
+  { prefix: '/chat', roles: ['admin', 'eif'] }
 ];
 
 function normalizeInternalPath(raw: string | null): string | null {

@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  if (role !== 'admin' && role !== 'intern') {
+  if (role !== 'admin' && role !== 'eif') {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
