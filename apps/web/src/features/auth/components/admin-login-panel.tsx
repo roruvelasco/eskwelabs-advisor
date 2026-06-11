@@ -115,19 +115,12 @@ export function AdminLoginPanel() {
     setErrors({});
     setIsEmailLoading(true);
     try {
-      const response = await signIn('credentials-admin', {
+      await signIn('credentials-admin', {
         email,
         password,
         callbackUrl: continueUrl,
-        redirect: false
+        redirect: true
       });
-
-      if (response?.ok && response.url) {
-        window.location.href = response.url;
-        return;
-      }
-
-      toast.error(errorMessages.CredentialsSignin ?? errorMessages.Default);
     } finally {
       setIsEmailLoading(false);
     }
