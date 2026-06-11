@@ -5,6 +5,7 @@ export interface Actor {
   email: string;
   role: ActorRole;
   isActive: boolean;
+  consentAcknowledgedAt?: Date | null;
 }
 
 export interface HonoEnv {

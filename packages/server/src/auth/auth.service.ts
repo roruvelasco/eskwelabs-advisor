@@ -13,7 +13,8 @@ export class AuthService {
       id: user.id,
       email: user.email,
       role: user.role,
-      isActive: user.isActive
+      isActive: user.isActive,
+      consentAcknowledgedAt: user.consentAcknowledgedAt
     };
   }
 
@@ -25,7 +26,8 @@ export class AuthService {
       id: user.id,
       email: user.email,
       role: user.role,
-      isActive: user.isActive
+      isActive: user.isActive,
+      consentAcknowledgedAt: user.consentAcknowledgedAt
     };
   }
 
@@ -41,7 +43,8 @@ export class AuthService {
       id: user.id,
       email: user.email,
       role: user.role,
-      isActive: user.isActive
+      isActive: user.isActive,
+      consentAcknowledgedAt: user.consentAcknowledgedAt
     };
   }
 }

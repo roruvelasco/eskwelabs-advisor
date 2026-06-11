@@ -28,7 +28,8 @@ describe('auth service', () => {
       id: user.id,
       email: user.email,
       role: 'eif',
-      isActive: true
+      isActive: true,
+      consentAcknowledgedAt: null
     });
   });
 
@@ -41,7 +42,8 @@ describe('auth service', () => {
       id: admin.id,
       email: admin.email,
       role: 'admin',
-      isActive: true
+      isActive: true,
+      consentAcknowledgedAt: null
     });
   });
 
@@ -74,7 +76,8 @@ describe('auth service', () => {
         id: user.id,
         email: user.email,
         role: 'eif',
-        isActive: true
+        isActive: true,
+        consentAcknowledgedAt: null
       });
     });
 

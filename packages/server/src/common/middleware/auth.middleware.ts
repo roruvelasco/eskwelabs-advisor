@@ -40,8 +40,25 @@ export function createAuthMiddleware(
       id: actor.id,
       email: actor.email,
       role: actor.role,
-      isActive: actor.isActive
+      isActive: actor.isActive,
+      consentAcknowledgedAt: actor.consentAcknowledgedAt
     });
+
+    await next();
+  };
+}
+
+export function requireConsent(): MiddlewareHandler {
+  return async (c, next) => {
+    const actor = c.get('actor');
+
+    if (!actor) {
+      throw unauthorized();
+    }
+
+    if (actor.role === 'eif' && !actor.consentAcknowledgedAt) {
+      throw forbidden('Monitoring notice acknowledgement is required');
+    }
 
     await next();
   };
