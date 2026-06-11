@@ -4,6 +4,7 @@ import type { TelemetryService } from '../telemetry/telemetry.service';
 import { CompiledSystemPromptBuilder } from './compiled-system-prompt.builder';
 import type { DnaDigestsRepository } from './dna-digests.repository';
 import type { DnaDigestRow } from './dna-digests.schema';
+import type { PromptIngestionService } from './prompt-ingestion.service';
 import type { PromptSnapshotsRepository } from './prompt-snapshots.repository';
 import type { PromptSnapshotRow } from './prompt-snapshots.schema';
 
@@ -27,7 +28,8 @@ export class PromptContextService implements PromptContextLoader {
     private dnaDigestsRepository: DnaDigestsRepository,
     private redisService: RedisService,
     private compiledSystemPromptBuilder: CompiledSystemPromptBuilder,
-    private telemetryService?: TelemetryService
+    private telemetryService?: TelemetryService,
+    private promptIngestionService?: PromptIngestionService
   ) {}
 
   private promptKey(advisorId: string) {
@@ -52,6 +54,27 @@ export class PromptContextService implements PromptContextLoader {
       cacheKeyType: 'advisor_prompt',
       advisorId
     });
+
+    if (this.promptIngestionService) {
+      try {
+        const refreshed =
+          await this.promptIngestionService.ingestAdvisorPrompt(advisorId);
+        await this.recordTelemetry('prompt_live_refresh', {
+          cacheKeyType: 'advisor_prompt',
+          advisorId,
+          status: refreshed.status,
+          hash: refreshed.snapshot.hash,
+          revision: refreshed.snapshot.revision
+        });
+        return refreshed.snapshot;
+      } catch (error) {
+        await this.recordTelemetry('prompt_live_refresh_failed', {
+          cacheKeyType: 'advisor_prompt',
+          advisorId,
+          code: this.errorCode(error)
+        });
+      }
+    }
 
     const active = await this.promptSnapshotsRepository.findActive(advisorId);
     if (active) {
@@ -89,6 +112,25 @@ export class PromptContextService implements PromptContextLoader {
       cacheKeyType: 'dna_digest'
     });
 
+    if (this.promptIngestionService) {
+      try {
+        const refreshed = await this.promptIngestionService.ingestDnaDigest();
+        await this.recordTelemetry('prompt_live_refresh', {
+          cacheKeyType: 'dna_digest',
+          status: refreshed.status,
+          hash: refreshed.digest.hash,
+          revision: refreshed.digest.revision,
+          sourceHash: refreshed.digest.sourceHash
+        });
+        return refreshed.digest;
+      } catch (error) {
+        await this.recordTelemetry('prompt_live_refresh_failed', {
+          cacheKeyType: 'dna_digest',
+          code: this.errorCode(error)
+        });
+      }
+    }
+
     const active = await this.dnaDigestsRepository.findActive();
     if (active) {
       await this.redisService.set(
@@ -122,6 +164,12 @@ export class PromptContextService implements PromptContextLoader {
     } catch {
       return;
     }
+  }
+
+  private errorCode(error: unknown) {
+    return error instanceof Error && 'code' in error
+      ? String(error.code)
+      : 'prompt_live_refresh_failed';
   }
 
   async getForAdvisor(advisorId: string) {

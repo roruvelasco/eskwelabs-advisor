@@ -267,7 +267,8 @@ export function createContainer() {
             c.get(DnaDigestsRepository),
             c.get(RedisService),
             c.get(CompiledSystemPromptBuilder),
-            c.get(TelemetryService)
+            c.get(TelemetryService),
+            c.get(PromptIngestionService)
           );
         }
 
