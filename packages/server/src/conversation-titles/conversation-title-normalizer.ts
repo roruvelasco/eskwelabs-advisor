@@ -12,6 +12,7 @@ const BULLET_PATTERN = /^[-*+]\s/;
 const JSON_OBJECT_PATTERN = /^\s*\{.*\}\s*$/;
 const JSON_ARRAY_PATTERN = /^\s*\[.*\]\s*$/;
 const LINEBREAK_PATTERN = /[\r\n]/;
+const STUB_PATTERN = /^Draft response for:/i;
 const LEADING_TITLE_PREFIX = /^title:\s*/i;
 const SURROUNDING_QUOTES = /^(['"])(.*)\1$/s;
 const TRAILING_PUNCTUATION = /[.!?]+$/;
@@ -39,6 +40,7 @@ export function normalizeGeneratedConversationTitle(
 
   if (title.length === 0) return null;
 
+  if (STUB_PATTERN.test(title)) return null;
   if (BACKTICK_PATTERN.test(title)) return null;
   if (HEADING_PATTERN.test(title)) return null;
   if (BULLET_PATTERN.test(title)) return null;
