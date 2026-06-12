@@ -11,7 +11,7 @@ export interface Message {
   completionTokens?: number;
   estimatedCostUsd?: string;
   latencyMs?: number;
-  status: 'ok' | 'blocked' | 'error';
+  status: 'ok' | 'blocked' | 'error' | 'pending' | 'streaming';
   blockReason?: string;
   promptDocRevision?: string;
   dnaDigestVersion?: string;
@@ -29,6 +29,7 @@ export function listMessages(conversationId: string) {
 export function createChatTurn(input: {
   conversationId: string;
   content: string;
+  clientTurnId?: string;
 }) {
   return apiClient['chat-turn']
     .$post({
@@ -37,13 +38,22 @@ export function createChatTurn(input: {
     .then((response) => response.json());
 }
 
+export type StreamEvent =
+  | { type: 'conversation.ready'; data: { conversationId: string } }
+  | { type: 'chunk'; content: string }
+  | { type: 'final'; data: unknown }
+  | { type: 'error'; data: { error: { code: string; message: string } } };
+
+export type StreamEventHandler = (event: StreamEvent) => void;
+
 export async function streamChatTurn(
-  input: { conversationId: string; content: string },
-  onEvent: (
-    event:
-      | { type: 'chunk'; content: string }
-      | { type: 'final' | 'error'; data: unknown }
-  ) => void
+  input: {
+    conversationId?: string;
+    advisorId?: string;
+    content: string;
+    clientTurnId?: string;
+  },
+  onEvent: StreamEventHandler
 ) {
   const response = await fetch('/api/chat-turn/stream', {
     method: 'POST',
@@ -84,10 +94,14 @@ export async function streamChatTurn(
         })
         .join('\n');
 
-      if (type === 'chunk') {
-        onEvent({ type, content: data });
-      } else if (type === 'final' || type === 'error') {
-        onEvent({ type, data: JSON.parse(data) as unknown });
+      if (type === 'conversation.ready') {
+        onEvent({ type: 'conversation.ready', data: JSON.parse(data) });
+      } else if (type === 'chunk') {
+        onEvent({ type: 'chunk', content: data });
+      } else if (type === 'final') {
+        onEvent({ type: 'final', data: JSON.parse(data) });
+      } else if (type === 'error') {
+        onEvent({ type: 'error', data: JSON.parse(data) });
       }
     }
   }

@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -18,7 +18,6 @@ import { ChatComposer } from './chat-composer';
 import { ChatMessages, type Message } from './chat-messages';
 import { messagesQuery } from '@/lib/domains/chat/queries';
 import { streamChatTurn } from '@/lib/domains/chat/api';
-import { createConversation } from '@/lib/domains/conversations/api';
 import { conversationQuery } from '@/lib/domains/conversations/queries';
 import { advisorsQuery } from '@/lib/domains/advisors/queries';
 
@@ -46,6 +45,12 @@ function ChatLayoutInner() {
   const [liveConversationId, setLiveConversationId] = useState<string>();
   const [stableSidebarAdvisorId, setStableSidebarAdvisorId] =
     useState<string>();
+
+  const conversationRef = useRef<string | null>(conversationId);
+
+  useEffect(() => {
+    conversationRef.current = conversationId;
+  }, [conversationId]);
 
   useEffect(() => {
     if (!conversationId && !advisorId) router.replace('/advisors');
@@ -84,20 +89,10 @@ function ChatLayoutInner() {
 
   const sendMutation = useMutation({
     mutationFn: async (content: string) => {
-      let cid = conversationId;
-      if (!cid) {
-        if (!advisorId) throw new Error('Advisor is required');
-        const result = await createConversation({
-          advisorId,
-          title: content.slice(0, 80)
-        });
-        cid = (result as { data: { id: string } }).data.id;
-        router.replace(`/chat?conversation=${cid}`);
-      }
-
-      setLiveConversationId(cid);
+      const clientTurnId = crypto.randomUUID();
       const userTempId = `user:${crypto.randomUUID()}`;
       const assistantTempId = `assistant:${crypto.randomUUID()}`;
+
       setLiveMessages((current) => [
         ...current,
         { id: userTempId, role: 'user', content, status: 'complete' },
@@ -110,55 +105,75 @@ function ChatLayoutInner() {
       ]);
 
       let finalData: StreamFinalData | undefined;
-      await streamChatTurn({ conversationId: cid, content }, (event) => {
-        if (event.type === 'chunk') {
-          setLiveMessages((current) =>
-            current.map((message) =>
-              message.id === assistantTempId
-                ? {
-                    ...message,
-                    content: message.content + event.content,
-                    status: 'streaming'
-                  }
-                : message
-            )
-          );
-          return;
+      let createdConversationId: string | undefined;
+
+      await streamChatTurn(
+        {
+          ...(conversationId ? { conversationId } : { advisorId: advisorId! }),
+          content,
+          clientTurnId
+        },
+        (event) => {
+          if (event.type === 'conversation.ready') {
+            createdConversationId = event.data.conversationId;
+            router.replace(`/chat?conversation=${createdConversationId}`, {
+              scroll: false
+            });
+            setLiveConversationId(createdConversationId);
+            return;
+          }
+
+          if (event.type === 'chunk') {
+            setLiveMessages((current) =>
+              current.map((message) =>
+                message.id === assistantTempId
+                  ? {
+                      ...message,
+                      content: message.content + event.content,
+                      status: 'streaming'
+                    }
+                  : message
+              )
+            );
+            return;
+          }
+
+          if (event.type === 'final') {
+            finalData = event.data as StreamFinalData;
+            setLiveMessages((current) =>
+              current.map((message) => {
+                if (message.id === userTempId) {
+                  return {
+                    id: finalData!.userMessage.id,
+                    role: 'user',
+                    content: finalData!.userMessage.content,
+                    status: 'complete'
+                  };
+                }
+
+                if (message.id === assistantTempId) {
+                  return {
+                    id: finalData!.assistantMessage.id,
+                    role: 'advisor',
+                    content: finalData!.assistantMessage.content,
+                    status: 'complete'
+                  };
+                }
+
+                return message;
+              })
+            );
+            return;
+          }
+
+          if (event.type === 'error') {
+            throw new Error(event.data?.error?.message ?? 'Chat stream failed');
+          }
         }
-
-        if (event.type === 'final') {
-          finalData = event.data as StreamFinalData;
-          setLiveMessages((current) =>
-            current.map((message) => {
-              if (message.id === userTempId) {
-                return {
-                  id: finalData!.userMessage.id,
-                  role: 'user',
-                  content: finalData!.userMessage.content,
-                  status: 'complete'
-                };
-              }
-
-              if (message.id === assistantTempId) {
-                return {
-                  id: finalData!.assistantMessage.id,
-                  role: 'advisor',
-                  content: finalData!.assistantMessage.content,
-                  status: 'complete'
-                };
-              }
-
-              return message;
-            })
-          );
-          return;
-        }
-
-        throw new Error('Chat stream failed');
-      });
+      );
 
       if (!finalData) throw new Error('Chat stream ended without final data');
-      return cid;
+      return createdConversationId ?? conversationId ?? '';
     },
     onSuccess: async (cid) => {
       await queryClient.invalidateQueries({ queryKey: ['messages', cid] });
@@ -194,9 +209,9 @@ function ChatLayoutInner() {
     content: msg.content
   }));
 
-  const liveBelongsToCurrent =
-    liveConversationId &&
-    (!conversationId || liveConversationId === conversationId);
+  const liveBelongsToCurrent = conversationId
+    ? true
+    : Boolean(liveConversationId || sendMutation.isPending);
   const liveIds = new Set(liveMessages.map((m) => m.id));
   const messages = [
     ...(conversationId ? loadedMessages.filter((m) => !liveIds.has(m.id)) : []),
