@@ -16,6 +16,8 @@ import {
   type LlmProvider
 } from '../adapters/advisor-adapters';
 import { AdvisorController } from '../advisors/advisors.controller';
+import { AdvisorRuntimeVersionRepository } from '../advisors/advisor-runtime.repository';
+import { AdvisorRuntimeService } from '../advisors/advisor-runtime.service';
 import { AdvisorsRepository } from '../advisors/advisors.repository';
 import { AdvisorsSerializer } from '../advisors/advisors.serializer';
 import { AdvisorsService } from '../advisors/advisors.service';
@@ -34,6 +36,7 @@ import { MessagesSerializer } from '../messages/messages.serializer';
 import { MessagesService } from '../messages/messages.service';
 import { ModelConfigController } from '../model-config/model-config.controller';
 import { ModelConfigRepository } from '../model-config/model-config.repository';
+import { ModelRateService } from '../model-config/model-rate.service';
 import { ModelConfigSerializer } from '../model-config/model-config.serializer';
 import { ModelConfigService } from '../model-config/model-config.service';
 import { PromptCacheController } from '../prompt-cache/prompt-cache.controller';
@@ -116,6 +119,11 @@ export function createContainer() {
         const env = c.get(SERVER_ENV);
         const providers = new Map<string, LlmProvider>();
 
+        if (env.LLM_PROVIDER_MODE === 'deterministic') {
+          providers.set('deterministic', new DeterministicLlmProvider());
+          return new RoutingLlmProvider(providers);
+        }
+
         if (env.GROQ_API_KEY) {
           providers.set('groq', new GroqLlmProvider(env));
         }
@@ -124,7 +132,7 @@ export function createContainer() {
           providers.set('gemini', new GeminiLlmProvider(env));
         }
 
-        if (providers.size === 0) {
+        if (env.LLM_PROVIDER_MODE === 'auto' && providers.size === 0) {
           providers.set('deterministic', new DeterministicLlmProvider());
         }
 
@@ -138,6 +146,11 @@ export function createContainer() {
     .bind({
       provide: AdvisorsRepository,
       useFactory: (c) => new AdvisorsRepository(c.get(DrizzleService))
+    })
+    .bind({
+      provide: AdvisorRuntimeVersionRepository,
+      useFactory: (c) =>
+        new AdvisorRuntimeVersionRepository(c.get(DrizzleService))
     })
     .bind({
       provide: ConversationsRepository,
@@ -210,16 +223,31 @@ export function createContainer() {
     })
     .bind({ provide: UsersSerializer, useFactory: () => new UsersSerializer() })
     .bind({
+      provide: ModelRateService,
+      useFactory: () => new ModelRateService()
+    })
+    .bind({
       provide: AdvisorsService,
       useFactory: (c) => new AdvisorsService(c.get(AdvisorsRepository))
+    })
+    .bind({
+      provide: AdvisorRuntimeService,
+      useFactory: (c) =>
+        new AdvisorRuntimeService(
+          c.get(AdvisorsRepository),
+          c.get(AdvisorRuntimeVersionRepository),
+          c.get(ModelConfigService),
+          c.get(ModelRateService),
+          c.get(PROMPT_CONTEXT_LOADER)
+        )
     })
     .bind({
       provide: ConversationsService,
       useFactory: (c) =>
         new ConversationsService(
           c.get(ConversationsRepository),
-          c.get(AdvisorsService),
-          c.get(ModelConfigService)
+          c.get(AdvisorRuntimeService),
+          c.get(AdvisorsService)
         )
     })
     .bind({
@@ -261,6 +289,25 @@ export function createContainer() {
       provide: PROMPT_CONTEXT_LOADER,
       useFactory: (c) => {
         const env = c.get(SERVER_ENV);
+        const mode = env.PROMPT_PROVIDER_MODE;
+
+        if (mode === 'deterministic' || env.RUNTIME_PROFILE !== 'production') {
+          return new DeterministicPromptContextService(
+            c.get(CompiledSystemPromptBuilder)
+          );
+        }
+
+        if (mode === 'snapshot') {
+          return new PromptContextService(
+            c.get(PromptSnapshotsRepository),
+            c.get(DnaDigestsRepository),
+            c.get(RedisService),
+            c.get(CompiledSystemPromptBuilder),
+            c.get(TelemetryService),
+            c.get(PromptIngestionService)
+          );
+        }
+
         if (env.GOOGLE_DOCS_SERVICE_ACCOUNT_JSON) {
           return new PromptContextService(
             c.get(PromptSnapshotsRepository),
@@ -300,7 +347,8 @@ export function createContainer() {
         new MessagesService(
           c.get(MessagesRepository),
           c.get(ConversationsService),
-          c.get(ModelConfigService),
+          c.get(ModelRateService),
+          c.get(AdvisorRuntimeService),
           c.get(PROMPT_CONTEXT_LOADER),
           c.get(LLM_PROVIDER),
           c.get(CostCapEnforcer),
@@ -324,7 +372,11 @@ export function createContainer() {
     .bind({
       provide: AdvisorController,
       useFactory: (c) =>
-        new AdvisorController(c.get(AdvisorsService), c.get(AdvisorsSerializer))
+        new AdvisorController(
+          c.get(AdvisorsService),
+          c.get(AdvisorRuntimeService),
+          c.get(AdvisorsSerializer)
+        )
     })
     .bind({
       provide: ConversationController,

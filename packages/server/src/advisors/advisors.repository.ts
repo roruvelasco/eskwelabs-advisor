@@ -11,6 +11,16 @@ export class AdvisorsRepository extends Repository {
       .where(eq(advisorsTable.isActive, true));
   }
 
+  async findById(id: string): Promise<Advisor | undefined> {
+    const rows = await this.drizzle.db
+      .select()
+      .from(advisorsTable)
+      .where(eq(advisorsTable.id, id))
+      .limit(1);
+
+    return rows[0];
+  }
+
   async findActive(id: string): Promise<Advisor | undefined> {
     const rows = await this.drizzle.db
       .select()

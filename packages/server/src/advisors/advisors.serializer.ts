@@ -5,17 +5,37 @@ export class AdvisorsSerializer {
       name: string;
       description: string;
       isActive: boolean;
+      status: string;
+      activeRuntimeVersionId: string | null;
       createdAt: Date;
+      availability?: {
+        status: 'available' | 'unavailable';
+        reasons?: string[];
+      };
     }>
   ) {
     return {
-      data: rows.map(({ id, name, description, isActive, createdAt }) => ({
-        id,
-        name,
-        description,
-        isActive,
-        createdAt
-      }))
+      data: rows.map(
+        ({
+          id,
+          name,
+          description,
+          isActive,
+          status,
+          activeRuntimeVersionId,
+          createdAt,
+          availability
+        }) => ({
+          id,
+          name,
+          description,
+          isActive,
+          status,
+          activeRuntimeVersionId,
+          createdAt,
+          availability
+        })
+      )
     };
   }
 }
