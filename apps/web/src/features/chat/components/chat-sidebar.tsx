@@ -1,13 +1,27 @@
 'use client';
 
-import { ChevronUp, LogOut, Plus, UserRound } from 'lucide-react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
+import {
+  ChevronUp,
+  LogOut,
+  Plus,
+  UserRound,
+  EllipsisVertical,
+  Trash2
+} from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import {
   AppBrand,
   Avatar,
   AvatarFallback,
   Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -21,11 +35,14 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarTrigger,
+  toast,
   useSidebar
 } from '@eskwelabs-advisor/ui';
+import { deleteConversation } from '@/lib/domains/conversations/api';
 import {
   conversationQuery,
   conversationsQuery
@@ -43,12 +60,17 @@ type SidebarConversation = {
 
 function RecentConversationButton({
   conversation,
-  onClick
+  isActive,
+  onClick,
+  onDelete
 }: {
   conversation: SidebarConversation;
+  isActive: boolean;
   onClick: () => void;
+  onDelete: () => void;
 }) {
   const { isMobile, setOpenMobile } = useSidebar();
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const handleClick = () => {
     if (isMobile) {
@@ -59,13 +81,41 @@ function RecentConversationButton({
 
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton asChild tooltip={conversation.title}>
+      <SidebarMenuButton
+        asChild
+        tooltip={conversation.title}
+        isActive={isActive}
+      >
         <button type="button" onClick={handleClick}>
           <span className="block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
             {conversation.title}
           </span>
         </button>
       </SidebarMenuButton>
+
+      <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
+        <DropdownMenuTrigger asChild>
+          <SidebarMenuAction
+            showOnHover
+            aria-label={`Options for ${conversation.title}`}
+            className={!isActive ? 'hidden' : undefined}
+          >
+            <EllipsisVertical className="size-4" />
+          </SidebarMenuAction>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="right" align="start">
+          <DropdownMenuItem
+            variant="destructive"
+            onSelect={() => {
+              setDropdownOpen(false);
+              onDelete();
+            }}
+          >
+            <Trash2 className="size-4" />
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </SidebarMenuItem>
   );
 }
@@ -93,6 +143,34 @@ export function ChatSidebar({
     conversations.find(
       (conversation) => conversation.id === currentConversationId
     )?.advisorId;
+
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteConversation(id),
+    onSuccess: (_, deletedId) => {
+      queryClient.invalidateQueries(conversationsQuery(currentAdvisorId));
+      queryClient.removeQueries({
+        queryKey: conversationQuery(deletedId).queryKey
+      });
+      toast.success('Conversation deleted');
+      if (currentConversationId === deletedId) {
+        router.push(
+          newChatAdvisorId ? `/chat?advisor=${newChatAdvisorId}` : '/advisors'
+        );
+      }
+    },
+    onError: () => {
+      toast.error('Failed to delete conversation');
+    }
+  });
+
+  const handleDeleteConfirm = () => {
+    if (!pendingDeleteId) return;
+    const idToDelete = pendingDeleteId;
+    setPendingDeleteId(null);
+    deleteMutation.mutate(idToDelete);
+  };
 
   const closeMobileSidebar = () => {
     if (isMobile) {
@@ -176,7 +254,9 @@ export function ChatSidebar({
                   <RecentConversationButton
                     key={conversation.id}
                     conversation={conversation}
+                    isActive={conversation.id === currentConversationId}
                     onClick={() => handleConversationSelection(conversation)}
+                    onDelete={() => setPendingDeleteId(conversation.id)}
                   />
                 ))}
               </SidebarMenu>
@@ -219,6 +299,39 @@ export function ChatSidebar({
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarFooter>
+
+      <Dialog
+        open={pendingDeleteId !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDeleteId(null);
+        }}
+      >
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Delete conversation?</DialogTitle>
+            <DialogDescription>
+              This conversation and all its messages will be permanently
+              deleted. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setPendingDeleteId(null)}
+              disabled={deleteMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteConfirm}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Sidebar>
   );
 }

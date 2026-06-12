@@ -26,3 +26,9 @@ export function createConversation(input: {
     })
     .then((response) => response.json());
 }
+
+export function deleteConversation(id: string) {
+  return apiClient.conversations[':id'].$delete({
+    param: { id }
+  });
+}
