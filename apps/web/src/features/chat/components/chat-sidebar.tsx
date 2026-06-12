@@ -97,10 +97,13 @@ function RecentConversationButton({
         <DropdownMenuTrigger asChild>
           <SidebarMenuAction
             showOnHover
+            asChild
             aria-label={`Options for ${conversation.title}`}
             className={!isActive ? 'hidden' : undefined}
           >
-            <EllipsisVertical className="size-4" />
+            <button type="button">
+              <EllipsisVertical className="size-4" />
+            </button>
           </SidebarMenuAction>
         </DropdownMenuTrigger>
         <DropdownMenuContent side="right" align="start">
