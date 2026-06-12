@@ -1,4 +1,4 @@
-import { boolean, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { boolean, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 export const advisorsTable = pgTable('advisors', {
   id: text('id').primaryKey(),
@@ -6,6 +6,8 @@ export const advisorsTable = pgTable('advisors', {
   description: text('description').notNull().default(''),
   promptDocId: text('prompt_doc_id'),
   isActive: boolean('is_active').notNull().default(true),
+  status: text('status').notNull().default('active'),
+  activeRuntimeVersionId: uuid('active_runtime_version_id'),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow()

@@ -10,6 +10,7 @@ export const conversationsTable = pgTable('conversations', {
   advisorId: text('advisor_id')
     .notNull()
     .references(() => advisorsTable.id),
+  advisorRuntimeVersionId: uuid('advisor_runtime_version_id'),
   title: text('title').notNull().default('Untitled conversation'),
   status: text('status').notNull().default('active'),
   createdAt: timestamp('created_at', { withTimezone: true })

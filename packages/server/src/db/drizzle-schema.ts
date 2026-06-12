@@ -1,5 +1,6 @@
 export * from '../users/users.schema';
 export * from '../advisors/advisors.schema';
+export * from '../advisors/advisor-runtime.schema';
 export * from '../conversations/conversations.schema';
 export * from '../messages/messages.schema';
 export * from '../model-config/model-config.schema';
