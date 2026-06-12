@@ -16,23 +16,34 @@ import { cn } from '@/lib/utils';
 import { ChatSidebar } from './chat-sidebar';
 import { ChatComposer } from './chat-composer';
 import { ChatMessages, type Message } from './chat-messages';
-import { messagesQuery } from '@/lib/domains/chat/queries';
+import { messagesQuery, messagesQueryKey } from '@/lib/domains/chat/queries';
 import { streamChatTurn } from '@/lib/domains/chat/api';
 import { conversationQuery } from '@/lib/domains/conversations/queries';
 import { advisorsQuery } from '@/lib/domains/advisors/queries';
 
 type StreamFinalData = {
-  userMessage: {
-    id: string;
-    role: string;
-    content: string;
-  };
-  assistantMessage: {
-    id: string;
-    role: string;
-    content: string;
-  };
+  userMessage: { id: string; role: string; content: string };
+  assistantMessage: { id: string; role: string; content: string };
 };
+
+type CacheMessage = {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  status?: string;
+};
+
+type CacheData = { data: CacheMessage[] };
+
+function messagesDraftKey(clientTurnId: string) {
+  return ['messages', 'draft', clientTurnId] as const;
+}
+
+function toDisplayStatus(status?: string): Message['status'] {
+  if (!status || status === 'ok') return 'complete';
+  if (status === 'blocked') return 'error';
+  return status as Message['status'];
+}
 
 function ChatLayoutInner() {
   const router = useRouter();
@@ -41,16 +52,13 @@ function ChatLayoutInner() {
   const conversationId = searchParams.get('conversation');
   const advisorId = searchParams.get('advisor');
   const { open, isMobile, openMobile } = useSidebar();
-  const [liveMessages, setLiveMessages] = useState<Message[]>([]);
-  const [liveConversationId, setLiveConversationId] = useState<string>();
   const [stableSidebarAdvisorId, setStableSidebarAdvisorId] =
     useState<string>();
-
-  const conversationRef = useRef<string | null>(conversationId);
-
-  useEffect(() => {
-    conversationRef.current = conversationId;
-  }, [conversationId]);
+  const streamRef = useRef<{
+    clientTurnId: string;
+    assistantTempId: string;
+    createdConversationId?: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!conversationId && !advisorId) router.replace('/advisors');
@@ -93,16 +101,30 @@ function ChatLayoutInner() {
       const userTempId = `user:${crypto.randomUUID()}`;
       const assistantTempId = `assistant:${crypto.randomUUID()}`;
 
-      setLiveMessages((current) => [
-        ...current,
+      streamRef.current = { clientTurnId, assistantTempId };
+
+      const optimisticTurn: CacheMessage[] = [
         { id: userTempId, role: 'user', content, status: 'complete' },
         {
           id: assistantTempId,
-          role: 'advisor',
+          role: 'assistant',
           content: '',
           status: 'thinking'
         }
-      ]);
+      ];
+
+      if (conversationId) {
+        queryClient.setQueryData<CacheData>(
+          messagesQueryKey(conversationId),
+          (prev) => ({
+            data: [...(prev?.data ?? []), ...optimisticTurn]
+          })
+        );
+      } else {
+        queryClient.setQueryData<CacheData>(messagesDraftKey(clientTurnId), {
+          data: optimisticTurn
+        });
+      }
 
       let finalData: StreamFinalData | undefined;
       let createdConversationId: string | undefined;
@@ -116,58 +138,83 @@ function ChatLayoutInner() {
         (event) => {
           if (event.type === 'conversation.ready') {
             createdConversationId = event.data.conversationId;
+            streamRef.current!.createdConversationId = createdConversationId;
+
+            const draftData = queryClient.getQueryData<CacheData>(
+              messagesDraftKey(clientTurnId)
+            );
+            if (draftData) {
+              queryClient.setQueryData<CacheData>(
+                messagesQueryKey(createdConversationId),
+                draftData
+              );
+            }
+
             router.replace(`/chat?conversation=${createdConversationId}`, {
               scroll: false
             });
-            setLiveConversationId(createdConversationId);
             return;
           }
 
           if (event.type === 'chunk') {
-            setLiveMessages((current) =>
-              current.map((message) =>
-                message.id === assistantTempId
-                  ? {
-                      ...message,
-                      content: message.content + event.content,
-                      status: 'streaming'
-                    }
-                  : message
-              )
-            );
+            const key = createdConversationId ?? conversationId;
+            const cacheKey = key
+              ? messagesQueryKey(key)
+              : messagesDraftKey(clientTurnId);
+            queryClient.setQueryData<CacheData>(cacheKey, (prev) => {
+              if (!prev) return prev;
+              return {
+                data: prev.data.map((msg) =>
+                  msg.id === assistantTempId
+                    ? {
+                        ...msg,
+                        content: msg.content + event.content,
+                        status: 'streaming'
+                      }
+                    : msg
+                )
+              };
+            });
             return;
           }
 
           if (event.type === 'final') {
             finalData = event.data as StreamFinalData;
-            setLiveMessages((current) =>
-              current.map((message) => {
-                if (message.id === userTempId) {
-                  return {
-                    id: finalData!.userMessage.id,
-                    role: 'user',
-                    content: finalData!.userMessage.content,
-                    status: 'complete'
-                  };
-                }
-
-                if (message.id === assistantTempId) {
-                  return {
-                    id: finalData!.assistantMessage.id,
-                    role: 'advisor',
-                    content: finalData!.assistantMessage.content,
-                    status: 'complete'
-                  };
-                }
-
-                return message;
-              })
-            );
+            const key = createdConversationId ?? conversationId;
+            const cacheKey = key
+              ? messagesQueryKey(key)
+              : messagesDraftKey(clientTurnId);
+            queryClient.setQueryData<CacheData>(cacheKey, (prev) => {
+              if (!prev) return prev;
+              return {
+                data: prev.data.map((msg) => {
+                  if (msg.id === userTempId) {
+                    return {
+                      ...msg,
+                      id: finalData!.userMessage.id,
+                      status: 'complete'
+                    };
+                  }
+                  if (msg.id === assistantTempId) {
+                    return {
+                      ...msg,
+                      id: finalData!.assistantMessage.id,
+                      content: finalData!.assistantMessage.content,
+                      status: 'complete'
+                    };
+                  }
+                  return msg;
+                })
+              };
+            });
             return;
           }
 
           if (event.type === 'error') {
-            throw new Error(event.data?.error?.message ?? 'Chat stream failed');
+            throw new Error(
+              (event.data as { error?: { message?: string } })?.error
+                ?.message ?? 'Chat stream failed'
+            );
           }
         }
       );
@@ -178,47 +225,48 @@ function ChatLayoutInner() {
     onSuccess: async (cid) => {
       await queryClient.invalidateQueries({ queryKey: ['messages', cid] });
       await queryClient.invalidateQueries({ queryKey: ['conversations'] });
-      setLiveMessages([]);
-      setLiveConversationId(undefined);
+      streamRef.current = null;
     },
     onError: () => {
-      setLiveMessages((current) =>
-        current.map((message) =>
-          message.role === 'advisor' &&
-          (message.status === 'thinking' || message.status === 'streaming')
-            ? {
-                ...message,
-                content: message.content || 'Request failed.',
-                status: 'error'
-              }
-            : message
-        )
-      );
+      const info = streamRef.current;
+      if (!info) return;
+
+      const liveKey = info.createdConversationId ?? conversationId;
+      const cacheKey = liveKey
+        ? messagesQueryKey(liveKey)
+        : messagesDraftKey(info.clientTurnId);
+
+      queryClient.setQueryData<CacheData>(cacheKey, (prev) => {
+        if (!prev) return prev;
+        return {
+          data: prev.data.map((msg) =>
+            msg.id === info.assistantTempId
+              ? {
+                  ...msg,
+                  content: msg.content || 'Request failed.',
+                  status: 'error'
+                }
+              : msg
+          )
+        };
+      });
+
+      streamRef.current = null;
     }
   });
 
   const loadedMessages: Message[] = (
-    (messagesResponse?.data ?? []) as Array<{
-      id: string;
-      role: string;
-      content: string;
-    }>
+    (messagesResponse?.data ?? []) as CacheMessage[]
   ).map((msg) => ({
     id: msg.id,
     role: msg.role === 'assistant' ? 'advisor' : 'user',
-    content: msg.content
+    content: msg.content,
+    status: toDisplayStatus(msg.status)
   }));
 
-  const liveBelongsToCurrent = conversationId
-    ? true
-    : Boolean(liveConversationId || sendMutation.isPending);
-  const liveIds = new Set(liveMessages.map((m) => m.id));
-  const messages = [
-    ...(conversationId ? loadedMessages.filter((m) => !liveIds.has(m.id)) : []),
-    ...(liveBelongsToCurrent ? liveMessages : [])
-  ];
+  const hasCachedData = loadedMessages.length > 0;
   const triggerHidden = isMobile ? openMobile : open;
-  const hasMessages = messages.length > 0 || sendMutation.isPending;
+  const hasMessages = loadedMessages.length > 0 || sendMutation.isPending;
 
   const handleSend = useCallback(
     (text: string) => {
@@ -260,13 +308,13 @@ function ChatLayoutInner() {
             )}
           </header>
 
-          {isLoading ? (
+          {isLoading && !hasCachedData && !sendMutation.isPending ? (
             <div className="flex min-h-0 flex-1 items-center justify-center">
               <p className="text-muted-foreground text-sm">
                 Loading messages...
               </p>
             </div>
-          ) : isError ? (
+          ) : isError && !hasCachedData ? (
             <div className="flex min-h-0 flex-1 items-center justify-center">
               <p className="text-muted-foreground text-sm">
                 Could not load messages.
@@ -274,7 +322,7 @@ function ChatLayoutInner() {
             </div>
           ) : hasMessages ? (
             <>
-              <ChatMessages messages={messages} />
+              <ChatMessages messages={loadedMessages} />
               <div className="border-border/50 shrink-0 border-t p-3">
                 <ChatComposer
                   disabled={sendMutation.isPending}
