@@ -45,9 +45,6 @@ export function ChatMessages({ messages }: { messages: Message[] }) {
                   className="flex items-center gap-2"
                 >
                   <DotWave size={24} speed={1} color="currentColor" />
-                  <span className="text-muted-foreground text-sm font-medium">
-                    Thinking...
-                  </span>
                 </div>
               ) : (
                 <MessageResponse isAnimating={msg.status === 'streaming'}>
