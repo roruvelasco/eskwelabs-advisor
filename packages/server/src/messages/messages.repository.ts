@@ -1,7 +1,11 @@
-import { asc, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 
 import { Repository } from '../common/factories/repository.factory';
-import { conversationsTable } from '../conversations/conversations.schema';
+import type { DbTransaction } from '../db/drizzle.service';
+import {
+  conversationsTable,
+  type ConversationTitleSource
+} from '../conversations/conversations.schema';
 import { messagesTable, type Message } from './messages.schema';
 
 export interface MessageRow {
@@ -76,6 +80,7 @@ export class MessagesRepository extends Repository {
     userId: string;
     advisorId: string;
     title: string;
+    titleSource: ConversationTitleSource;
     advisorRuntimeVersionId?: string | null;
   }) {
     const rows = await this.drizzle.db
@@ -84,6 +89,7 @@ export class MessagesRepository extends Repository {
         userId: input.userId,
         advisorId: input.advisorId,
         title: input.title,
+        titleSource: input.titleSource,
         advisorRuntimeVersionId: input.advisorRuntimeVersionId ?? null,
         status: 'active'
       })
@@ -101,6 +107,7 @@ export class MessagesRepository extends Repository {
     conversationInput: {
       advisorId: string;
       title: string;
+      titleSource: ConversationTitleSource;
       advisorRuntimeVersionId?: string;
     },
     userMessage: MessageCreateInput,
@@ -114,6 +121,7 @@ export class MessagesRepository extends Repository {
           advisorId: conversationInput.advisorId,
           advisorRuntimeVersionId: conversationInput.advisorRuntimeVersionId,
           title: conversationInput.title,
+          titleSource: conversationInput.titleSource,
           status: 'active'
         })
         .returning();
@@ -149,21 +157,79 @@ export class MessagesRepository extends Repository {
     });
   }
 
+  async findSuccessfulExchangeByIds(input: {
+    conversationId: string;
+    userMessageId: string;
+    assistantMessageId: string;
+  }): Promise<{
+    userMessage: MessageRow;
+    assistantMessage: MessageRow;
+  } | null> {
+    const rows = await this.drizzle.db
+      .select()
+      .from(messagesTable)
+      .where(
+        and(
+          eq(messagesTable.conversationId, input.conversationId),
+          inArray(messagesTable.id, [
+            input.userMessageId,
+            input.assistantMessageId
+          ])
+        )
+      )
+      .limit(2);
+
+    if (rows.length !== 2) return null;
+
+    const userMsg = rows.find(
+      (r) =>
+        r.id === input.userMessageId && r.role === 'user' && r.status === 'ok'
+    );
+    const assistantMsg = rows.find(
+      (r) =>
+        r.id === input.assistantMessageId &&
+        r.role === 'assistant' &&
+        r.status === 'ok'
+    );
+
+    if (!userMsg || !assistantMsg) return null;
+
+    return {
+      userMessage: toRow(userMsg),
+      assistantMessage: toRow(assistantMsg)
+    };
+  }
+
   async createSuccessfulTurn(
     userMessage: MessageCreateInput,
     assistantMessage: MessageCreateInput
   ) {
-    return this.createTurn(userMessage, assistantMessage);
+    return this.drizzle.db.transaction((tx) =>
+      this.createSuccessfulTurnInTransaction(tx, userMessage, assistantMessage)
+    );
   }
 
-  async createErroredTurn(
+  async createSuccessfulTurnInTransaction(
+    tx: DbTransaction,
     userMessage: MessageCreateInput,
     assistantMessage: MessageCreateInput
   ) {
-    return this.createTurn(userMessage, assistantMessage);
+    const userRows = await tx
+      .insert(messagesTable)
+      .values(userMessage)
+      .returning();
+    const assistantRows = await tx
+      .insert(messagesTable)
+      .values(assistantMessage)
+      .returning();
+
+    return {
+      userMessage: toRow(userRows[0]),
+      assistantMessage: toRow(assistantRows[0])
+    };
   }
 
-  private async createTurn(
+  async createErroredTurn(
     userMessage: MessageCreateInput,
     assistantMessage: MessageCreateInput
   ) {

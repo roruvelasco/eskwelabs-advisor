@@ -4,6 +4,8 @@ import { AdvisorRuntimeService } from '../advisors/advisor-runtime.service';
 import { forbidden, notFound } from '../common/http/http-exception';
 import type { Actor } from '../common/utils/hono';
 
+const BLANK_TITLE_RE = /^\s*$/;
+
 export class ConversationsService {
   constructor(
     private conversationsRepository: ConversationsRepository,
@@ -32,11 +34,32 @@ export class ConversationsService {
       input.advisorId
     );
 
+    const hasTitle =
+      input.title !== undefined && !BLANK_TITLE_RE.test(input.title);
+
     return this.conversationsRepository.create({
       userId: actor.id,
       advisorId: input.advisorId,
-      title: input.title ?? 'Untitled conversation',
+      title: hasTitle ? input.title!.trim() : 'Untitled conversation',
+      titleSource: hasTitle ? 'manual' : 'fallback',
       advisorRuntimeVersionId: runtime.runtimeVersionId
+    });
+  }
+
+  async createImplicit(
+    actor: Actor,
+    input: {
+      advisorId: string;
+      fallbackTitle: string;
+      runtimeVersionId: string;
+    }
+  ) {
+    return this.conversationsRepository.create({
+      userId: actor.id,
+      advisorId: input.advisorId,
+      title: input.fallbackTitle,
+      titleSource: 'fallback',
+      advisorRuntimeVersionId: input.runtimeVersionId
     });
   }
 
@@ -49,6 +72,16 @@ export class ConversationsService {
       throw forbidden();
     }
     return conversation;
+  }
+
+  async delete(actor: Actor, id: string) {
+    const deleted = await this.conversationsRepository.deleteForUser(
+      actor.id,
+      id
+    );
+    if (!deleted) {
+      throw notFound();
+    }
   }
 
   async touch(id: string) {

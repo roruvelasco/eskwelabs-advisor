@@ -1,9 +1,14 @@
 import { ApplicationController } from './application.controller';
 import { ApplicationModule } from './application.module';
 import { createContainer } from './di/container';
+import type { DeferredTaskRunner } from './background/deferred-task-runner';
 
-export function createServer() {
-  const container = createContainer();
+export type CreateServerOptions = {
+  deferredTaskRunner?: DeferredTaskRunner;
+};
+
+export function createServer(options?: CreateServerOptions) {
+  const container = createContainer(options?.deferredTaskRunner);
   const module = container.get(ApplicationModule);
   const controller = container.get(ApplicationController);
 
@@ -19,6 +24,8 @@ export type ApiRoutes = ReturnType<
 >;
 
 export { createContainer } from './di/container';
+export type { DeferredTaskRunner } from './background/deferred-task-runner';
+export { ImmediateDeferredTaskRunner } from './background/deferred-task-runner';
 export { AuthService } from './auth/auth.service';
 export { AdvisorsService } from './advisors/advisors.service';
 export { AdvisorsRepository } from './advisors/advisors.repository';

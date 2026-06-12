@@ -69,14 +69,18 @@ Response: `{ data: User }`
 **Controller**: `ConversationController` (`packages/server/src/conversations/`)
 **Auth**: `requireActor(['eif', 'admin'])`
 
-| Method | Path                     | Query / Body                            | Description                          |
-| ------ | ------------------------ | --------------------------------------- | ------------------------------------ |
-| `GET`  | `/api/conversations`     | `?advisorId=string`                     | List conversations for current actor |
-| `POST` | `/api/conversations`     | `{ advisorId: string, title?: string }` | Create conversation                  |
-| `GET`  | `/api/conversations/:id` | —                                       | Get conversation detail              |
+| Method   | Path                     | Query / Body                            | Description                          |
+| -------- | ------------------------ | --------------------------------------- | ------------------------------------ |
+| `GET`    | `/api/conversations`     | `?advisorId=string`                     | List conversations for current actor |
+| `POST`   | `/api/conversations`     | `{ advisorId: string, title?: string }` | Create conversation                  |
+| `GET`    | `/api/conversations/:id` | —                                       | Get conversation detail              |
+| `DELETE` | `/api/conversations/:id` | —                                       | Delete conversation (owner-only)     |
 
 Response (list): `{ data: Conversation[] }`
 Response (single): `{ data: Conversation }`
+Response (delete): `204 No Content`
+
+**Auth (delete)**: `requireActor(['eif', 'admin'])` + `requireConsent()` | **Scope**: owner-only | **Errors**: `400` (invalid UUID), `404` (not found / not owner) | **Side effect**: messages for the conversation are deleted through DB cascade
 
 ---
 

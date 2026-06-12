@@ -1,7 +1,11 @@
 import { and, desc, eq } from 'drizzle-orm';
 
 import { Repository } from '../common/factories/repository.factory';
-import { conversationsTable, type Conversation } from './conversations.schema';
+import {
+  conversationsTable,
+  type ConversationTitleSource,
+  type Conversation
+} from './conversations.schema';
 
 export interface ConversationRow {
   id: string;
@@ -9,6 +13,7 @@ export interface ConversationRow {
   advisorId: string;
   advisorRuntimeVersionId?: string | null;
   title: string;
+  titleSource: string;
   status: string;
   createdAt: string;
   updatedAt: string;
@@ -60,7 +65,8 @@ export class ConversationsRepository extends Repository {
     userId: string;
     advisorId: string;
     title: string;
-    advisorRuntimeVersionId?: string;
+    titleSource: ConversationTitleSource;
+    advisorRuntimeVersionId?: string | null;
   }) {
     const rows = await this.drizzle.db
       .insert(conversationsTable)
@@ -68,6 +74,7 @@ export class ConversationsRepository extends Repository {
         userId: input.userId,
         advisorId: input.advisorId,
         title: input.title,
+        titleSource: input.titleSource,
         advisorRuntimeVersionId: input.advisorRuntimeVersionId,
         status: 'active'
       })
@@ -81,5 +88,37 @@ export class ConversationsRepository extends Repository {
       .update(conversationsTable)
       .set({ updatedAt: new Date() })
       .where(eq(conversationsTable.id, id));
+  }
+
+  async updateGeneratedTitleIfFallback(
+    conversationId: string,
+    title: string
+  ): Promise<boolean> {
+    const result = await this.drizzle.db
+      .update(conversationsTable)
+      .set({ title, titleSource: 'generated' })
+      .where(
+        and(
+          eq(conversationsTable.id, conversationId),
+          eq(conversationsTable.titleSource, 'fallback')
+        )
+      )
+      .returning({ id: conversationsTable.id });
+
+    return result.length > 0;
+  }
+
+  async deleteForUser(userId: string, conversationId: string) {
+    const deleted = await this.drizzle.db
+      .delete(conversationsTable)
+      .where(
+        and(
+          eq(conversationsTable.id, conversationId),
+          eq(conversationsTable.userId, userId)
+        )
+      )
+      .returning({ id: conversationsTable.id });
+
+    return deleted.length > 0;
   }
 }

@@ -20,6 +20,9 @@ import type {
 } from '../usage-counters/cost-cap.service';
 import type { UsageCountersService } from '../usage-counters/usage-counters.service';
 import type { PromptContextLoader } from '../prompt-cache/prompt-context.service';
+import type { SuccessfulTurnPersistenceService } from '../conversation-titles/successful-turn-persistence.service';
+import type { ConversationTitleWorker } from '../conversation-titles/conversation-title-worker';
+import type { DeferredTaskRunner } from '../background/deferred-task-runner';
 
 type StartTurnInput = {
   conversationId?: string;
@@ -75,7 +78,10 @@ export class MessagesService {
     costCapEnforcer: CostCapEnforcer,
     usageCountersService: UsageCountersService,
     telemetryService: TelemetryService,
-    env: ServerEnv
+    env: ServerEnv,
+    private successfulTurnPersistenceService: SuccessfulTurnPersistenceService,
+    private conversationTitleWorker: ConversationTitleWorker,
+    private deferredTaskRunner: DeferredTaskRunner
   ) {
     this.promptContextService = promptContextService;
     this.llmProvider = llmProvider;
@@ -213,11 +219,10 @@ export class MessagesService {
       runtime = await this.advisorRuntimeService.resolveRunnableVersion(
         input.advisorId!
       );
-      conversation = await this.messagesRepository.createConversation({
-        userId: actor.id,
+      conversation = await this.conversationsService.createImplicit(actor, {
         advisorId: input.advisorId!,
-        title: input.content.slice(0, 80),
-        advisorRuntimeVersionId: runtime.runtimeVersionId
+        fallbackTitle: input.content.slice(0, 80),
+        runtimeVersionId: runtime.runtimeVersionId
       });
       isNewConversation = true;
     }
@@ -356,15 +361,24 @@ export class MessagesService {
       latencyMs: number;
     }
   ) {
-    const turn = await this.messagesRepository.createSuccessfulTurn(
-      this.userMessageInput(
+    const turn = await this.successfulTurnPersistenceService.persist({
+      userMessage: this.userMessageInput(
         actor,
         conversationId,
         prepared.userContent,
         prepared.clientTurnId
       ),
-      this.assistantMessageInput(actor, conversationId, prepared, completion)
-    );
+      assistantMessage: this.assistantMessageInput(
+        actor,
+        conversationId,
+        prepared,
+        completion
+      ),
+      titleGenerationModel: {
+        provider: prepared.provider,
+        model: prepared.model
+      }
+    });
 
     await this.finalizeBudget(actor, prepared.reservation, completion);
 
@@ -425,6 +439,12 @@ export class MessagesService {
         completion
       );
 
+      if (turn.titleJobId) {
+        this.deferredTaskRunner.run(async () => {
+          await this.conversationTitleWorker.processJob(turn.titleJobId!);
+        });
+      }
+
       return {
         conversation: prepared.isNewConversation
           ? { id: prepared.conversation.id }
@@ -438,20 +458,24 @@ export class MessagesService {
           error instanceof Error && 'code' in error
             ? String(error.code)
             : 'chat_turn_error';
-        await this.messagesRepository.createErroredTurn(
-          this.userMessageInput(
-            actor,
-            prepared.conversation.id,
-            prepared.userContent,
-            prepared.clientTurnId
-          ),
-          this.assistantErrorMessageInput(
-            actor,
-            prepared.conversation.id,
-            prepared,
-            { content: 'Request failed.', blockReason }
-          )
-        );
+        try {
+          await this.messagesRepository.createErroredTurn(
+            this.userMessageInput(
+              actor,
+              prepared.conversation.id,
+              prepared.userContent,
+              prepared.clientTurnId
+            ),
+            this.assistantErrorMessageInput(
+              actor,
+              prepared.conversation.id,
+              prepared,
+              { content: 'Request failed.', blockReason }
+            )
+          );
+        } catch {
+          // conversation may have been deleted concurrently; skip persistence
+        }
         await this.recordTelemetry('chat_turn_error', actor, 'error', {
           conversationId: prepared.conversation.id,
           code: blockReason
@@ -519,6 +543,12 @@ export class MessagesService {
         completion
       );
 
+      if (turn.titleJobId) {
+        this.deferredTaskRunner.run(async () => {
+          await this.conversationTitleWorker.processJob(turn.titleJobId!);
+        });
+      }
+
       yield {
         type: 'final' as const,
         data: {
@@ -533,20 +563,24 @@ export class MessagesService {
           error instanceof Error && 'code' in error
             ? String(error.code)
             : 'chat_stream_error';
-        await this.messagesRepository.createErroredTurn(
-          this.userMessageInput(
-            actor,
-            prepared.conversation.id,
-            prepared.userContent,
-            prepared.clientTurnId
-          ),
-          this.assistantErrorMessageInput(
-            actor,
-            prepared.conversation.id,
-            prepared,
-            { content: 'Stream failed.', blockReason }
-          )
-        );
+        try {
+          await this.messagesRepository.createErroredTurn(
+            this.userMessageInput(
+              actor,
+              prepared.conversation.id,
+              prepared.userContent,
+              prepared.clientTurnId
+            ),
+            this.assistantErrorMessageInput(
+              actor,
+              prepared.conversation.id,
+              prepared,
+              { content: 'Stream failed.', blockReason }
+            )
+          );
+        } catch {
+          // conversation may have been deleted concurrently; skip persistence
+        }
         await this.recordTelemetry('chat_turn_stream_error', actor, 'error', {
           conversationId: prepared.conversation.id,
           code: blockReason

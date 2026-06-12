@@ -9,3 +9,4 @@ export * from '../prompt-cache/prompt-snapshots.schema';
 export * from '../prompt-cache/dna-digests.schema';
 export * from '../usage-counters/usage-counters.schema';
 export * from '../telemetry/telemetry.schema';
+export * from '../conversation-titles/conversation-title-jobs.schema';

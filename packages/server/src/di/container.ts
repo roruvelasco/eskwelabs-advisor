@@ -24,6 +24,16 @@ import { AdvisorsService } from '../advisors/advisors.service';
 import { ApplicationController } from '../application.controller';
 import { ApplicationModule } from '../application.module';
 import { RedisService } from '../cache/redis.service';
+import { ConversationTitleJobsRepository } from '../conversation-titles/conversation-title-jobs.repository';
+import { ConversationTitleModelResolver } from '../conversation-titles/conversation-title-model-resolver';
+import { ConversationTitleGenerator } from '../conversation-titles/conversation-title-generator';
+import { ConversationTitleWorker } from '../conversation-titles/conversation-title-worker';
+import { ConversationTitleJobsController } from '../conversation-titles/conversation-title-jobs.controller';
+import { SuccessfulTurnPersistenceService } from '../conversation-titles/successful-turn-persistence.service';
+import {
+  DeferredTaskRunner,
+  ImmediateDeferredTaskRunner
+} from '../background/deferred-task-runner';
 import { getServerEnv, type ServerEnv } from '../config/env';
 import { ConversationController } from '../conversations/conversations.controller';
 import { ConversationsRepository } from '../conversations/conversations.repository';
@@ -76,8 +86,11 @@ export const LLM_PROVIDER = new InjectionToken<LlmProvider>('LLM_PROVIDER');
 export const PROMPT_CONTEXT_LOADER = new InjectionToken<PromptContextLoader>(
   'PROMPT_CONTEXT_LOADER'
 );
+export const DEFERRED_TASK_RUNNER = new InjectionToken<DeferredTaskRunner>(
+  'DEFERRED_TASK_RUNNER'
+);
 
-export function createContainer() {
+export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
   const container = new Container();
 
   container
@@ -342,6 +355,52 @@ export function createContainer() {
         new UsersController(c.get(UsersService), c.get(UsersSerializer))
     })
     .bind({
+      provide: ConversationTitleJobsRepository,
+      useFactory: (c) =>
+        new ConversationTitleJobsRepository(c.get(DrizzleService))
+    })
+    .bind({
+      provide: ConversationTitleModelResolver,
+      useFactory: (c) => new ConversationTitleModelResolver(c.get(SERVER_ENV))
+    })
+    .bind({
+      provide: ConversationTitleGenerator,
+      useFactory: (c) => new ConversationTitleGenerator(c.get(LLM_PROVIDER))
+    })
+    .bind({
+      provide: ConversationTitleWorker,
+      useFactory: (c) =>
+        new ConversationTitleWorker(
+          c.get(ConversationTitleJobsRepository),
+          c.get(MessagesRepository),
+          c.get(ConversationTitleGenerator),
+          c.get(ConversationsRepository),
+          c.get(TelemetryService)
+        )
+    })
+    .bind({
+      provide: ConversationTitleJobsController,
+      useFactory: (c) =>
+        new ConversationTitleJobsController(
+          c.get(ConversationTitleWorker),
+          c.get(SERVER_ENV)
+        )
+    })
+    .bind({
+      provide: DEFERRED_TASK_RUNNER,
+      useFactory: () => deferredTaskRunner ?? new ImmediateDeferredTaskRunner()
+    })
+    .bind({
+      provide: SuccessfulTurnPersistenceService,
+      useFactory: (c) =>
+        new SuccessfulTurnPersistenceService(
+          c.get(DrizzleService),
+          c.get(MessagesRepository),
+          c.get(ConversationTitleJobsRepository),
+          c.get(ConversationTitleModelResolver)
+        )
+    })
+    .bind({
       provide: MessagesService,
       useFactory: (c) =>
         new MessagesService(
@@ -354,7 +413,10 @@ export function createContainer() {
           c.get(CostCapEnforcer),
           c.get(UsageCountersService),
           c.get(TelemetryService),
-          c.get(SERVER_ENV)
+          c.get(SERVER_ENV),
+          c.get(SuccessfulTurnPersistenceService),
+          c.get(ConversationTitleWorker),
+          c.get(DEFERRED_TASK_RUNNER)
         )
     })
     .bind({
@@ -443,7 +505,8 @@ export function createContainer() {
           c.get(PromptCacheController),
           c.get(UsageCounterController),
           c.get(TelemetryController),
-          c.get(AdminController)
+          c.get(AdminController),
+          c.get(ConversationTitleJobsController)
         )
     })
     .bind({

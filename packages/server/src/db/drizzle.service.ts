@@ -1,8 +1,14 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
+import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 
 import type { ServerEnv } from '../config/env';
 import * as schema from './drizzle-schema';
+
+type DrizzleDb = PostgresJsDatabase<typeof schema>;
+export type DbTransaction = Parameters<
+  Parameters<DrizzleDb['transaction']>[0]
+>[0];
 
 export class DrizzleService {
   private client: postgres.Sql;

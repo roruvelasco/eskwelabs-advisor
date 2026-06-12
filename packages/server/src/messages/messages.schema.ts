@@ -18,7 +18,7 @@ export const messagesTable = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     conversationId: uuid('conversation_id')
       .notNull()
-      .references(() => conversationsTable.id),
+      .references(() => conversationsTable.id, { onDelete: 'cascade' }),
     userId: uuid('user_id')
       .notNull()
       .references(() => usersTable.id),

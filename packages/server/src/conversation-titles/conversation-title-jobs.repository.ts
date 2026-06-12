@@ -123,7 +123,8 @@ export class ConversationTitleJobsRepository extends Repository {
     now?: Date
   ): Promise<ConversationTitleJobRow | null> {
     const timestamp = now ?? new Date();
-    const leaseExpiry = new Date(timestamp.getTime() + 120_000);
+    const leaseExpiry = new Date(timestamp.getTime() + 120_000).toISOString();
+    const ts = timestamp.toISOString();
 
     return this.drizzle.db.transaction(async (tx) => {
       const [job] = await tx.execute<{
@@ -146,7 +147,7 @@ export class ConversationTitleJobsRepository extends Repository {
           SELECT * FROM conversation_title_jobs
           WHERE id = ${jobId}
             AND status = 'pending'
-            AND run_after <= ${timestamp}
+            AND run_after <= ${ts}::timestamptz
             AND attempts < max_attempts
           ORDER BY run_after ASC, created_at ASC, id ASC
           LIMIT 1
@@ -177,8 +178,8 @@ export class ConversationTitleJobsRepository extends Repository {
           SET
             status = 'processing',
             attempts = attempts + 1,
-            lease_expires_at = ${leaseExpiry},
-            updated_at = ${timestamp}
+            lease_expires_at = ${leaseExpiry}::timestamptz,
+            updated_at = ${ts}::timestamptz
           WHERE id = ${jobId}
             AND status = 'pending'
             AND attempts < max_attempts
@@ -196,7 +197,8 @@ export class ConversationTitleJobsRepository extends Repository {
   ): Promise<ConversationTitleJobRow[]> {
     const clamped = Math.min(Math.max(limit, 1), 50);
     const timestamp = now ?? new Date();
-    const leaseExpiry = new Date(timestamp.getTime() + 120_000);
+    const leaseExpiry = new Date(timestamp.getTime() + 120_000).toISOString();
+    const ts = timestamp.toISOString();
 
     const rows = await this.drizzle.db.execute<{
       id: string;
@@ -219,13 +221,13 @@ export class ConversationTitleJobsRepository extends Repository {
         SET
           status = 'processing',
           attempts = attempts + 1,
-          lease_expires_at = ${leaseExpiry},
-          updated_at = ${timestamp}
+          lease_expires_at = ${leaseExpiry}::timestamptz,
+          updated_at = ${ts}::timestamptz
         FROM (
           SELECT id
           FROM conversation_title_jobs
           WHERE status = 'pending'
-            AND run_after <= ${timestamp}
+            AND run_after <= ${ts}::timestamptz
             AND attempts < max_attempts
           ORDER BY run_after ASC, created_at ASC, id ASC
           LIMIT ${clamped}
@@ -303,37 +305,30 @@ export class ConversationTitleJobsRepository extends Repository {
     return !!row;
   }
 
-  private toRawRow(row: {
-    id: string;
-    conversation_id: string;
-    user_message_id: string;
-    assistant_message_id: string;
-    provider: string;
-    model: string;
-    status: string;
-    attempts: number;
-    max_attempts: number;
-    run_after: Date;
-    lease_expires_at: Date | null;
-    last_error: string | null;
-    created_at: Date;
-    updated_at: Date;
-  }): ConversationTitleJobRow {
+  private toRawRow(row: Record<string, unknown>): ConversationTitleJobRow {
+    const toStr = (v: unknown): string => {
+      if (v instanceof Date) return v.toISOString();
+      if (typeof v === 'string') return v;
+      return String(v);
+    };
+
     return {
-      id: row.id,
-      conversationId: row.conversation_id,
-      userMessageId: row.user_message_id,
-      assistantMessageId: row.assistant_message_id,
-      provider: row.provider,
-      model: row.model,
-      status: row.status,
-      attempts: row.attempts,
-      maxAttempts: row.max_attempts,
-      runAfter: row.run_after.toISOString(),
-      leaseExpiresAt: row.lease_expires_at?.toISOString() ?? undefined,
-      lastError: row.last_error ?? undefined,
-      createdAt: row.created_at.toISOString(),
-      updatedAt: row.updated_at.toISOString()
+      id: String(row.id),
+      conversationId: String(row.conversation_id),
+      userMessageId: String(row.user_message_id),
+      assistantMessageId: String(row.assistant_message_id),
+      provider: String(row.provider),
+      model: String(row.model),
+      status: String(row.status),
+      attempts: Number(row.attempts),
+      maxAttempts: Number(row.max_attempts),
+      runAfter: toStr(row.run_after),
+      leaseExpiresAt: row.lease_expires_at
+        ? toStr(row.lease_expires_at)
+        : undefined,
+      lastError: row.last_error ? String(row.last_error) : undefined,
+      createdAt: toStr(row.created_at),
+      updatedAt: toStr(row.updated_at)
     };
   }
 

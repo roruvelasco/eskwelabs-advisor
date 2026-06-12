@@ -27,6 +27,56 @@ type StreamEvent =
       };
     };
 
+function createPersistenceService() {
+  return {
+    persist: async (input: unknown) => {
+      const i = input as {
+        userMessage: MessageCreateInput;
+        assistantMessage: MessageCreateInput;
+      };
+      return {
+        userMessage: {
+          id: crypto.randomUUID(),
+          conversationId: i.userMessage.conversationId,
+          userId: i.userMessage.userId,
+          role: 'user' as const,
+          content: i.userMessage.content,
+          status: 'ok' as const,
+          createdAt: new Date().toISOString()
+        },
+        assistantMessage: {
+          id: crypto.randomUUID(),
+          conversationId: i.assistantMessage.conversationId,
+          userId: i.assistantMessage.userId,
+          role: 'assistant' as const,
+          content: i.assistantMessage.content,
+          status: 'ok' as const,
+          provider: i.assistantMessage.provider,
+          model: i.assistantMessage.model,
+          promptTokens: i.assistantMessage.promptTokens,
+          completionTokens: i.assistantMessage.completionTokens,
+          estimatedCostUsd: i.assistantMessage.estimatedCostUsd,
+          latencyMs: i.assistantMessage.latencyMs,
+          promptDocRevision: i.assistantMessage.promptDocRevision,
+          dnaDigestVersion: i.assistantMessage.dnaDigestVersion,
+          createdAt: new Date().toISOString()
+        }
+      };
+    }
+  } as never;
+}
+
+function createTitleWorker() {
+  return {
+    processJob: async () => ({ state: 'completed' as const, applied: true })
+  } as never;
+}
+
+function createDeferredRunner() {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  return { run: (_task: () => Promise<void>) => {} } as never;
+}
+
 function createModelRateService(config?: {
   provider?: string;
   model?: string;
@@ -250,7 +300,10 @@ describe('messages service', () => {
         { assertAllowed: async () => undefined } as never,
         { incrementTurn: async () => undefined } as never,
         { record: async () => undefined } as never,
-        { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never
+        { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
+        createPersistenceService(),
+        createTitleWorker(),
+        createDeferredRunner()
       );
     }
 
@@ -320,7 +373,10 @@ describe('messages service', () => {
       { assertAllowed: async () => undefined } as never,
       { incrementTurn: async () => undefined } as never,
       { record: async () => undefined } as never,
-      { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never
+      { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
+      createPersistenceService(),
+      createTitleWorker(),
+      createDeferredRunner()
     );
 
     const turn = await messagesService.chatTurn(actor, {
@@ -382,7 +438,10 @@ describe('messages service', () => {
       { assertAllowed: async () => undefined } as never,
       { incrementTurn: async () => undefined } as never,
       { record: async () => undefined } as never,
-      { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never
+      { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
+      createPersistenceService(),
+      createTitleWorker(),
+      createDeferredRunner()
     );
 
     const events: StreamEvent[] = [];
@@ -468,7 +527,10 @@ describe('messages service', () => {
       { assertAllowed: async () => undefined } as never,
       { incrementTurn: async () => undefined } as never,
       { record: async () => undefined } as never,
-      { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never
+      { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
+      createPersistenceService(),
+      createTitleWorker(),
+      createDeferredRunner()
     );
 
     await service.chatTurn(actor, {
@@ -528,7 +590,10 @@ describe('messages service', () => {
         }
       } as never,
       { record: async () => undefined } as never,
-      { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never
+      { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
+      createPersistenceService(),
+      createTitleWorker(),
+      createDeferredRunner()
     );
 
     const events: StreamEvent[] = [];
@@ -599,7 +664,10 @@ describe('messages service', () => {
       } as never,
       { incrementTurn: async () => undefined } as never,
       { record: async () => undefined } as never,
-      { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never
+      { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
+      createPersistenceService(),
+      createTitleWorker(),
+      createDeferredRunner()
     );
 
     await service.chatTurn(actor, {
@@ -670,7 +738,10 @@ describe('messages service', () => {
           telemetry.push({ eventName, payload });
         }
       } as never,
-      { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never
+      { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
+      createPersistenceService(),
+      createTitleWorker(),
+      createDeferredRunner()
     );
 
     await expect(
@@ -731,7 +802,10 @@ describe('messages service', () => {
         }
       } as never,
       { record: async () => undefined } as never,
-      { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never
+      { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
+      createPersistenceService(),
+      createTitleWorker(),
+      createDeferredRunner()
     );
 
     await expect(
@@ -818,7 +892,10 @@ describe('messages service', () => {
       } as never,
       {
         DEFAULT_MAX_OUTPUT_TOKENS: 2000
-      } as never
+      } as never,
+      createPersistenceService(),
+      createTitleWorker(),
+      createDeferredRunner()
     );
 
     await expect(
@@ -868,7 +945,10 @@ describe('messages service', () => {
       { assertAllowed: async () => undefined } as never,
       { incrementTurn: async () => undefined } as never,
       { record: async () => undefined } as never,
-      { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never
+      { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
+      createPersistenceService(),
+      createTitleWorker(),
+      createDeferredRunner()
     );
 
     await expect(

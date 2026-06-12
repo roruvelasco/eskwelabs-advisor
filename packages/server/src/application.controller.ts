@@ -9,6 +9,7 @@ import { TelemetryController } from './telemetry/telemetry.controller';
 import { UsageCounterController } from './usage-counters/usage-counters.controller';
 import { UsersController } from './users/users.controller';
 import { ConversationController } from './conversations/conversations.controller';
+import { ConversationTitleJobsController } from './conversation-titles/conversation-title-jobs.controller';
 import { createAuthMiddleware } from './common/middleware/auth.middleware';
 import { errorHandler } from './common/middleware/error.middleware';
 import { createRateLimitMiddleware } from './common/middleware/rate-limit.middleware';
@@ -34,7 +35,8 @@ export class ApplicationController {
     private promptCacheController: PromptCacheController,
     private usageCounterController: UsageCounterController,
     private telemetryController: TelemetryController,
-    private adminController: AdminController
+    private adminController: AdminController,
+    private conversationTitleJobsController: ConversationTitleJobsController
   ) {}
 
   registerControllers() {
@@ -61,6 +63,7 @@ export class ApplicationController {
       .route('/', this.promptCacheController.routes())
       .route('/', this.usageCounterController.routes())
       .route('/', this.telemetryController.routes())
-      .route('/', this.adminController.routes());
+      .route('/', this.adminController.routes())
+      .route('/', this.conversationTitleJobsController.routes());
   }
 }
