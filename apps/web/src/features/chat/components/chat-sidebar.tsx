@@ -99,7 +99,9 @@ function RecentConversationButton({
             showOnHover
             asChild
             aria-label={`Options for ${conversation.title}`}
-            className={!isActive ? 'hidden' : undefined}
+            className={
+              !isActive ? 'hidden md:hidden' : 'opacity-100 md:opacity-100'
+            }
           >
             <button type="button">
               <EllipsisVertical className="size-4" />
