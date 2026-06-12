@@ -37,9 +37,9 @@ function AdvisorCard({ id, name, description, index }: AdvisorCardProps) {
   const Icon = meta.icon;
 
   return (
-    <div className="border-border/50 bg-card group flex flex-col rounded-2xl border p-8 transition-colors duration-200 hover:border-[#1a4a35]">
+    <div className="border-border/50 bg-card group flex flex-col rounded-2xl border p-8 transition-colors duration-200 focus-within:border-[#1a4a35] hover:border-[#1a4a35]">
       {/* Ordinal */}
-      <p className="text-muted-foreground/20 select-none font-serif text-6xl font-medium leading-none transition-colors duration-300 group-hover:text-[#2d6a4f]/35">
+      <p className="text-muted-foreground/20 select-none font-serif text-6xl font-medium leading-none transition-colors duration-300 group-focus-within:text-[#2d6a4f]/35 group-hover:text-[#2d6a4f]/35">
         {String(index + 1).padStart(2, '0')}
       </p>
 
@@ -56,7 +56,7 @@ function AdvisorCard({ id, name, description, index }: AdvisorCardProps) {
       {/* Icon — fixed-height slot, always at the same position */}
       <div className="flex h-32 items-center justify-center">
         <Icon
-          className="text-muted-foreground/20 transition-colors duration-300 group-hover:text-[#2d6a4f]/40"
+          className="text-muted-foreground/20 transition-colors duration-300 group-focus-within:text-[#2d6a4f]/40 group-hover:text-[#2d6a4f]/40"
           size={52}
           strokeWidth={1.1}
         />
