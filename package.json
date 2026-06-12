@@ -29,6 +29,7 @@
     "db:validate-runtime": "bun --env-file=.env run scripts/validate-runtime.ts",
     "db:reset": "bun run scripts/nuke-db.ts && bun run db:migrate && bun run db:sync-advisors && bun run db:bootstrap-demo && bun run scripts/seed.ts && bun run db:validate-runtime",
     "db:push": "drizzle-kit push",
+    "db:prod": "bun run scripts/prod-seed.ts",
     "db:studio": "node -e \"console.log('Supabase Studio: http://127.0.0.1:54323')\"",
     "db:start": "supabase start && drizzle-kit migrate && bun run scripts/sync-advisors.ts && bun run db:bootstrap-demo",
     "advisors:publish": "bun --env-file=.env run scripts/publish-advisor.ts",
