@@ -1,13 +1,6 @@
 'use client';
 
 import * as React from 'react';
-import {
-  CircleCheckIcon,
-  InfoIcon,
-  Loader2Icon,
-  OctagonXIcon,
-  TriangleAlertIcon
-} from 'lucide-react';
 import { toast, Toaster as Sonner, type ToasterProps } from 'sonner';
 
 const Toaster = ({ ...props }: ToasterProps) => {
@@ -15,23 +8,47 @@ const Toaster = ({ ...props }: ToasterProps) => {
     <Sonner
       theme="light"
       className="toaster group"
-      closeButton
       duration={5000}
+      closeButton={true}
       icons={{
-        success: <CircleCheckIcon className="size-4" />,
-        info: <InfoIcon className="size-4" />,
-        warning: <TriangleAlertIcon className="size-4" />,
-        error: <OctagonXIcon className="size-4" />,
-        loading: <Loader2Icon className="size-4 animate-spin" />
+        success: <span className="hidden" />,
+        info: <span className="hidden" />,
+        warning: <span className="hidden" />,
+        error: <span className="hidden" />,
+        loading: <span className="hidden" />
       }}
       style={
         {
           '--normal-bg': 'var(--popover)',
           '--normal-text': 'var(--popover-foreground)',
           '--normal-border': 'var(--border)',
-          '--border-radius': 'var(--radius)'
+          '--border-radius': 'var(--radius)',
+          '--toast-icon-margin-start': '0px',
+          '--toast-icon-margin-end': '0px',
+          '--toast-svg-margin-start': '0px',
+          '--toast-svg-margin-end': '0px',
+          '--toast-button-margin-start': '0px',
+          '--toast-button-margin-end': '0px',
+          '--toast-close-button-start': 'auto',
+          '--toast-close-button-end': '1rem',
+          '--toast-close-button-transform': 'translateY(-50%)'
         } as React.CSSProperties
       }
+      toastOptions={{
+        classNames: {
+          toast: '!font-sans !text-sm !shadow-sm [&>[data-icon]]:!hidden',
+          title: '!font-medium',
+          success:
+            '!bg-[var(--muted)] !text-[var(--success)] !border-[var(--success)]',
+          error:
+            '!bg-[var(--muted)] !text-[var(--destructive)] !border-[var(--destructive)]',
+          warning:
+            '!bg-[var(--muted)] !text-[var(--warning)] !border-[var(--warning)]',
+          content: '!pr-8', // Add padding to the right of text so it doesn't overlap the close button
+          closeButton:
+            '!absolute !top-1/2 !bg-transparent !border-none !text-inherit opacity-70 hover:!opacity-100'
+        }
+      }}
       {...props}
     />
   );
