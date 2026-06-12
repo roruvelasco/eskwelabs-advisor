@@ -29,7 +29,19 @@ export const serverEnvSchema = z.object({
   DAILY_SPEND_LIMIT_USD: z.coerce.number().positive().default(10),
   DEFAULT_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(2_000),
   RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
-  RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(100)
+  RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(100),
+  RUNTIME_PROFILE: z
+    .enum(['production', 'demo', 'test'])
+    .optional()
+    .default('demo'),
+  LLM_PROVIDER_MODE: z
+    .enum(['auto', 'deterministic', 'gemini', 'groq'])
+    .optional()
+    .default('auto'),
+  PROMPT_PROVIDER_MODE: z
+    .enum(['auto', 'deterministic', 'snapshot'])
+    .optional()
+    .default('auto')
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
