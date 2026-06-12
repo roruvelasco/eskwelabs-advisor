@@ -11,15 +11,50 @@ import { HttpException } from '../common/http/http-exception';
 import type { Actor } from '../common/utils/hono';
 import type { ServerEnv } from '../config/env';
 import type { ConversationsService } from '../conversations/conversations.service';
-import type { ModelConfigService } from '../model-config/model-config.service';
+import type { ModelRateService } from '../model-config/model-rate.service';
+import type { AdvisorRuntimeService } from '../advisors/advisor-runtime.service';
 import type { TelemetryService } from '../telemetry/telemetry.service';
 import type {
   CostCapEnforcer,
   CostReservation
 } from '../usage-counters/cost-cap.service';
-import { estimateModelCostUsd } from '../usage-counters/model-rates';
 import type { UsageCountersService } from '../usage-counters/usage-counters.service';
 import type { PromptContextLoader } from '../prompt-cache/prompt-context.service';
+
+type StartTurnInput = {
+  conversationId?: string;
+  advisorId?: string;
+  content: string;
+  clientTurnId?: string;
+};
+
+type PreparedTurn = {
+  conversation: {
+    id: string;
+    advisorId: string;
+    advisorRuntimeVersionId?: string | null;
+  };
+  runtime: {
+    runtimeVersionId: string;
+    promptContext: {
+      systemPrompt: string;
+      promptSnapshotHash: string;
+      promptDocRevision: string;
+      dnaDigestVersion: string;
+    };
+    modelConfig: { provider: string; model: string };
+  };
+  isNewConversation: boolean;
+  request: LlmChatRequest;
+  provider: string;
+  model: string;
+  promptSnapshotHash: string;
+  promptDocRevision: string;
+  dnaDigestVersion: string;
+  reservation: CostReservation | undefined;
+  userContent: string;
+  clientTurnId?: string;
+};
 
 export class MessagesService {
   private static readonly HISTORY_MESSAGE_LIMIT = 20;
@@ -33,7 +68,8 @@ export class MessagesService {
   constructor(
     private messagesRepository: MessagesRepository,
     private conversationsService: ConversationsService,
-    private modelConfigService: ModelConfigService,
+    private modelRateService: ModelRateService,
+    private advisorRuntimeService: AdvisorRuntimeService,
     promptContextService: PromptContextLoader,
     llmProvider: LlmProvider,
     costCapEnforcer: CostCapEnforcer,
@@ -126,57 +162,78 @@ export class MessagesService {
   }
 
   private estimatedTurnBudget(config: { provider: string; model: string }) {
-    const estimatedCostUsd = estimateModelCostUsd({
-      provider: config.provider,
-      model: config.model,
-      promptTokens: this.env.DEFAULT_MAX_OUTPUT_TOKENS,
-      completionTokens: this.env.DEFAULT_MAX_OUTPUT_TOKENS
-    });
-
-    if (estimatedCostUsd === null) {
-      throw new HttpException(
-        422,
-        'Model rate is not configured',
-        'model_rate_not_configured'
-      );
-    }
-
-    return {
-      estimatedTokens: this.env.DEFAULT_MAX_OUTPUT_TOKENS * 2,
-      estimatedCostUsd
-    };
+    return this.modelRateService.estimatedTurnBudget(
+      config,
+      this.env.DEFAULT_MAX_OUTPUT_TOKENS
+    );
   }
 
   private async prepareTurn(
     actor: Actor,
-    input: { conversationId: string; content: string }
-  ) {
-    const conversation = await this.conversationsService.assertOwns(
-      actor,
-      input.conversationId
-    );
-    const advisorId = conversation.advisorId;
-    const config = await this.modelConfigService.getForAdvisor(advisorId);
+    input: StartTurnInput
+  ): Promise<PreparedTurn> {
+    const hasConversationId = Boolean(input.conversationId);
+    const hasAdvisorId = Boolean(input.advisorId);
 
-    if (!config?.isEnabled) {
+    if (!hasConversationId && !hasAdvisorId) {
       throw new HttpException(
-        429,
-        'Advisor model is disabled',
-        'model_disabled'
+        400,
+        'Either conversationId or advisorId is required',
+        'validation_failed'
       );
     }
 
-    const reservation = await this.reserveBudget({
-      userId: actor.id,
-      ...this.estimatedTurnBudget(config)
-    });
+    if (hasConversationId && hasAdvisorId) {
+      throw new HttpException(
+        400,
+        'Provide either conversationId or advisorId, not both',
+        'validation_failed'
+      );
+    }
+
+    let conversation: {
+      id: string;
+      advisorId: string;
+      advisorRuntimeVersionId?: string | null;
+    };
+    let runtime: Awaited<
+      ReturnType<AdvisorRuntimeService['resolveRunnableVersion']>
+    >;
+    let isNewConversation = false;
+
+    if (hasConversationId) {
+      conversation = await this.conversationsService.assertOwns(
+        actor,
+        input.conversationId!
+      );
+      runtime = await this.advisorRuntimeService.resolveRunnableVersion(
+        conversation.advisorId
+      );
+    } else {
+      runtime = await this.advisorRuntimeService.resolveRunnableVersion(
+        input.advisorId!
+      );
+      conversation = await this.messagesRepository.createConversation({
+        userId: actor.id,
+        advisorId: input.advisorId!,
+        title: input.content.slice(0, 80),
+        advisorRuntimeVersionId: runtime.runtimeVersionId
+      });
+      isNewConversation = true;
+    }
+
+    let reservation: CostReservation | undefined;
 
     try {
-      const promptContext =
-        await this.promptContextService.getForAdvisor(advisorId);
+      const budget = this.estimatedTurnBudget(runtime.modelConfig);
+
+      reservation = await this.reserveBudget({
+        userId: actor.id,
+        ...budget
+      });
 
       const history = (
-        await this.messagesRepository.listForConversation(input.conversationId)
+        await this.messagesRepository.listForConversation(conversation.id)
       )
         .filter(
           (message) =>
@@ -190,12 +247,12 @@ export class MessagesService {
         }));
 
       const request: LlmChatRequest = {
-        provider: config.provider,
-        model: config.model,
+        provider: runtime.modelConfig.provider,
+        model: runtime.modelConfig.model,
         messages: [
           {
             role: 'system',
-            content: promptContext.systemPrompt
+            content: runtime.promptContext.systemPrompt
           },
           ...history,
           { role: 'user', content: input.content }
@@ -203,14 +260,18 @@ export class MessagesService {
       };
 
       return {
+        conversation,
+        runtime,
+        isNewConversation,
         request,
-        provider: config.provider,
-        model: config.model,
-        promptSnapshotHash: promptContext.promptSnapshotHash,
-        promptDocRevision: promptContext.promptDocRevision,
-        dnaDigestVersion: promptContext.dnaDigestVersion,
+        provider: runtime.modelConfig.provider,
+        model: runtime.modelConfig.model,
+        promptSnapshotHash: runtime.promptContext.promptSnapshotHash,
+        promptDocRevision: runtime.promptContext.promptDocRevision,
+        dnaDigestVersion: runtime.promptContext.dnaDigestVersion,
         reservation,
-        userContent: input.content
+        userContent: input.content,
+        clientTurnId: input.clientTurnId
       };
     } catch (error) {
       await this.releaseBudget(reservation);
@@ -218,23 +279,108 @@ export class MessagesService {
     }
   }
 
-  private async createBlockedTurn(
+  private userMessageInput(
     actor: Actor,
     conversationId: string,
     content: string,
-    blockReason: string
+    clientTurnId?: string
+  ): MessageCreateInput {
+    return {
+      conversationId,
+      userId: actor.id,
+      role: 'user',
+      content,
+      status: 'ok',
+      clientTurnId
+    };
+  }
+
+  private assistantMessageInput(
+    actor: Actor,
+    conversationId: string,
+    prepared: PreparedTurn,
+    completion: {
+      content: string;
+      promptTokens: number;
+      completionTokens: number;
+      estimatedCostUsd: string;
+      latencyMs: number;
+    }
+  ): MessageCreateInput {
+    return {
+      conversationId,
+      userId: actor.id,
+      role: 'assistant',
+      content: completion.content,
+      provider: prepared.provider,
+      model: prepared.model,
+      promptTokens: completion.promptTokens,
+      completionTokens: completion.completionTokens,
+      estimatedCostUsd: completion.estimatedCostUsd,
+      latencyMs: completion.latencyMs,
+      status: 'ok',
+      promptDocRevision: prepared.promptDocRevision,
+      dnaDigestVersion: prepared.dnaDigestVersion
+    };
+  }
+
+  private assistantErrorMessageInput(
+    actor: Actor,
+    conversationId: string,
+    prepared: PreparedTurn,
+    input: { content: string; blockReason: string }
+  ): MessageCreateInput {
+    return {
+      conversationId,
+      userId: actor.id,
+      role: 'assistant',
+      content: input.content,
+      provider: prepared.provider,
+      model: prepared.model,
+      status: 'error',
+      blockReason: input.blockReason,
+      promptDocRevision: prepared.promptDocRevision,
+      dnaDigestVersion: prepared.dnaDigestVersion
+    };
+  }
+
+  private async persistSuccessfulTurn(
+    actor: Actor,
+    conversationId: string,
+    prepared: PreparedTurn,
+    completion: {
+      content: string;
+      promptTokens: number;
+      completionTokens: number;
+      estimatedCostUsd: string;
+      latencyMs: number;
+    }
   ) {
-    return this.messagesRepository.createErroredTurn(
-      this.userMessageInput(actor, conversationId, content),
-      {
+    const turn = await this.messagesRepository.createSuccessfulTurn(
+      this.userMessageInput(
+        actor,
         conversationId,
-        userId: actor.id,
-        role: 'assistant',
-        content: 'Request blocked.',
-        status: 'blocked',
-        blockReason
-      }
+        prepared.userContent,
+        prepared.clientTurnId
+      ),
+      this.assistantMessageInput(actor, conversationId, prepared, completion)
     );
+
+    await this.finalizeBudget(actor, prepared.reservation, completion);
+
+    await this.conversationsService.touch(conversationId);
+    await this.recordTelemetry('chat_turn_completed', actor, 'info', {
+      conversationId,
+      provider: prepared.provider,
+      model: prepared.model,
+      promptSnapshotHash: prepared.promptSnapshotHash,
+      dnaDigestVersion: prepared.dnaDigestVersion,
+      promptTokens: completion.promptTokens,
+      completionTokens: completion.completionTokens,
+      estimatedCostUsd: completion.estimatedCostUsd
+    });
+
+    return turn;
   }
 
   private blockTelemetryReason(code: string) {
@@ -265,121 +411,26 @@ export class MessagesService {
     }
   }
 
-  private userMessageInput(
-    actor: Actor,
-    conversationId: string,
-    content: string
-  ): MessageCreateInput {
-    return {
-      conversationId,
-      userId: actor.id,
-      role: 'user',
-      content,
-      status: 'ok'
-    };
-  }
-
-  private assistantMessageInput(
-    actor: Actor,
-    conversationId: string,
-    prepared: Awaited<ReturnType<MessagesService['prepareTurn']>>,
-    completion: {
-      content: string;
-      promptTokens: number;
-      completionTokens: number;
-      estimatedCostUsd: string;
-      latencyMs: number;
-    }
-  ): MessageCreateInput {
-    return {
-      conversationId,
-      userId: actor.id,
-      role: 'assistant',
-      content: completion.content,
-      provider: prepared.provider,
-      model: prepared.model,
-      promptTokens: completion.promptTokens,
-      completionTokens: completion.completionTokens,
-      estimatedCostUsd: completion.estimatedCostUsd,
-      latencyMs: completion.latencyMs,
-      status: 'ok',
-      promptDocRevision: prepared.promptDocRevision,
-      dnaDigestVersion: prepared.dnaDigestVersion
-    };
-  }
-
-  private assistantErrorMessageInput(
-    actor: Actor,
-    conversationId: string,
-    prepared: Awaited<ReturnType<MessagesService['prepareTurn']>>,
-    input: { content: string; blockReason: string }
-  ): MessageCreateInput {
-    return {
-      conversationId,
-      userId: actor.id,
-      role: 'assistant',
-      content: input.content,
-      provider: prepared.provider,
-      model: prepared.model,
-      status: 'error',
-      blockReason: input.blockReason,
-      promptDocRevision: prepared.promptDocRevision,
-      dnaDigestVersion: prepared.dnaDigestVersion
-    };
-  }
-
-  private async persistSuccessfulTurn(
-    actor: Actor,
-    conversationId: string,
-    prepared: Awaited<ReturnType<MessagesService['prepareTurn']>>,
-    completion: {
-      content: string;
-      promptTokens: number;
-      completionTokens: number;
-      estimatedCostUsd: string;
-      latencyMs: number;
-    }
-  ) {
-    const turn = await this.messagesRepository.createSuccessfulTurn(
-      this.userMessageInput(actor, conversationId, prepared.userContent),
-      this.assistantMessageInput(actor, conversationId, prepared, completion)
-    );
-
-    await this.finalizeBudget(actor, prepared.reservation, completion);
-
-    await this.conversationsService.touch(conversationId);
-    await this.recordTelemetry('chat_turn_completed', actor, 'info', {
-      conversationId,
-      provider: prepared.provider,
-      model: prepared.model,
-      promptSnapshotHash: prepared.promptSnapshotHash,
-      dnaDigestVersion: prepared.dnaDigestVersion,
-      promptTokens: completion.promptTokens,
-      completionTokens: completion.completionTokens,
-      estimatedCostUsd: completion.estimatedCostUsd
-    });
-
-    return turn;
-  }
-
-  async chatTurn(
-    actor: Actor,
-    input: { conversationId: string; content: string }
-  ) {
-    let prepared:
-      | Awaited<ReturnType<MessagesService['prepareTurn']>>
-      | undefined;
+  async chatTurn(actor: Actor, input: StartTurnInput) {
+    let prepared: PreparedTurn | undefined;
 
     try {
       prepared = await this.prepareTurn(actor, input);
       const completion = await this.llmProvider.complete(prepared.request);
 
-      return this.persistSuccessfulTurn(
+      const turn = await this.persistSuccessfulTurn(
         actor,
-        input.conversationId,
+        prepared.conversation.id,
         prepared,
         completion
       );
+
+      return {
+        conversation: prepared.isNewConversation
+          ? { id: prepared.conversation.id }
+          : undefined,
+        ...turn
+      };
     } catch (error) {
       if (prepared) {
         await this.releaseBudget(prepared.reservation);
@@ -390,39 +441,26 @@ export class MessagesService {
         await this.messagesRepository.createErroredTurn(
           this.userMessageInput(
             actor,
-            input.conversationId,
-            prepared.userContent
+            prepared.conversation.id,
+            prepared.userContent,
+            prepared.clientTurnId
           ),
           this.assistantErrorMessageInput(
             actor,
-            input.conversationId,
+            prepared.conversation.id,
             prepared,
-            {
-              content: 'Request failed.',
-              blockReason
-            }
+            { content: 'Request failed.', blockReason }
           )
         );
         await this.recordTelemetry('chat_turn_error', actor, 'error', {
-          conversationId: input.conversationId,
+          conversationId: prepared.conversation.id,
           code: blockReason
         });
       } else if (
         error instanceof HttpException &&
         !this.isAuthorizationFailure(error)
       ) {
-        await this.createBlockedTurn(
-          actor,
-          input.conversationId,
-          input.content,
-          error.code
-        );
-        await this.recordTelemetry('chat_turn_blocked', actor, 'warning', {
-          conversationId: input.conversationId,
-          code: error.code
-        });
         await this.recordTelemetry('request_blocked', actor, 'warning', {
-          conversationId: input.conversationId,
           code: error.code,
           reason: this.blockTelemetryReason(error.code)
         });
@@ -431,16 +469,19 @@ export class MessagesService {
     }
   }
 
-  async *streamChatTurn(
-    actor: Actor,
-    input: { conversationId: string; content: string }
-  ) {
-    let prepared:
-      | Awaited<ReturnType<MessagesService['prepareTurn']>>
-      | undefined;
+  async *streamChatTurn(actor: Actor, input: StartTurnInput) {
+    let prepared: PreparedTurn | undefined;
 
     try {
       prepared = await this.prepareTurn(actor, input);
+
+      if (prepared.isNewConversation) {
+        yield {
+          type: 'conversation.ready' as const,
+          data: { conversationId: prepared.conversation.id }
+        };
+      }
+
       const startedAt = Date.now();
       let content = '';
       let usage: LlmUsage | undefined;
@@ -473,7 +514,7 @@ export class MessagesService {
 
       const turn = await this.persistSuccessfulTurn(
         actor,
-        input.conversationId,
+        prepared.conversation.id,
         prepared,
         completion
       );
@@ -495,44 +536,26 @@ export class MessagesService {
         await this.messagesRepository.createErroredTurn(
           this.userMessageInput(
             actor,
-            input.conversationId,
-            prepared.userContent
+            prepared.conversation.id,
+            prepared.userContent,
+            prepared.clientTurnId
           ),
           this.assistantErrorMessageInput(
             actor,
-            input.conversationId,
+            prepared.conversation.id,
             prepared,
-            {
-              content: 'Stream failed.',
-              blockReason
-            }
+            { content: 'Stream failed.', blockReason }
           )
         );
         await this.recordTelemetry('chat_turn_stream_error', actor, 'error', {
-          conversationId: input.conversationId,
+          conversationId: prepared.conversation.id,
           code: blockReason
         });
       } else if (
         error instanceof HttpException &&
         !this.isAuthorizationFailure(error)
       ) {
-        await this.createBlockedTurn(
-          actor,
-          input.conversationId,
-          input.content,
-          error.code
-        );
-        await this.recordTelemetry(
-          'chat_turn_stream_blocked',
-          actor,
-          'warning',
-          {
-            conversationId: input.conversationId,
-            code: error.code
-          }
-        );
         await this.recordTelemetry('request_blocked', actor, 'warning', {
-          conversationId: input.conversationId,
           code: error.code,
           reason: this.blockTelemetryReason(error.code)
         });

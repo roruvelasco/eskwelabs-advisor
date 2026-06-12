@@ -1,6 +1,7 @@
-import { asc, eq } from 'drizzle-orm';
+import { asc, desc, eq } from 'drizzle-orm';
 
 import { Repository } from '../common/factories/repository.factory';
+import { conversationsTable } from '../conversations/conversations.schema';
 import { messagesTable, type Message } from './messages.schema';
 
 export interface MessageRow {
@@ -15,10 +16,11 @@ export interface MessageRow {
   completionTokens?: number;
   estimatedCostUsd?: string;
   latencyMs?: number;
-  status: 'ok' | 'blocked' | 'error';
+  status: 'ok' | 'blocked' | 'error' | 'pending' | 'streaming';
   blockReason?: string;
   promptDocRevision?: string;
   dnaDigestVersion?: string;
+  clientTurnId?: string;
   createdAt: string;
 }
 
@@ -45,6 +47,7 @@ function toRow(message: Message): MessageRow {
     blockReason: nullable(message.blockReason),
     promptDocRevision: nullable(message.promptDocRevision),
     dnaDigestVersion: nullable(message.dnaDigestVersion),
+    clientTurnId: nullable(message.clientTurnId),
     createdAt: message.createdAt.toISOString()
   };
 }
@@ -55,7 +58,7 @@ export class MessagesRepository extends Repository {
       .select()
       .from(messagesTable)
       .where(eq(messagesTable.conversationId, conversationId))
-      .orderBy(asc(messagesTable.createdAt));
+      .orderBy(asc(messagesTable.createdAt), desc(messagesTable.role));
 
     return rows.map(toRow);
   }
@@ -67,6 +70,83 @@ export class MessagesRepository extends Repository {
       .returning();
 
     return toRow(rows[0]);
+  }
+
+  async createConversation(input: {
+    userId: string;
+    advisorId: string;
+    title: string;
+    advisorRuntimeVersionId?: string | null;
+  }) {
+    const rows = await this.drizzle.db
+      .insert(conversationsTable)
+      .values({
+        userId: input.userId,
+        advisorId: input.advisorId,
+        title: input.title,
+        advisorRuntimeVersionId: input.advisorRuntimeVersionId ?? null,
+        status: 'active'
+      })
+      .returning();
+
+    return {
+      id: rows[0].id,
+      advisorId: rows[0].advisorId,
+      advisorRuntimeVersionId: rows[0].advisorRuntimeVersionId
+    };
+  }
+
+  async createConversationWithTurn(
+    userId: string,
+    conversationInput: {
+      advisorId: string;
+      title: string;
+      advisorRuntimeVersionId?: string;
+    },
+    userMessage: MessageCreateInput,
+    assistantMessage: MessageCreateInput
+  ) {
+    return this.drizzle.db.transaction(async (tx) => {
+      const convoRows = await tx
+        .insert(conversationsTable)
+        .values({
+          userId,
+          advisorId: conversationInput.advisorId,
+          advisorRuntimeVersionId: conversationInput.advisorRuntimeVersionId,
+          title: conversationInput.title,
+          status: 'active'
+        })
+        .returning();
+
+      const conversation = convoRows[0];
+
+      const userRows = await tx
+        .insert(messagesTable)
+        .values({
+          ...userMessage,
+          conversationId: conversation.id
+        })
+        .returning();
+
+      const assistantRows = await tx
+        .insert(messagesTable)
+        .values({
+          ...assistantMessage,
+          conversationId: conversation.id
+        })
+        .returning();
+
+      return {
+        conversation: {
+          id: conversation.id,
+          advisorId: conversation.advisorId,
+          advisorRuntimeVersionId:
+            conversation.advisorRuntimeVersionId ?? undefined
+        },
+        userMessage: toRow(userRows[0]),
+        assistantMessage: toRow(assistantRows[0])
+      };
+    });
   }
 
   async createSuccessfulTurn(

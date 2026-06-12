@@ -1,18 +1,14 @@
 import { ConversationsRepository } from './conversations.repository';
 import { AdvisorsService } from '../advisors/advisors.service';
-import {
-  forbidden,
-  HttpException,
-  notFound
-} from '../common/http/http-exception';
+import { AdvisorRuntimeService } from '../advisors/advisor-runtime.service';
+import { forbidden, notFound } from '../common/http/http-exception';
 import type { Actor } from '../common/utils/hono';
-import { ModelConfigService } from '../model-config/model-config.service';
 
 export class ConversationsService {
   constructor(
     private conversationsRepository: ConversationsRepository,
-    private advisorsService: AdvisorsService,
-    private modelConfigService: ModelConfigService
+    private advisorRuntimeService: AdvisorRuntimeService,
+    private advisorsService: AdvisorsService
   ) {}
 
   async list(actor?: Actor, advisorId?: string) {
@@ -32,21 +28,15 @@ export class ConversationsService {
   }
 
   async create(actor: Actor, input: { advisorId: string; title?: string }) {
-    const advisor = await this.advisorsService.getActive(input.advisorId);
-    const config = await this.modelConfigService.getForAdvisor(input.advisorId);
-
-    if (!advisor.promptDocId || config?.isEnabled === false) {
-      throw new HttpException(
-        422,
-        'Advisor is not ready for chat',
-        'advisor_not_configured'
-      );
-    }
+    const runtime = await this.advisorRuntimeService.resolveRunnableVersion(
+      input.advisorId
+    );
 
     return this.conversationsRepository.create({
       userId: actor.id,
       advisorId: input.advisorId,
-      title: input.title ?? 'Untitled conversation'
+      title: input.title ?? 'Untitled conversation',
+      advisorRuntimeVersionId: runtime.runtimeVersionId
     });
   }
 

@@ -10,10 +10,16 @@ import { z } from 'zod';
 import { MessagesSerializer } from './messages.serializer';
 import { MessagesService } from './messages.service';
 
-const chatTurnSchema = z.object({
-  conversationId: z.string().uuid(),
-  content: z.string().min(1).max(8000)
-});
+const chatTurnSchema = z
+  .object({
+    conversationId: z.string().uuid().optional(),
+    advisorId: z.string().min(1).optional(),
+    content: z.string().min(1).max(8000),
+    clientTurnId: z.string().optional()
+  })
+  .refine((data) => Boolean(data.conversationId) !== Boolean(data.advisorId), {
+    message: 'Provide exactly one of conversationId or advisorId'
+  });
 
 export class MessageController extends Controller {
   constructor(
@@ -59,7 +65,12 @@ export class MessageController extends Controller {
               actor,
               input
             )) {
-              if (event.type === 'chunk') {
+              if (event.type === 'conversation.ready') {
+                await stream.writeSSE({
+                  event: 'conversation.ready',
+                  data: JSON.stringify(event.data)
+                });
+              } else if (event.type === 'chunk') {
                 await stream.writeSSE({
                   event: 'chunk',
                   data: event.content

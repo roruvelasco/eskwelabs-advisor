@@ -7,6 +7,7 @@ export interface ConversationRow {
   id: string;
   userId: string;
   advisorId: string;
+  advisorRuntimeVersionId?: string | null;
   title: string;
   status: string;
   createdAt: string;
@@ -16,6 +17,7 @@ export interface ConversationRow {
 function toRow(conversation: Conversation): ConversationRow {
   return {
     ...conversation,
+    advisorRuntimeVersionId: conversation.advisorRuntimeVersionId ?? undefined,
     createdAt: conversation.createdAt.toISOString(),
     updatedAt: conversation.updatedAt.toISOString()
   };
@@ -54,13 +56,19 @@ export class ConversationsRepository extends Repository {
     return rows[0] ? toRow(rows[0]) : null;
   }
 
-  async create(input: { userId: string; advisorId: string; title: string }) {
+  async create(input: {
+    userId: string;
+    advisorId: string;
+    title: string;
+    advisorRuntimeVersionId?: string;
+  }) {
     const rows = await this.drizzle.db
       .insert(conversationsTable)
       .values({
         userId: input.userId,
         advisorId: input.advisorId,
         title: input.title,
+        advisorRuntimeVersionId: input.advisorRuntimeVersionId,
         status: 'active'
       })
       .returning();
