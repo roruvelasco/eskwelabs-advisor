@@ -21,6 +21,7 @@ export * from './components/ui/switch';
 export * from './components/ui/sheet';
 export * from './components/ui/drawer';
 export * from './components/ui/sidebar';
+export * from './components/ui/dot-wave';
 export * from './components/ai/message';
 export * from './components/layout';
 export * from './hooks';

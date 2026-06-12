@@ -1,13 +1,12 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { DotWave } from 'ldrs/react';
-import 'ldrs/react/DotWave.css';
 import { cn } from '@/lib/utils';
 import {
   Message as AiMessage,
   MessageContent,
-  MessageResponse
+  MessageResponse,
+  DotWave
 } from '@eskwelabs-advisor/ui';
 
 export type Message = {
@@ -43,9 +42,12 @@ export function ChatMessages({ messages }: { messages: Message[] }) {
               msg.status === 'thinking' && !msg.content ? (
                 <div
                   aria-label="Advisor is thinking"
-                  className="flex h-5 items-center"
+                  className="flex items-center gap-2"
                 >
-                  <DotWave size={28} speed={1} color="currentColor" />
+                  <DotWave size={24} speed={1} color="currentColor" />
+                  <span className="text-muted-foreground text-sm font-medium">
+                    Thinking...
+                  </span>
                 </div>
               ) : (
                 <MessageResponse isAnimating={msg.status === 'streaming'}>

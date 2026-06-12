@@ -15,7 +15,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Separator
+  Separator,
+  DotWave
 } from '@eskwelabs-advisor/ui';
 
 import { acknowledgeConsent, getConsent } from '@/lib/domains/auth/api';
@@ -290,17 +291,21 @@ export function AdvisorSelection() {
         </div>
 
         {isLoading ? (
-          <p className="text-muted-foreground py-16 text-center text-sm">
-            Loading advisors...
-          </p>
+          <div className="flex flex-1 flex-col items-center justify-center pb-32">
+            <DotWave size={40} speed={1} color="#4a8a69" />
+          </div>
         ) : isError ? (
-          <p className="text-muted-foreground py-16 text-center text-sm">
-            Could not load advisors.
-          </p>
+          <div className="flex flex-1 flex-col items-center justify-center pb-32">
+            <p className="text-muted-foreground text-sm">
+              Could not load advisors.
+            </p>
+          </div>
         ) : advisors.length === 0 ? (
-          <p className="text-muted-foreground py-16 text-center text-sm">
-            No advisors are available.
-          </p>
+          <div className="flex flex-1 flex-col items-center justify-center pb-32">
+            <p className="text-muted-foreground text-sm">
+              No advisors are available.
+            </p>
+          </div>
         ) : (
           <div className="grid flex-1 items-stretch gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {advisors.map((advisor, index) => (
