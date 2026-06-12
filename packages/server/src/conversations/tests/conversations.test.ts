@@ -11,6 +11,44 @@ const actor: Actor = {
   isActive: true
 };
 
+function createConversationRuntimeService(config?: {
+  succeed?: boolean;
+  throwCode?: string;
+}) {
+  return {
+    resolveRunnableVersion: async () => {
+      if (config?.throwCode) {
+        throw new HttpException(422, config.throwCode, config.throwCode);
+      }
+      if (config?.succeed === false) {
+        throw new HttpException(
+          422,
+          'Advisor not configured',
+          'advisor_not_configured'
+        );
+      }
+      return {
+        advisorId: 'data-dashboard',
+        advisorName: 'Data Dashboard Advisor',
+        runtimeVersionId: crypto.randomUUID(),
+        promptContext: {
+          systemPrompt: 'System instructions',
+          systemPromptHash: 'hash',
+          promptSnapshotHash: 'snapshot-hash',
+          promptDocRevision: 'revision',
+          dnaDigestVersion: 'dna-version'
+        },
+        modelConfig: {
+          provider: 'deterministic',
+          model: 'deterministic-model',
+          isEnabled: true
+        }
+      };
+    },
+    checkReadiness: async () => ({ ready: true as const, runtime: {} })
+  } as never;
+}
+
 describe('conversations service', () => {
   test('lists no conversations without an actor', async () => {
     const service = new ConversationsService(
@@ -22,32 +60,15 @@ describe('conversations service', () => {
     await expect(service.list()).resolves.toEqual([]);
   });
 
-  test('rejects conversation creation when advisor has no prompt Doc ID', async () => {
+  test('rejects conversation creation when runtime version is missing', async () => {
     const service = new ConversationsService(
       {
         create: async () => {
           throw new Error('conversation should not be created');
         }
       } as never,
-      {
-        getActive: async () => ({
-          id: 'data-dashboard',
-          name: 'Data Dashboard Advisor',
-          description: 'Dashboard mentoring',
-          promptDocId: null,
-          isActive: true,
-          createdAt: new Date()
-        })
-      } as never,
-      {
-        getForAdvisor: async () => ({
-          advisorId: 'data-dashboard',
-          provider: 'gemini',
-          model: 'gemini-2.5-flash-lite',
-          isEnabled: true,
-          updatedAt: new Date()
-        })
-      } as never
+      createConversationRuntimeService({ succeed: false }),
+      {} as never
     );
 
     await expect(
@@ -55,7 +76,7 @@ describe('conversations service', () => {
     ).rejects.toBeInstanceOf(HttpException);
   });
 
-  test('allows conversation creation when no model config row exists', async () => {
+  test('allows conversation creation when runtime is ready', async () => {
     const service = new ConversationsService(
       {
         create: async () => ({
@@ -64,22 +85,12 @@ describe('conversations service', () => {
           advisorId: 'data-dashboard',
           title: 'Test',
           createdAt: new Date(),
-          updatedAt: new Date()
+          updatedAt: new Date(),
+          advisorRuntimeVersionId: crypto.randomUUID()
         })
       } as never,
-      {
-        getActive: async () => ({
-          id: 'data-dashboard',
-          name: 'Data Dashboard Advisor',
-          description: 'Dashboard mentoring',
-          promptDocId: 'prompt-doc-id',
-          isActive: true,
-          createdAt: new Date()
-        })
-      } as never,
-      {
-        getForAdvisor: async () => undefined
-      } as never
+      createConversationRuntimeService({ succeed: true }),
+      {} as never
     );
 
     await expect(
@@ -87,32 +98,15 @@ describe('conversations service', () => {
     ).resolves.toBeDefined();
   });
 
-  test('rejects conversation creation when model config is disabled', async () => {
+  test('rejects conversation creation when runtime is disabled', async () => {
     const service = new ConversationsService(
       {
         create: async () => {
           throw new Error('conversation should not be created');
         }
       } as never,
-      {
-        getActive: async () => ({
-          id: 'data-dashboard',
-          name: 'Data Dashboard Advisor',
-          description: 'Dashboard mentoring',
-          promptDocId: 'prompt-doc-id',
-          isActive: true,
-          createdAt: new Date()
-        })
-      } as never,
-      {
-        getForAdvisor: async () => ({
-          advisorId: 'data-dashboard',
-          provider: 'gemini',
-          model: 'gemini-2.5-flash-lite',
-          isEnabled: false,
-          updatedAt: new Date()
-        })
-      } as never
+      createConversationRuntimeService({ throwCode: 'advisor_not_configured' }),
+      {} as never
     );
 
     await expect(

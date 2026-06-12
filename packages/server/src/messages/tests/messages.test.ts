@@ -18,6 +18,7 @@ const actor: Actor = {
 };
 
 type StreamEvent =
+  | { type: 'conversation.ready'; data: { conversationId: string } }
   | { type: 'chunk'; content: string }
   | {
       type: 'final';
@@ -25,6 +26,73 @@ type StreamEvent =
         assistantMessage: MessageRow;
       };
     };
+
+function createModelRateService(config?: {
+  provider?: string;
+  model?: string;
+  assertConfigured?: () => void;
+}) {
+  return {
+    assertRateConfigured: () => {
+      if (config?.assertConfigured) {
+        config.assertConfigured();
+      }
+    },
+    estimatedTurnBudget: () => {
+      if (config?.assertConfigured) {
+        config.assertConfigured();
+      }
+      return { estimatedTokens: 4000, estimatedCostUsd: 0.001 };
+    }
+  } as never;
+}
+
+function createAdvisorRuntimeService(runtime: {
+  advisorId: string;
+  advisorName?: string;
+  runtimeVersionId?: string;
+  promptContext?: {
+    systemPrompt?: string;
+    systemPromptHash?: string;
+    promptSnapshotHash?: string;
+    promptDocRevision?: string;
+    dnaDigestVersion?: string;
+  };
+  modelConfig?: {
+    provider: string;
+    model: string;
+    isEnabled?: boolean;
+  };
+}) {
+  return {
+    resolveRunnableVersion: async () => ({
+      advisorId: runtime.advisorId,
+      advisorName: runtime.advisorName ?? runtime.advisorId,
+      runtimeVersionId: runtime.runtimeVersionId ?? crypto.randomUUID(),
+      promptContext: {
+        systemPrompt:
+          runtime.promptContext?.systemPrompt ??
+          'System instructions <scope_policy>\nshared dna digest',
+        systemPromptHash:
+          runtime.promptContext?.systemPromptHash ?? 'sys-prompt-hash',
+        promptSnapshotHash:
+          runtime.promptContext?.promptSnapshotHash ?? 'prompt-hash',
+        promptDocRevision:
+          runtime.promptContext?.promptDocRevision ?? 'prompt-revision',
+        dnaDigestVersion: runtime.promptContext?.dnaDigestVersion ?? 'dna-hash'
+      },
+      modelConfig: {
+        provider: runtime.modelConfig?.provider ?? 'deterministic',
+        model: runtime.modelConfig?.model ?? 'deterministic-model',
+        isEnabled: runtime.modelConfig?.isEnabled ?? true
+      }
+    }),
+    checkReadiness: async () => ({
+      ready: true as const,
+      runtime: {}
+    })
+  } as never;
+}
 
 async function* streamShouldNotBeCalled(): AsyncGenerator<LlmChatChunk> {
   if (Date.now() < 0) {
@@ -141,24 +209,31 @@ describe('messages service', () => {
           }),
           touch: async () => undefined
         } as never,
-        {
-          getForAdvisor: async () => ({
-            advisorId,
+        createModelRateService(),
+        createAdvisorRuntimeService({
+          advisorId,
+          promptContext: {
+            systemPrompt: `System instructions for ${advisorId}\n<scope_policy>\nshared dna digest`,
+            promptSnapshotHash: `prompt:${advisorId}`,
+            dnaDigestVersion: 'dna:digest:shared'
+          },
+          modelConfig: {
             provider: 'deterministic',
-            model: 'deterministic-model',
-            isEnabled: true,
-            updatedAt: new Date().toISOString()
-          })
-        } as never,
-        createPromptContext({
-          advisorPromptText: `System instructions for ${advisorId}`,
-          dnaDigestText: 'shared dna digest',
-          promptSnapshotHash: `prompt:${advisorId}`,
-          dnaDigestVersion: 'dna:digest:shared',
-          onLoad: () => {
-            dnaCalls += 1;
+            model: 'deterministic-model'
           }
         }),
+        {
+          getForAdvisor: async () => {
+            dnaCalls += 1;
+            return {
+              systemPrompt: `System instructions for ${advisorId}\n<scope_policy>\nshared dna digest`,
+              systemPromptHash: 'hash',
+              promptSnapshotHash: `prompt:${advisorId}`,
+              promptDocRevision: 'revision',
+              dnaDigestVersion: 'dna:digest:shared'
+            };
+          }
+        },
         {
           complete: async (request: LlmChatRequest) => {
             requests.push(request);
@@ -191,7 +266,7 @@ describe('messages service', () => {
       }
     );
 
-    expect(dnaCalls).toBe(2);
+    expect(dnaCalls).toBe(0);
     const systemPrompts = requests.map(
       (request) => request.messages[0]?.content ?? ''
     );
@@ -220,15 +295,14 @@ describe('messages service', () => {
         }),
         touch: async () => undefined
       } as never,
-      {
-        getForAdvisor: async () => ({
-          advisorId: 'data-dashboard',
-          provider: 'deterministic',
-          model: 'deterministic-model',
-          isEnabled: true,
-          updatedAt: new Date().toISOString()
-        })
-      } as never,
+      createModelRateService(),
+      createAdvisorRuntimeService({
+        advisorId: 'data-dashboard',
+        promptContext: {
+          systemPrompt: 'System instructions\n<scope_policy>\nDNA digest'
+        },
+        modelConfig: { provider: 'deterministic', model: 'deterministic-model' }
+      }),
       createPromptContext({
         advisorPromptText: 'System instructions',
         dnaDigestText: 'DNA digest'
@@ -275,15 +349,14 @@ describe('messages service', () => {
         }),
         touch: async () => undefined
       } as never,
-      {
-        getForAdvisor: async () => ({
-          advisorId: 'data-dashboard',
-          provider: 'deterministic',
-          model: 'deterministic-model',
-          isEnabled: true,
-          updatedAt: new Date().toISOString()
-        })
-      } as never,
+      createModelRateService(),
+      createAdvisorRuntimeService({
+        advisorId: 'data-dashboard',
+        promptContext: {
+          systemPrompt: 'System instructions\n<scope_policy>\nDNA digest'
+        },
+        modelConfig: { provider: 'deterministic', model: 'deterministic-model' }
+      }),
       createPromptContext({
         advisorPromptText: 'System instructions',
         dnaDigestText: 'DNA digest'
@@ -370,15 +443,11 @@ describe('messages service', () => {
         }),
         touch: async () => undefined
       } as never,
-      {
-        getForAdvisor: async () => ({
-          advisorId: 'data-dashboard',
-          provider: 'deterministic',
-          model: 'deterministic-model',
-          isEnabled: true,
-          updatedAt: new Date().toISOString()
-        })
-      } as never,
+      createModelRateService(),
+      createAdvisorRuntimeService({
+        advisorId: 'data-dashboard',
+        modelConfig: { provider: 'deterministic', model: 'deterministic-model' }
+      }),
       createPromptContext({
         advisorPromptText: 'System instructions',
         dnaDigestText: 'shared dna digest'
@@ -435,15 +504,11 @@ describe('messages service', () => {
           updatedAt: new Date().toISOString()
         })
       } as never,
-      {
-        getForAdvisor: async () => ({
-          advisorId: 'data-dashboard',
-          provider: 'deterministic',
-          model: 'deterministic-model',
-          isEnabled: true,
-          updatedAt: new Date().toISOString()
-        })
-      } as never,
+      createModelRateService(),
+      createAdvisorRuntimeService({
+        advisorId: 'data-dashboard',
+        modelConfig: { provider: 'deterministic', model: 'deterministic-model' }
+      }),
       createPromptContext({
         advisorPromptText: 'System instructions',
         dnaDigestText: 'shared dna digest'
@@ -504,15 +569,11 @@ describe('messages service', () => {
         }),
         touch: async () => undefined
       } as never,
-      {
-        getForAdvisor: async () => ({
-          advisorId: 'data-dashboard',
-          provider: 'gemini',
-          model: 'gemini-2.5-flash-lite',
-          isEnabled: true,
-          updatedAt: new Date().toISOString()
-        })
-      } as never,
+      createModelRateService(),
+      createAdvisorRuntimeService({
+        advisorId: 'data-dashboard',
+        modelConfig: { provider: 'gemini', model: 'gemini-2.5-flash-lite' }
+      }),
       createPromptContext({
         advisorPromptText: 'System instructions',
         dnaDigestText: 'shared dna digest'
@@ -571,15 +632,19 @@ describe('messages service', () => {
           updatedAt: new Date().toISOString()
         })
       } as never,
-      {
-        getForAdvisor: async () => ({
-          advisorId: 'data-dashboard',
-          provider: 'unknown',
-          model: 'unknown-model',
-          isEnabled: true,
-          updatedAt: new Date().toISOString()
-        })
-      } as never,
+      createModelRateService({
+        assertConfigured: () => {
+          throw new HttpException(
+            422,
+            'Model rate is not configured',
+            'model_rate_not_configured'
+          );
+        }
+      }),
+      createAdvisorRuntimeService({
+        advisorId: 'data-dashboard',
+        modelConfig: { provider: 'unknown', model: 'unknown-model' }
+      }),
       {
         getForAdvisor: async () => {
           promptCalls += 1;
@@ -617,17 +682,7 @@ describe('messages service', () => {
 
     expect(promptCalls).toBe(0);
     expect(providerCalls).toBe(0);
-    expect(createdMessages).toHaveLength(2);
-    expect(createdMessages[0]).toMatchObject({
-      role: 'user',
-      status: 'ok',
-      content: 'blocked'
-    });
-    expect(createdMessages[1]).toMatchObject({
-      role: 'assistant',
-      status: 'blocked',
-      blockReason: 'model_rate_not_configured'
-    });
+    expect(createdMessages).toHaveLength(0);
     expect(telemetry).toContainEqual({
       eventName: 'request_blocked',
       payload: expect.objectContaining({
@@ -654,15 +709,11 @@ describe('messages service', () => {
         }),
         touch: async () => undefined
       } as never,
-      {
-        getForAdvisor: async () => ({
-          advisorId: 'data-dashboard',
-          provider: 'deterministic',
-          model: 'deterministic-model',
-          isEnabled: true,
-          updatedAt: new Date().toISOString()
-        })
-      } as never,
+      createModelRateService(),
+      createAdvisorRuntimeService({
+        advisorId: 'data-dashboard',
+        modelConfig: { provider: 'deterministic', model: 'deterministic-model' }
+      }),
       createPromptContext({
         advisorPromptText: 'System instructions',
         dnaDigestText: 'shared dna digest'
@@ -722,15 +773,11 @@ describe('messages service', () => {
           updatedAt: new Date().toISOString()
         })
       } as never,
-      {
-        getForAdvisor: async () => ({
-          advisorId: 'data-dashboard',
-          provider: 'deterministic',
-          model: 'deterministic-model',
-          isEnabled: true,
-          updatedAt: new Date().toISOString()
-        })
-      } as never,
+      createModelRateService(),
+      createAdvisorRuntimeService({
+        advisorId: 'data-dashboard',
+        modelConfig: { provider: 'deterministic', model: 'deterministic-model' }
+      }),
       {
         getForAdvisor: async () => {
           promptCalls += 1;
@@ -783,17 +830,7 @@ describe('messages service', () => {
 
     expect(promptCalls).toBe(0);
     expect(providerCalls).toBe(0);
-    expect(createdMessages).toHaveLength(2);
-    expect(createdMessages[0]).toMatchObject({
-      role: 'user',
-      status: 'ok',
-      content: 'blocked'
-    });
-    expect(createdMessages[1]).toMatchObject({
-      role: 'assistant',
-      status: 'blocked',
-      blockReason: 'daily_message_limit'
-    });
+    expect(createdMessages).toHaveLength(0);
     expect(telemetry).toContainEqual({
       eventName: 'request_blocked',
       payload: expect.objectContaining({
@@ -812,11 +849,11 @@ describe('messages service', () => {
           throw new HttpException(403, 'Forbidden', 'forbidden');
         }
       } as never,
-      {
-        getForAdvisor: async () => {
-          throw new Error('model config should not be loaded');
-        }
-      } as never,
+      createModelRateService(),
+      createAdvisorRuntimeService({
+        advisorId: 'data-dashboard',
+        modelConfig: { provider: 'deterministic', model: 'deterministic-model' }
+      }),
       {
         getForAdvisor: async () => {
           throw new Error('prompt context should not be loaded');
