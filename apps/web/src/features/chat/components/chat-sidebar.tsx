@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   ChevronUp,
   LogOut,
@@ -71,12 +71,27 @@ function RecentConversationButton({
 }) {
   const { isMobile, setOpenMobile } = useSidebar();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const longPressLock = useRef(false);
 
   const handleClick = () => {
+    if (longPressLock.current) {
+      longPressLock.current = false;
+      return;
+    }
     if (isMobile) {
       setOpenMobile(false);
     }
     onClick();
+  };
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    if (!isMobile) return;
+    e.preventDefault();
+    longPressLock.current = true;
+    onDelete();
+    setTimeout(() => {
+      longPressLock.current = false;
+    }, 500);
   };
 
   return (
@@ -86,38 +101,44 @@ function RecentConversationButton({
         tooltip={conversation.title}
         isActive={isActive}
       >
-        <button type="button" onClick={handleClick}>
+        <button
+          type="button"
+          onClick={handleClick}
+          onContextMenu={handleContextMenu}
+        >
           <span className="block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
             {conversation.title}
           </span>
         </button>
       </SidebarMenuButton>
 
-      <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
-        <DropdownMenuTrigger asChild>
-          <SidebarMenuAction
-            showOnHover={!isActive}
-            asChild
-            aria-label={`Options for ${conversation.title}`}
-          >
-            <button type="button">
-              <EllipsisVertical className="size-4" />
-            </button>
-          </SidebarMenuAction>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent side="right" align="start">
-          <DropdownMenuItem
-            variant="destructive"
-            onSelect={() => {
-              setDropdownOpen(false);
-              onDelete();
-            }}
-          >
-            <Trash2 className="size-4" />
-            Delete
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {!isMobile && (
+        <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
+          <DropdownMenuTrigger asChild>
+            <SidebarMenuAction
+              showOnHover={!isActive}
+              asChild
+              aria-label={`Options for ${conversation.title}`}
+            >
+              <button type="button">
+                <EllipsisVertical className="size-4" />
+              </button>
+            </SidebarMenuAction>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="right" align="start">
+            <DropdownMenuItem
+              variant="destructive"
+              onSelect={() => {
+                setDropdownOpen(false);
+                onDelete();
+              }}
+            >
+              <Trash2 className="size-4" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
     </SidebarMenuItem>
   );
 }
