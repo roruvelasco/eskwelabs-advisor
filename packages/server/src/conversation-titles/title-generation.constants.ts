@@ -25,6 +25,8 @@ Requirements:
 - at most 80 characters
 - capture the specific topic, not a generic description
 - vary wording across conversations — avoid repetitive phrases
+- never include the advisor/scaffold name (e.g. "Data Dashboard", "Data Modeling", "SSOT Memo", "Advisor")
+- do not prefix with any platform, tool, or persona name — just the topic
 - no quotation marks
 - no markdown
 - no prefix such as "Title:"
