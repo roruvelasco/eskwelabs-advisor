@@ -72,6 +72,12 @@ function RecentConversationButton({
   const { isMobile, setOpenMobile } = useSidebar();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const longPressLock = useRef(false);
+  const touchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined
+  );
+  const touchStartPos = useRef<{ x: number; y: number } | null>(null);
+  const LONG_PRESS_MS = 500;
+  const MOVE_THRESHOLD = 10;
 
   const handleClick = () => {
     if (longPressLock.current) {
@@ -84,14 +90,37 @@ function RecentConversationButton({
     onClick();
   };
 
-  const handleContextMenu = (e: React.MouseEvent) => {
-    if (!isMobile) return;
-    e.preventDefault();
-    longPressLock.current = true;
-    onDelete();
-    setTimeout(() => {
-      longPressLock.current = false;
-    }, 500);
+  const clearLongPress = () => {
+    clearTimeout(touchTimer.current);
+    touchStartPos.current = null;
+  };
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    touchStartPos.current = { x: e.clientX, y: e.clientY };
+    touchTimer.current = setTimeout(() => {
+      longPressLock.current = true;
+      onDelete();
+      setTimeout(() => {
+        longPressLock.current = false;
+      }, 500);
+    }, LONG_PRESS_MS);
+  };
+
+  const handlePointerUp = () => {
+    clearLongPress();
+  };
+
+  const handlePointerCancel = () => {
+    clearLongPress();
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!touchStartPos.current) return;
+    const dx = Math.abs(e.clientX - touchStartPos.current.x);
+    const dy = Math.abs(e.clientY - touchStartPos.current.y);
+    if (dx > MOVE_THRESHOLD || dy > MOVE_THRESHOLD) {
+      clearLongPress();
+    }
   };
 
   return (
@@ -104,7 +133,10 @@ function RecentConversationButton({
         <button
           type="button"
           onClick={handleClick}
-          onContextMenu={handleContextMenu}
+          onPointerDown={handlePointerDown}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
+          onPointerMove={handlePointerMove}
         >
           <span className="block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
             {conversation.title}
