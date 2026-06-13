@@ -240,6 +240,10 @@ function ChatLayoutInner() {
   });
   const { data: draftMessagesResponse } = useQuery<CacheData>({
     queryKey: messagesDraftKey(activeDraftId ?? ''),
+    queryFn: () =>
+      queryClient.getQueryData<CacheData>(
+        messagesDraftKey(activeDraftId ?? '')
+      ) ?? { data: [] },
     enabled: Boolean(activeDraftId) && !conversationId
   });
   const { data: conversationResponse } = useQuery({

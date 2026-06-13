@@ -177,7 +177,8 @@
   }
 
   [data-sidebar='sidebar'][data-mobile='true'] {
-    width: 50vw !important;
+    width: 70vw !important;
+    max-width: 70vw !important;
   }
 
   .ai-message-response {
