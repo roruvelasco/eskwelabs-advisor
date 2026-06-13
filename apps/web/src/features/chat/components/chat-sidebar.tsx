@@ -137,6 +137,7 @@ function RecentConversationButton({
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerCancel}
           onPointerMove={handlePointerMove}
+          className="select-none"
         >
           <span className="block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
             {conversation.title}
