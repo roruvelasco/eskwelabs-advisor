@@ -59,6 +59,7 @@ function ChatLayoutInner() {
     assistantTempId: string;
     createdConversationId?: string;
   } | null>(null);
+  const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!conversationId && !advisorId) router.replace('/advisors');
@@ -71,6 +72,7 @@ function ChatLayoutInner() {
       const assistantTempId = `assistant:${crypto.randomUUID()}`;
 
       streamRef.current = { clientTurnId, assistantTempId };
+      if (!conversationId) setActiveDraftId(clientTurnId);
 
       const optimisticTurn: CacheMessage[] = [
         { id: userTempId, role: 'user', content, status: 'complete' },
@@ -194,11 +196,13 @@ function ChatLayoutInner() {
       return createdConversationId ?? conversationId ?? '';
     },
     onSuccess: async (cid) => {
+      setActiveDraftId(null);
       await queryClient.invalidateQueries({ queryKey: ['messages', cid] });
       await queryClient.invalidateQueries({ queryKey: ['conversations'] });
       streamRef.current = null;
     },
     onError: () => {
+      setActiveDraftId(null);
       const info = streamRef.current;
       if (!info) return;
 
@@ -234,6 +238,10 @@ function ChatLayoutInner() {
     ...messagesQuery(conversationId ?? ''),
     enabled: Boolean(conversationId) && !sendMutation.isPending
   });
+  const { data: draftMessagesResponse } = useQuery<CacheData>({
+    queryKey: messagesDraftKey(activeDraftId ?? ''),
+    enabled: Boolean(activeDraftId) && !conversationId
+  });
   const { data: conversationResponse } = useQuery({
     ...conversationQuery(conversationId ?? ''),
     enabled: Boolean(conversationId)
@@ -257,9 +265,10 @@ function ChatLayoutInner() {
   );
   const currentAdvisorName = currentAdvisor?.name ?? 'Advisor';
 
-  const loadedMessages: Message[] = (
-    (messagesResponse?.data ?? []) as CacheMessage[]
-  ).map((msg) => ({
+  const rawMessages = (draftMessagesResponse?.data ??
+    messagesResponse?.data ??
+    []) as CacheMessage[];
+  const loadedMessages: Message[] = rawMessages.map((msg) => ({
     id: msg.id,
     role: msg.role === 'assistant' ? 'advisor' : 'user',
     content: msg.content,
