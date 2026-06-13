@@ -64,37 +64,6 @@ function ChatLayoutInner() {
     if (!conversationId && !advisorId) router.replace('/advisors');
   }, [advisorId, conversationId, router]);
 
-  const {
-    data: messagesResponse,
-    isLoading,
-    isError
-  } = useQuery({
-    ...messagesQuery(conversationId ?? ''),
-    enabled: Boolean(conversationId)
-  });
-  const { data: conversationResponse } = useQuery({
-    ...conversationQuery(conversationId ?? ''),
-    enabled: Boolean(conversationId)
-  });
-  const { data: advisorsResponse } = useQuery(advisorsQuery);
-
-  const currentAdvisorId =
-    advisorId ??
-    (conversationResponse as { data?: { advisorId?: string } } | undefined)
-      ?.data?.advisorId;
-  const sidebarAdvisorId = currentAdvisorId ?? stableSidebarAdvisorId;
-  useEffect(() => {
-    if (currentAdvisorId) {
-      setStableSidebarAdvisorId(currentAdvisorId);
-    }
-  }, [currentAdvisorId]);
-  const isResolvingConversationAdvisor =
-    Boolean(conversationId) && !sidebarAdvisorId;
-  const currentAdvisor = (advisorsResponse?.data ?? []).find(
-    (advisor) => advisor.id === currentAdvisorId
-  );
-  const currentAdvisorName = currentAdvisor?.name ?? 'Advisor';
-
   const sendMutation = useMutation({
     mutationFn: async (content: string) => {
       const clientTurnId = crypto.randomUUID();
@@ -150,9 +119,11 @@ function ChatLayoutInner() {
               );
             }
 
-            router.replace(`/chat?conversation=${createdConversationId}`, {
-              scroll: false
-            });
+            window.history.replaceState(
+              null,
+              '',
+              `/chat?conversation=${createdConversationId}`
+            );
             return;
           }
 
@@ -254,6 +225,37 @@ function ChatLayoutInner() {
       streamRef.current = null;
     }
   });
+
+  const {
+    data: messagesResponse,
+    isLoading,
+    isError
+  } = useQuery({
+    ...messagesQuery(conversationId ?? ''),
+    enabled: Boolean(conversationId) && !sendMutation.isPending
+  });
+  const { data: conversationResponse } = useQuery({
+    ...conversationQuery(conversationId ?? ''),
+    enabled: Boolean(conversationId)
+  });
+  const { data: advisorsResponse } = useQuery(advisorsQuery);
+
+  const currentAdvisorId =
+    advisorId ??
+    (conversationResponse as { data?: { advisorId?: string } } | undefined)
+      ?.data?.advisorId;
+  const sidebarAdvisorId = currentAdvisorId ?? stableSidebarAdvisorId;
+  useEffect(() => {
+    if (currentAdvisorId) {
+      setStableSidebarAdvisorId(currentAdvisorId);
+    }
+  }, [currentAdvisorId]);
+  const isResolvingConversationAdvisor =
+    Boolean(conversationId) && !sidebarAdvisorId;
+  const currentAdvisor = (advisorsResponse?.data ?? []).find(
+    (advisor) => advisor.id === currentAdvisorId
+  );
+  const currentAdvisorName = currentAdvisor?.name ?? 'Advisor';
 
   const loadedMessages: Message[] = (
     (messagesResponse?.data ?? []) as CacheMessage[]
