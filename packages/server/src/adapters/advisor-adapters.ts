@@ -1,4 +1,4 @@
-import { createHash, createSign } from 'node:crypto';
+import { createHash } from 'node:crypto';
 
 import { HttpException } from '../common/http/http-exception';
 import type { ServerEnv } from '../config/env';
@@ -41,18 +41,8 @@ export interface LlmProvider {
   stream(request: LlmChatRequest): AsyncGenerator<LlmChatChunk>;
 }
 
-const DOCS_SCOPE = 'https://www.googleapis.com/auth/documents.readonly';
-
 function sha256(value: string) {
   return createHash('sha256').update(value.trim()).digest('hex');
-}
-
-function base64Url(value: string | Buffer) {
-  return Buffer.from(value)
-    .toString('base64')
-    .replace(/=/g, '')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_');
 }
 
 function extractGoogleDocText(document: GoogleDocumentResponse) {
@@ -87,81 +77,49 @@ export class GoogleDocsClient {
 
   constructor(private env: ServerEnv) {}
 
-  private get serviceAccount() {
-    if (!this.env.GOOGLE_DOCS_SERVICE_ACCOUNT_JSON) return null;
-    try {
-      return JSON.parse(this.env.GOOGLE_DOCS_SERVICE_ACCOUNT_JSON) as {
-        client_email?: string;
-        private_key?: string;
-        token_uri?: string;
-      };
-    } catch {
-      throw new HttpException(
-        500,
-        'Google Docs service account is invalid',
-        'docs_auth_invalid'
-      );
-    }
-  }
-
   private async getAccessToken() {
     if (this.accessToken && this.accessToken.expiresAt > Date.now() + 60_000) {
       return this.accessToken.value;
     }
 
-    const serviceAccount = this.serviceAccount;
-    if (serviceAccount?.client_email && serviceAccount.private_key) {
-      const tokenUri =
-        serviceAccount.token_uri ?? 'https://oauth2.googleapis.com/token';
-      const now = Math.floor(Date.now() / 1000);
-      const header = base64Url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
-      const claim = base64Url(
-        JSON.stringify({
-          iss: serviceAccount.client_email,
-          scope: DOCS_SCOPE,
-          aud: tokenUri,
-          exp: now + 3600,
-          iat: now
-        })
+    const { GOOGLE_REFRESH_TOKEN, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET } =
+      this.env;
+    if (!GOOGLE_REFRESH_TOKEN || !GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+      throw new HttpException(
+        503,
+        'Google Docs credentials are not configured',
+        'docs_not_configured'
       );
-      const signature = createSign('RSA-SHA256')
-        .update(`${header}.${claim}`)
-        .sign(serviceAccount.private_key);
-      const assertion = `${header}.${claim}.${base64Url(signature)}`;
-
-      const response = await fetch(tokenUri, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-          assertion
-        })
-      });
-
-      if (!response.ok) {
-        throw new HttpException(
-          503,
-          'Google Docs authentication failed',
-          'docs_auth_failed'
-        );
-      }
-
-      const payload = (await response.json()) as {
-        access_token: string;
-        expires_in?: number;
-      };
-      this.accessToken = {
-        value: payload.access_token,
-        expiresAt: Date.now() + (payload.expires_in ?? 3600) * 1000
-      };
-      return this.accessToken.value;
     }
 
-    throw new HttpException(
-      503,
-      'Google Docs service account is not configured',
-      'docs_not_configured'
-    );
+    const response = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: GOOGLE_REFRESH_TOKEN,
+        client_id: GOOGLE_CLIENT_ID,
+        client_secret: GOOGLE_CLIENT_SECRET
+      })
+    });
+
+    if (!response.ok) {
+      throw new HttpException(
+        503,
+        'Google Docs authentication failed',
+        'docs_auth_failed'
+      );
+    }
+
+    const payload = (await response.json()) as {
+      access_token: string;
+      expires_in?: number;
+    };
+    this.accessToken = {
+      value: payload.access_token,
+      expiresAt: Date.now() + (payload.expires_in ?? 3600) * 1000
+    };
+    return this.accessToken.value;
   }
 
   async fetchDocument(docId: string) {
@@ -175,8 +133,9 @@ export class GoogleDocsClient {
 
     const token = await this.getAccessToken();
 
-    const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` }
+    const response = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store'
     });
 
     if (!response.ok) {

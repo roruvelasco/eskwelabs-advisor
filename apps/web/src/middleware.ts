@@ -27,7 +27,7 @@ function isPrefixed(pathname: string, prefixes: string[]) {
 export function classifyRoute(pathname: string): RouteKind {
   if (pathname === '/admin/login') return 'adminLogin';
   if (pathname === '/login') return 'eifLogin';
-  if (isPrefixed(pathname, ['/admin']) || pathname.startsWith('/api/admin'))
+  if (isPrefixed(pathname, ['/admin']) || isPrefixed(pathname, ['/api/admin']))
     return 'adminArea';
   if (
     isPrefixed(pathname, eifPagePrefixes) ||

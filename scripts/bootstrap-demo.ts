@@ -34,6 +34,11 @@ async function main() {
       continue;
     }
 
+    if (!advisor.promptDocId) {
+      console.log(`  ✗ ${advisor.id} has no promptDocId, skipping`);
+      continue;
+    }
+
     let snapshotId: string | null = null;
     let digestId: string | null = null;
 

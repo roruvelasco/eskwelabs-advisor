@@ -304,24 +304,26 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
         const env = c.get(SERVER_ENV);
         const mode = env.PROMPT_PROVIDER_MODE;
 
-        if (mode === 'deterministic' || env.RUNTIME_PROFILE !== 'production') {
+        // Explicit deterministic override — always fake, regardless of other config.
+        if (mode === 'deterministic') {
           return new DeterministicPromptContextService(
             c.get(CompiledSystemPromptBuilder)
           );
         }
 
+        // Snapshot-only mode — serve from PG snapshots without live Doc fetch.
         if (mode === 'snapshot') {
           return new PromptContextService(
             c.get(PromptSnapshotsRepository),
             c.get(DnaDigestsRepository),
             c.get(RedisService),
             c.get(CompiledSystemPromptBuilder),
-            c.get(TelemetryService),
-            c.get(PromptIngestionService)
+            c.get(TelemetryService)
           );
         }
 
-        if (env.GOOGLE_DOCS_SERVICE_ACCOUNT_JSON) {
+        // Google Docs configured — OAuth refresh token fetch; no service account required.
+        if (env.GOOGLE_REFRESH_TOKEN && env.GOOGLE_DOCS_DNA_DOC_ID) {
           return new PromptContextService(
             c.get(PromptSnapshotsRepository),
             c.get(DnaDigestsRepository),
@@ -332,6 +334,7 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
           );
         }
 
+        // No Docs configured — use deterministic (safe default for local dev).
         return new DeterministicPromptContextService(
           c.get(CompiledSystemPromptBuilder)
         );

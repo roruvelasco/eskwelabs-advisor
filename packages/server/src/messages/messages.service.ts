@@ -101,20 +101,7 @@ export class MessagesService {
     estimatedTokens: number;
     estimatedCostUsd: number;
   }) {
-    const enforcer = this.costCapEnforcer as CostCapEnforcer & {
-      reserveTurn?: (input: {
-        userId: string;
-        estimatedTokens: number;
-        estimatedCostUsd: number;
-      }) => Promise<CostReservation>;
-    };
-
-    if (enforcer.reserveTurn) {
-      return enforcer.reserveTurn(input);
-    }
-
-    await this.costCapEnforcer.assertAllowed(input);
-    return undefined;
+    return this.costCapEnforcer.reserveTurn(input);
   }
 
   private async finalizeBudget(
@@ -126,19 +113,8 @@ export class MessagesService {
       estimatedCostUsd: string;
     }
   ) {
-    const enforcer = this.costCapEnforcer as CostCapEnforcer & {
-      finalizeReservation?: (
-        reservation: CostReservation,
-        input: {
-          promptTokens: number;
-          completionTokens: number;
-          estimatedCostUsd: number;
-        }
-      ) => Promise<void>;
-    };
-
-    if (reservation && enforcer.finalizeReservation) {
-      await enforcer.finalizeReservation(reservation, {
+    if (reservation) {
+      await this.costCapEnforcer.finalizeReservation(reservation, {
         promptTokens: completion.promptTokens,
         completionTokens: completion.completionTokens,
         estimatedCostUsd: Number(completion.estimatedCostUsd)
@@ -154,13 +130,9 @@ export class MessagesService {
   }
 
   private async releaseBudget(reservation?: CostReservation) {
-    const enforcer = this.costCapEnforcer as CostCapEnforcer & {
-      releaseReservation?: (reservation?: CostReservation) => Promise<void>;
-    };
-
-    if (reservation && enforcer.releaseReservation) {
+    if (reservation) {
       try {
-        await enforcer.releaseReservation(reservation);
+        await this.costCapEnforcer.releaseReservation(reservation);
       } catch {
         return;
       }

@@ -26,17 +26,13 @@ type AdvisoryLockTransaction = {
 };
 
 export class UsageCountersRepository extends Repository {
-  private lockKey(userId: string, dayPh: string) {
-    return `usage-counter:${userId}:${dayPh}`;
-  }
-
   private async lockUserDay(
     tx: AdvisoryLockTransaction,
     userId: string,
     dayPh: string
   ) {
     await tx.execute(
-      sql`select pg_advisory_xact_lock(hashtext(${this.lockKey(userId, dayPh)}))`
+      sql`select pg_advisory_xact_lock(hashtext(${userId}), hashtext(${dayPh}))`
     );
   }
 
