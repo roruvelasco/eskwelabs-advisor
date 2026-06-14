@@ -77,6 +77,31 @@ function createDeferredRunner() {
   return { run: (_task: () => Promise<void>) => {} } as never;
 }
 
+function createCostCapEnforcer(opts?: {
+  onReserveTurn?: (budget: {
+    userId: string;
+    estimatedTokens: number;
+    estimatedCostUsd: number;
+  }) => void;
+  throwCode?: string;
+}) {
+  return {
+    reserveTurn: async (budget: {
+      userId: string;
+      estimatedTokens: number;
+      estimatedCostUsd: number;
+    }) => {
+      if (opts?.throwCode) {
+        throw new HttpException(429, 'Cap reached', opts.throwCode);
+      }
+      opts?.onReserveTurn?.(budget);
+      return budget;
+    },
+    finalizeReservation: async () => undefined,
+    releaseReservation: async () => undefined
+  } as never;
+}
+
 function createModelRateService(config?: {
   provider?: string;
   model?: string;
@@ -297,7 +322,7 @@ describe('messages service', () => {
           },
           stream: streamShouldNotBeCalled
         },
-        { assertAllowed: async () => undefined } as never,
+        createCostCapEnforcer(),
         { incrementTurn: async () => undefined } as never,
         { record: async () => undefined } as never,
         { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
@@ -370,7 +395,7 @@ describe('messages service', () => {
         }),
         stream: streamShouldNotBeCalled
       },
-      { assertAllowed: async () => undefined } as never,
+      createCostCapEnforcer(),
       { incrementTurn: async () => undefined } as never,
       { record: async () => undefined } as never,
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
@@ -435,7 +460,7 @@ describe('messages service', () => {
           };
         }
       },
-      { assertAllowed: async () => undefined } as never,
+      createCostCapEnforcer(),
       { incrementTurn: async () => undefined } as never,
       { record: async () => undefined } as never,
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
@@ -524,7 +549,7 @@ describe('messages service', () => {
         },
         stream: streamShouldNotBeCalled
       },
-      { assertAllowed: async () => undefined } as never,
+      createCostCapEnforcer(),
       { incrementTurn: async () => undefined } as never,
       { record: async () => undefined } as never,
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
@@ -583,7 +608,7 @@ describe('messages service', () => {
           yield { type: 'delta' as const, content: 'partial ' };
         }
       },
-      { assertAllowed: async () => undefined } as never,
+      createCostCapEnforcer(),
       {
         incrementTurn: async (_userId: string, input: unknown) => {
           increments.push(input);
@@ -653,15 +678,11 @@ describe('messages service', () => {
         }),
         stream: streamShouldNotBeCalled
       },
-      {
-        assertAllowed: async (budget: {
-          userId: string;
-          estimatedTokens: number;
-          estimatedCostUsd: number;
-        }) => {
-          capturedBudget = budget;
+      createCostCapEnforcer({
+        onReserveTurn: (b) => {
+          capturedBudget = b;
         }
-      } as never,
+      }),
       { incrementTurn: async () => undefined } as never,
       { record: async () => undefined } as never,
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
@@ -726,7 +747,7 @@ describe('messages service', () => {
         },
         stream: streamShouldNotBeCalled
       },
-      { assertAllowed: async () => undefined } as never,
+      createCostCapEnforcer(),
       { incrementTurn: async () => undefined } as never,
       {
         record: async (
@@ -795,7 +816,7 @@ describe('messages service', () => {
         },
         stream: streamShouldNotBeCalled
       },
-      { assertAllowed: async () => undefined } as never,
+      createCostCapEnforcer(),
       {
         incrementTurn: async (_userId: string, input: unknown) => {
           increments.push(input);
@@ -868,15 +889,7 @@ describe('messages service', () => {
           yield { type: 'delta' as const, content: '' };
         }
       },
-      {
-        assertAllowed: async () => {
-          throw new HttpException(
-            429,
-            'Daily message limit reached',
-            'daily_message_limit'
-          );
-        }
-      } as never,
+      createCostCapEnforcer({ throwCode: 'daily_message_limit' }),
       {
         incrementTurn: async () => undefined
       } as never,
@@ -942,7 +955,7 @@ describe('messages service', () => {
         },
         stream: streamShouldNotBeCalled
       },
-      { assertAllowed: async () => undefined } as never,
+      createCostCapEnforcer(),
       { incrementTurn: async () => undefined } as never,
       { record: async () => undefined } as never,
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
