@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @source '../../node_modules/@eskwelabs-advisor/ui/src';
+@source '../../node_modules/@eskwelabs-advisor/ui/node_modules/streamdown/dist/*.js';
 
 @import 'tw-animate-css';
 
@@ -240,6 +241,13 @@
 
   .ai-message-response strong {
     font-weight: 650;
+  }
+
+  /* Streamdown link safety modal — responsive constraints */
+  [data-streamdown='link-safety-modal'] > div {
+    max-width: min(28rem, calc(100vw - 2rem));
+    max-height: calc(100svh - 2rem);
+    overflow-y: auto;
   }
 
   ::-webkit-scrollbar-thumb:hover {
