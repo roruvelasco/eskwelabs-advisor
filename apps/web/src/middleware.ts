@@ -124,12 +124,57 @@ interface ValidToken {
   isActive: true;
 }
 
-function buildActorResponse(
+async function signActorPayload(
+  actor: ValidToken,
+  method: string,
+  path: string,
+  secret: string
+) {
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const nonce = crypto.randomUUID().replaceAll('-', '');
+  const payload = `${actor.id}:${actor.email}:${actor.role}:true:${method}:${path}:${timestamp}:${nonce}`;
+
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(payload));
+  const signature = btoa(String.fromCharCode(...new Uint8Array(sig)));
+
+  return { signature, timestamp, nonce };
+}
+
+async function buildActorResponse(
   request: NextRequest,
   actor: ValidToken,
   nonce: string,
   cleanHeaders: Headers
 ) {
+  const forwardingSecret = process.env.ACTOR_FORWARDING_SECRET;
+  const isProduction = process.env.NODE_ENV === 'production';
+  const isDevDefault =
+    forwardingSecret === 'dev-actor-forwarding-secret-change-in-prod';
+
+  if (forwardingSecret && !(isProduction && isDevDefault)) {
+    const {
+      signature,
+      timestamp,
+      nonce: actorNonce
+    } = await signActorPayload(
+      actor,
+      request.method,
+      request.nextUrl.pathname,
+      forwardingSecret
+    );
+    cleanHeaders.set('x-eskwelabs-actor-signature', signature);
+    cleanHeaders.set('x-eskwelabs-actor-timestamp', timestamp);
+    cleanHeaders.set('x-eskwelabs-actor-nonce', actorNonce);
+  }
+
   cleanHeaders.set('x-eskwelabs-actor-id', actor.id);
   cleanHeaders.set('x-eskwelabs-actor-email', actor.email);
   cleanHeaders.set('x-eskwelabs-actor-role', actor.role);
@@ -185,13 +230,13 @@ function handleUnauthenticated(
 // Authenticated handler
 // ---------------------------------------------------------------------------
 
-function handleAuthenticated(
+async function handleAuthenticated(
   request: NextRequest,
   token: Record<string, unknown>,
   kind: RouteKind,
   nonce: string,
   cleanHeaders: Headers
-): NextResponse {
+): Promise<NextResponse> {
   const id = token.id as string | undefined;
   const email = token.email as string | undefined;
   const role = token.role as string | undefined;
@@ -228,7 +273,7 @@ function handleAuthenticated(
         ? denyApi(request, nonce)
         : redirectToPath(request, nonce, '/advisors');
     }
-    return buildActorResponse(request, actor, nonce, cleanHeaders);
+    return await buildActorResponse(request, actor, nonce, cleanHeaders);
   }
 
   if (kind === 'eifArea' && isAdmin) {
@@ -237,7 +282,7 @@ function handleAuthenticated(
       : redirectToPath(request, nonce, '/admin');
   }
 
-  return buildActorResponse(request, actor, nonce, cleanHeaders);
+  return await buildActorResponse(request, actor, nonce, cleanHeaders);
 }
 
 // ---------------------------------------------------------------------------
@@ -250,6 +295,9 @@ function stripActorHeaders(headers: Headers) {
   clean.delete('x-eskwelabs-actor-email');
   clean.delete('x-eskwelabs-actor-role');
   clean.delete('x-eskwelabs-actor-active');
+  clean.delete('x-eskwelabs-actor-signature');
+  clean.delete('x-eskwelabs-actor-timestamp');
+  clean.delete('x-eskwelabs-actor-nonce');
   return clean;
 }
 
@@ -266,7 +314,7 @@ export function createMiddleware(
 
     if (!token)
       return handleUnauthenticated(request, kind, nonce, cleanHeaders);
-    return handleAuthenticated(request, token, kind, nonce, cleanHeaders);
+    return await handleAuthenticated(request, token, kind, nonce, cleanHeaders);
   };
 }
 

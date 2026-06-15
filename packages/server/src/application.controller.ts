@@ -17,6 +17,7 @@ import { securityHeadersMiddleware } from './common/middleware/security.middlewa
 
 import type { HonoEnv } from './common/utils/hono';
 import type { RateLimitService } from './rate-limit/rate-limit.service';
+import type { ServerEnv } from './config/env';
 import type { TelemetryService } from './telemetry/telemetry.service';
 import type { UsersService } from './users/users.service';
 
@@ -27,6 +28,7 @@ export class ApplicationController {
     private usersService: UsersService,
     private rateLimitService: RateLimitService,
     private telemetryService: TelemetryService,
+    private serverEnv: Pick<ServerEnv, 'ACTOR_FORWARDING_SECRET'>,
     private usersController: UsersController,
     private advisorController: AdvisorController,
     private conversationController: ConversationController,
@@ -42,7 +44,7 @@ export class ApplicationController {
   registerControllers() {
     this.app.onError(errorHandler);
     this.app.use('*', securityHeadersMiddleware);
-    this.app.use('*', createAuthMiddleware(this.usersService));
+    this.app.use('*', createAuthMiddleware(this.usersService, this.serverEnv));
 
     if (this.rateLimitService) {
       this.app.use(

@@ -500,6 +500,7 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
           c.get(UsersService),
           c.get(RateLimitService),
           c.get(TelemetryService),
+          c.get(SERVER_ENV),
           c.get(UsersController),
           c.get(AdvisorController),
           c.get(ConversationController),

@@ -52,7 +52,11 @@ export const serverEnvSchema = z
       .default('auto'),
     TITLE_GENERATION_PROVIDER: z.string().trim().min(1).optional(),
     TITLE_GENERATION_MODEL: z.string().trim().min(1).optional(),
-    CRON_SECRET: z.string().trim().min(16).optional()
+    CRON_SECRET: z.string().trim().min(16).optional(),
+    ACTOR_FORWARDING_SECRET: z
+      .string()
+      .min(16)
+      .default('dev-actor-forwarding-secret-change-in-prod')
   })
   .refine(
     (data) => {
