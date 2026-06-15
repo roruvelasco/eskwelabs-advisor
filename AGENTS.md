@@ -67,17 +67,18 @@ When asked to build a new feature, fix a bug, or make any code change:
 
 ### Backend Domains (`packages/server/src/<domain>/`)
 
-| Domain           | Files                                                                                                            | Key DI Tokens                                                                                                  |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `admin`          | controller, service, repository, serializer, schema (stub), access-policy, use-cases, dto, tests                 | AdminController, AdminService, AdminRepository                                                                 |
-| `advisors`       | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                        | AdvisorController, AdvisorsService, AdvisorsRepository                                                         |
-| `conversations`  | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                        | ConversationController, ConversationsService, ConversationsRepository                                          |
-| `messages`       | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                        | MessageController, MessagesService, MessagesRepository                                                         |
-| `model-config`   | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                        | ModelConfigController, ModelConfigService, ModelConfigRepository                                               |
-| `prompt-cache`   | controller, ingestion/context services, repositories, serializers, schemas, access-policy, use-cases, dto, tests | PromptCacheController, PromptCacheService, PromptCacheRepository, PromptIngestionService, PromptContextService |
-| `usage-counters` | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests (+ cost-cap.service)   | UsageCounterController, UsageCountersService, UsageCountersRepository                                          |
-| `telemetry`      | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                        | TelemetryController, TelemetryService, TelemetryRepository                                                     |
-| `users`          | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                        | UsersController, UsersService, UsersRepository                                                                 |
+| Domain                | Files                                                                                                            | Key DI Tokens                                                                                                  |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `admin`               | controller, service, repository, serializer, schema (stub), access-policy, use-cases, dto, tests                 | AdminController, AdminService, AdminRepository                                                                 |
+| `advisors`            | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                        | AdvisorController, AdvisorsService, AdvisorsRepository                                                         |
+| `conversations`       | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                        | ConversationController, ConversationsService, ConversationsRepository                                          |
+| `conversation-titles` | controller, worker, generator, repository, serializer, schema, use-cases, dto, tests                             | ConversationTitleJobsController, ConversationTitleWorker, ConversationTitleGenerator                           |
+| `messages`            | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                        | MessageController, MessagesService, MessagesRepository                                                         |
+| `model-config`        | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                        | ModelConfigController, ModelConfigService, ModelConfigRepository                                               |
+| `prompt-cache`        | controller, ingestion/context services, repositories, serializers, schemas, access-policy, use-cases, dto, tests | PromptCacheController, PromptCacheService, PromptCacheRepository, PromptIngestionService, PromptContextService |
+| `usage-counters`      | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests (+ cost-cap.service)   | UsageCounterController, UsageCountersService, UsageCountersRepository                                          |
+| `telemetry`           | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                        | TelemetryController, TelemetryService, TelemetryRepository                                                     |
+| `users`               | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                        | UsersController, UsersService, UsersRepository                                                                 |
 
 Cross-cutting: `auth/` (auth-request.ts, auth.service.ts), `cache/` (redis.service.ts), `rate-limit/` (rate-limit.service.ts), `config/` (env.ts), `adapters/` (advisor-adapters.ts), `db/` (drizzle.service.ts), `di/` (container.ts), `common/factories/` (controller.factory.ts, repository.factory.ts), `common/middleware/` (auth.middleware.ts, error.middleware.ts, rate-limit.middleware.ts, security.middleware.ts, validation.middleware.ts), `common/http/` (http-exception.ts), `common/utils/` (client-ip.ts, day-ph.ts, hono.ts)
 
@@ -106,7 +107,7 @@ Cross-cutting: `auth/` (auth-request.ts, auth.service.ts), `cache/` (redis.servi
 
 ### Database Tables
 
-`advisors`, `users`, `conversations`, `messages`, `model_config`, `prompt_cache`, `prompt_snapshots`, `dna_digests`, `usage_counters`, `telemetry_events` — see [DATABASE.md](agents/DATABASE.md).
+`advisors`, `users`, `conversations`, `messages`, `model_config`, `prompt_cache`, `prompt_snapshots`, `dna_digests`, `usage_counters`, `telemetry_events`, `advisor_runtime_versions`, `conversation_title_jobs` — see [DATABASE.md](agents/DATABASE.md).
 
 ## Design System
 
@@ -123,18 +124,19 @@ To change the look, edit the CSS variables — not component files. See [UI-PRAC
 
 ## Auth & CSP
 
-- **Cookie-based auth**: `eskwelabs_actor_email`, `eskwelabs_actor_id`, `eskwelabs_actor_role`, `eskwelabs_actor_active` cookies set by middleware
+- **Cookie-based auth**: `eskwelabs_actor_email`, `eskwelabs_actor_id`, `eskwelabs_actor_role`, `eskwelabs_actor_active` cookies set by middleware (httpOnly)
 - **Role-specific login**: EIF login uses NextAuth provider IDs `google` / `credentials`; admin login uses `google-admin` / `credentials-admin`. The sign-in callback rejects role mismatches before creating a JWT session.
-- **Next.js middleware** (`apps/web/src/middleware.ts`): reads JWT via `getToken()`, gates routes against JWT claims (`role`, `isActive`). Sets `x-eskwelabs-actor-*` request headers from JWT-derived claims. Never queries Postgres.
+- **Next.js middleware** (`apps/web/src/middleware.ts`): reads JWT via `getToken()`, gates routes against JWT claims (`role`, `isActive`). Signs forwarded actor headers with HMAC-SHA256 (`ACTOR_FORWARDING_SECRET`) including method, path, timestamp, and nonce. Strips incoming forged actor/signature headers before setting trusted values. Never queries Postgres.
 - **Strict role split**: Admin sessions are redirected away from EIF app routes to `/admin`; EIF sessions are redirected away from admin pages to `/advisors`. Admin APIs and EIF APIs return 403 for the wrong role.
-- **Hono middleware** (`auth.middleware.ts`): `createAuthMiddleware(usersService)` validates forwarded `id`/`email` against the `users` table via `UsersService`, sets `c.get('actor')` from DB role/status. Two helpers: `requireActor(roles)` for route gating.
+- **Hono middleware** (`auth.middleware.ts`): `createAuthMiddleware(usersService, env)` verifies HMAC signature and timestamp freshness (300s TTL) before trusting forwarded `id`/`email`. Then validates against the `users` table via `UsersService`, sets `c.get('actor')` from DB role/status. Two helpers: `requireActor(roles)` for route gating.
+- **Client session**: `/api/session` route handler verifies NextAuth JWT server-side and returns `{ data: SessionActor | null }`. Frontend `sessionQuery` calls this endpoint instead of reading httpOnly cookies from `document.cookie`.
 - **Allowlist source**: `users` table (Supabase/Postgres) — `email`, `role`, `is_active`. Bootstrap by inserting the first admin row directly into Supabase before first login.
 - **CSP**: Nonce-based in `middleware.ts`. Layout calls `await headers()` to force dynamic rendering per-request.
 
 ## Key Env Vars
 
 Defined in `packages/server/src/config/env.ts` via zod schema. All declared in `turbo.json` `globalPassThroughEnv`:
-`DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `GOOGLE_DOCS_SERVICE_ACCOUNT_JSON`, `OPENAI_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_DOCS_DNA_DOC_ID`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `GROQ_API_KEY`, `GROQ_BASE_URL`, `DAILY_MESSAGE_LIMIT`, `DAILY_TOKEN_LIMIT`, `DAILY_SPEND_LIMIT_USD`, `DEFAULT_MAX_OUTPUT_TOKENS`, `RATE_LIMIT_WINDOW_SECONDS`, `RATE_LIMIT_MAX_REQUESTS`
+`DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `GOOGLE_DOCS_SERVICE_ACCOUNT_JSON`, `OPENAI_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_DOCS_DNA_DOC_ID`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `GROQ_API_KEY`, `GROQ_BASE_URL`, `DAILY_MESSAGE_LIMIT`, `DAILY_TOKEN_LIMIT`, `DAILY_SPEND_LIMIT_USD`, `DEFAULT_MAX_OUTPUT_TOKENS`, `RATE_LIMIT_WINDOW_SECONDS`, `RATE_LIMIT_MAX_REQUESTS`, `ACTOR_FORWARDING_SECRET`
 
 ## Code Style
 

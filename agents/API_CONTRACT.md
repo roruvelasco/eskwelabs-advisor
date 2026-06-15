@@ -19,6 +19,16 @@ Error codes: `forbidden` (403), `unauthorized` (401), `not_found` (404), `rate_l
 | `GET`  | `/api/`        | None | Service info `{ status, name }` |
 | `GET`  | `/api/healthz` | None | Health check `{ status: 'ok' }` |
 
+## Session (Frontend)
+
+`/api/session` is a Next.js route handler (not Hono). It verifies the NextAuth JWT server-side and returns the current session actor.
+
+| Method | Path           | Auth     | Description                                                |
+| ------ | -------------- | -------- | ---------------------------------------------------------- |
+| `GET`  | `/api/session` | NextAuth | Get current session actor `{ data: SessionActor \| null }` |
+
+Response: `{ data: { id, email, role, isActive } | null }`
+
 ---
 
 ## Advisors
