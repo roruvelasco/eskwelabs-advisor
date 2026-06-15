@@ -4,8 +4,6 @@ import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { DotWave } from '@eskwelabs-advisor/ui';
 
-import { ConsentDialog } from '@/features/auth/components/consent-dialog';
-import { acknowledgeConsent, getConsent } from '@/lib/domains/auth/api';
 import { advisorsQuery } from '@/lib/domains/advisors/queries';
 
 import { GREEN, LIGHT, ORDERED_IDS } from './advisor-data';
@@ -15,18 +13,9 @@ import { HeroSection } from './components/HeroSection';
 import { ScrollProgressBar } from './components/ScrollProgressBar';
 import { StickyNav } from './components/StickyNav';
 
-// ─── Consent session key ──────────────────────────────────────────────────────
-
-const CONSENT_KEY = 'eskwelabs-advisor:monitoring-notice-seen';
-
 // ─── AdvisorSelection (page root) ────────────────────────────────────────────
 
 export function AdvisorSelection() {
-  const [consentOpen, setConsentOpen] = useState(false);
-  const [isAcknowledging, setIsAcknowledging] = useState(false);
-  const [acknowledged, setAcknowledged] = useState(false);
-  const [consentError, setConsentError] = useState<string>();
-
   const [navVisible, setNavVisible] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
 
@@ -35,20 +24,14 @@ export function AdvisorSelection() {
 
   const sectionRefs = useRef<(HTMLElement | null)[]>([null, null, null]);
 
-  const { data: advisorsResponse, isLoading, isError } = useQuery(advisorsQuery);
-  const { isLoading: isConsentLoading } = useQuery({
-    queryKey: ['consent'],
-    queryFn: getConsent,
-  });
+  const {
+    data: advisorsResponse,
+    isLoading,
+    isError
+  } = useQuery(advisorsQuery);
 
   const advisors = advisorsResponse?.data ?? [];
   const advisorMap = Object.fromEntries(advisors.map((a) => [a.id, a]));
-
-  useEffect(() => {
-    if (isConsentLoading) return;
-    const seen = window.sessionStorage.getItem(CONSENT_KEY) === 'true';
-    setConsentOpen(!seen);
-  }, [isConsentLoading]);
 
   // Track scroll: sticky nav + active section + nav theme.
   // Nav appears only after the full hero sentinel (280svh) is past the viewport,
@@ -57,13 +40,16 @@ export function AdvisorSelection() {
     function onScroll() {
       const heroEl = document.getElementById('hero');
       // heroEl.offsetHeight = 280svh worth of pixels
-      const heroBottom = heroEl ? heroEl.offsetTop + heroEl.offsetHeight : window.innerHeight * 2.8;
+      const heroBottom = heroEl
+        ? heroEl.offsetTop + heroEl.offsetHeight
+        : window.innerHeight * 2.8;
       setNavVisible(window.scrollY + window.innerHeight > heroBottom);
 
       let current = -1;
       sectionRefs.current.forEach((el, i) => {
         if (!el) return;
-        if (el.getBoundingClientRect().top <= window.innerHeight * 0.55) current = i;
+        if (el.getBoundingClientRect().top <= window.innerHeight * 0.55)
+          current = i;
       });
       setActiveIndex(current);
 
@@ -87,36 +73,8 @@ export function AdvisorSelection() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  const handleAcknowledge = async () => {
-    setIsAcknowledging(true);
-    setConsentError(undefined);
-    try {
-      await acknowledgeConsent();
-    } catch {
-      setConsentError('Could not record acknowledgement. Please try again.');
-      setIsAcknowledging(false);
-      return;
-    }
-    try {
-      window.sessionStorage.setItem(CONSENT_KEY, 'true');
-    } catch {
-      // ignore
-    }
-    setAcknowledged(true);
-    setTimeout(() => setConsentOpen(false), 1100);
-    setIsAcknowledging(false);
-  };
-
   return (
     <>
-      <ConsentDialog
-        open={consentOpen}
-        acknowledged={acknowledged}
-        isAcknowledging={isAcknowledging}
-        error={consentError}
-        onAcknowledge={handleAcknowledge}
-      />
-
       <ScrollProgressBar color={navTheme.progressBar} />
 
       <StickyNav
@@ -130,11 +88,17 @@ export function AdvisorSelection() {
         <HeroSection sectionRefs={sectionRefs} />
 
         {isLoading ? (
-          <div className="flex min-h-[40vh] items-center justify-center" style={{ background: LIGHT.bg }}>
+          <div
+            className="flex min-h-[40vh] items-center justify-center"
+            style={{ background: LIGHT.bg }}
+          >
             <DotWave size={40} speed={1} color="#4a8a69" />
           </div>
         ) : isError ? (
-          <div className="flex min-h-[40vh] items-center justify-center" style={{ background: LIGHT.bg }}>
+          <div
+            className="flex min-h-[40vh] items-center justify-center"
+            style={{ background: LIGHT.bg }}
+          >
             <p className="font-sans text-sm" style={{ color: LIGHT.bodyColor }}>
               Could not load advisors.
             </p>
@@ -146,7 +110,9 @@ export function AdvisorSelection() {
               advisorId={id}
               advisor={advisorMap[id]}
               isEven={i % 2 === 0}
-              sectionRef={(el) => { sectionRefs.current[i] = el; }}
+              sectionRef={(el) => {
+                sectionRefs.current[i] = el;
+              }}
               // Uncomment to replace abstract visual with a real image:
               // imageSrc="/images/dashboard-preview.jpg"
               // imageAlt="Dashboard preview"

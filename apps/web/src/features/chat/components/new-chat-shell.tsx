@@ -16,10 +16,14 @@ import { cn } from '@/lib/utils';
 import { ChatSidebar } from './chat-sidebar';
 import { ChatComposer } from './chat-composer';
 import { ChatMessages, type Message } from './chat-messages';
+import { ConsentDialog } from '@/features/auth/components/consent-dialog';
+import { acknowledgeConsent, getConsent } from '@/lib/domains/auth/api';
 import { messagesQuery, messagesQueryKey } from '@/lib/domains/chat/queries';
 import { streamChatTurn } from '@/lib/domains/chat/api';
 import { conversationQuery } from '@/lib/domains/conversations/queries';
 import { advisorsQuery } from '@/lib/domains/advisors/queries';
+
+const CONSENT_KEY = 'eskwelabs-advisor:monitoring-notice-seen';
 
 type StreamFinalData = {
   userMessage: { id: string; role: string; content: string };
@@ -60,6 +64,43 @@ function ChatLayoutInner() {
     createdConversationId?: string;
   } | null>(null);
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
+
+  // ── Consent ───────────────────────────────────────────────────────────────
+  const [consentOpen, setConsentOpen] = useState(false);
+  const [isAcknowledging, setIsAcknowledging] = useState(false);
+  const [acknowledged, setAcknowledged] = useState(false);
+  const [consentError, setConsentError] = useState<string>();
+
+  const { isLoading: isConsentLoading } = useQuery({
+    queryKey: ['consent'],
+    queryFn: getConsent
+  });
+
+  useEffect(() => {
+    if (isConsentLoading) return;
+    const seen = window.sessionStorage.getItem(CONSENT_KEY) === 'true';
+    setConsentOpen(!seen);
+  }, [isConsentLoading]);
+
+  const handleAcknowledge = async () => {
+    setIsAcknowledging(true);
+    setConsentError(undefined);
+    try {
+      await acknowledgeConsent();
+    } catch {
+      setConsentError('Could not record acknowledgement. Please try again.');
+      setIsAcknowledging(false);
+      return;
+    }
+    try {
+      window.sessionStorage.setItem(CONSENT_KEY, 'true');
+    } catch {
+      // ignore
+    }
+    setAcknowledged(true);
+    setTimeout(() => setConsentOpen(false), 1100);
+    setIsAcknowledging(false);
+  };
 
   useEffect(() => {
     if (!conversationId && !advisorId) router.replace('/advisors');
@@ -292,6 +333,14 @@ function ChatLayoutInner() {
 
   return (
     <>
+      <ConsentDialog
+        open={consentOpen}
+        acknowledged={acknowledged}
+        isAcknowledging={isAcknowledging}
+        error={consentError}
+        onAcknowledge={handleAcknowledge}
+      />
+
       <ChatSidebar
         currentAdvisorId={sidebarAdvisorId}
         currentConversationId={conversationId ?? undefined}
