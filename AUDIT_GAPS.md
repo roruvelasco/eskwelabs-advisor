@@ -1,29 +1,5 @@
 ## 3. High Priority Findings
 
-### H3. Full Message History Loaded for Every Chat Turn
-
-- Category: Performance
-- Files: packages/server/src/messages/messages.service.ts:213
-- Evidence: prepareTurn calls listForConversation which fetches ALL messages, then filters and slices to the last 20 in JavaScript.
-- Impact: Long conversations (100+ turns) load hundreds of messages from the database just to use the last 20.
-- Remediation: Add a LIMIT 20 ORDER BY created_at DESC at the SQL level.
-
-### H4. Gemini Provider Has No Timeout
-
-- Category: Reliability / Bug
-- Files: packages/server/src/adapters/advisor-adapters.ts (GeminiLlmProvider)
-- Evidence: Unlike GroqLlmProvider which uses AbortController with PROVIDER_TIMEOUT_MS, the Gemini provider has no timeout on either complete() or stream(). A hung Gemini connection blocks indefinitely.
-- Impact: Serverless function timeout (Vercel default 10s) will kill the request, but the user sees no graceful error.
-- Remediation: Add AbortController with timeout to both Gemini methods, matching the Groq pattern.
-
-### H5. Non-Atomic Rate Limiting in Memory-Fallback Mode
-
-- Category: Security / Bug
-- Files: packages/server/src/cache/redis.service.ts:95-98
-- Evidence: incrWithTtl does get then set as separate operations in the in-memory fallback. Under concurrent requests, two callers can both read 0 and both set 1, losing an increment.
-- Impact: Rate limiting is unreliable when Redis is not configured. Multiple requests can bypass the limit simultaneously.
-- Remediation: Use a mutex or atomic counter for the in-memory fallback.
-
 ### H6. No Error Boundaries in Frontend
 
 - Category: UX / Reliability

@@ -296,38 +296,59 @@ export class GeminiLlmProvider implements LlmProvider {
     }
 
     const startedAt = Date.now();
-    const response = await fetch(
-      this.endpoint(request.model, 'generateContent'),
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(this.body(request))
-      }
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      this.env.PROVIDER_TIMEOUT_MS
     );
 
-    if (!response.ok) {
+    try {
+      const response = await fetch(
+        this.endpoint(request.model, 'generateContent'),
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(this.body(request)),
+          signal: controller.signal
+        }
+      );
+
+      if (!response.ok) {
+        throw new HttpException(502, 'Gemini request failed', 'gemini_failed');
+      }
+
+      const payload = (await response.json()) as GeminiGenerateResponse;
+      const content = extractGeminiText(payload);
+      const promptTokens = payload.usageMetadata?.promptTokenCount ?? 0;
+      const completionTokens = payload.usageMetadata?.candidatesTokenCount ?? 0;
+
+      return {
+        content,
+        promptTokens,
+        completionTokens,
+        latencyMs: Date.now() - startedAt,
+        estimatedCostUsd: formatEstimatedCostUsd(
+          estimateModelCostUsd({
+            provider: request.provider,
+            model: request.model,
+            promptTokens,
+            completionTokens
+          }) ?? 0
+        )
+      };
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      if ((error as Error).name === 'AbortError') {
+        throw new HttpException(
+          504,
+          'Provider request timed out',
+          'provider_timeout'
+        );
+      }
       throw new HttpException(502, 'Gemini request failed', 'gemini_failed');
+    } finally {
+      clearTimeout(timeout);
     }
-
-    const payload = (await response.json()) as GeminiGenerateResponse;
-    const content = extractGeminiText(payload);
-    const promptTokens = payload.usageMetadata?.promptTokenCount ?? 0;
-    const completionTokens = payload.usageMetadata?.candidatesTokenCount ?? 0;
-
-    return {
-      content,
-      promptTokens,
-      completionTokens,
-      latencyMs: Date.now() - startedAt,
-      estimatedCostUsd: formatEstimatedCostUsd(
-        estimateModelCostUsd({
-          provider: request.provider,
-          model: request.model,
-          promptTokens,
-          completionTokens
-        }) ?? 0
-      )
-    };
   }
 
   async *stream(request: LlmChatRequest): AsyncGenerator<LlmChatChunk> {
@@ -339,83 +360,108 @@ export class GeminiLlmProvider implements LlmProvider {
       );
     }
 
-    const response = await fetch(
-      `${this.endpoint(request.model, 'streamGenerateContent')}&alt=sse`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(this.body(request))
-      }
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      this.env.PROVIDER_TIMEOUT_MS
     );
 
-    if (!response.ok || !response.body) {
+    try {
+      const response = await fetch(
+        `${this.endpoint(request.model, 'streamGenerateContent')}&alt=sse`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(this.body(request)),
+          signal: controller.signal
+        }
+      );
+
+      if (!response.ok || !response.body) {
+        throw new HttpException(
+          502,
+          'Gemini stream failed',
+          'gemini_stream_failed'
+        );
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let usage: LlmUsage | undefined;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split('\n\n');
+        buffer = events.pop() ?? '';
+
+        for (const event of events) {
+          const data = event
+            .split('\n')
+            .filter((line) => line.startsWith('data:'))
+            .map((line) => line.slice('data:'.length).trim())
+            .join('');
+
+          if (!data || data === '[DONE]') continue;
+          const payload = JSON.parse(data) as GeminiGenerateResponse;
+          const content = extractGeminiText(payload);
+          if (content) {
+            yield { type: 'delta', content };
+          }
+
+          if (payload.usageMetadata) {
+            const promptTokens = payload.usageMetadata.promptTokenCount ?? 0;
+            const completionTokens =
+              payload.usageMetadata.candidatesTokenCount ?? 0;
+            usage = {
+              promptTokens,
+              completionTokens,
+              totalTokens:
+                payload.usageMetadata.totalTokenCount ??
+                promptTokens + completionTokens,
+              estimatedCostUsd: formatEstimatedCostUsd(
+                estimateModelCostUsd({
+                  provider: request.provider,
+                  model: request.model,
+                  promptTokens,
+                  completionTokens
+                }) ?? 0
+              )
+            };
+          }
+        }
+      }
+
+      if (!usage) {
+        usage = {
+          promptTokens: 0,
+          completionTokens: 0,
+          totalTokens: 0,
+          estimatedCostUsd: '0'
+        };
+      }
+
+      yield { type: 'done', usage, finishReason: 'stop' };
+    } catch (error) {
+      if ((error as Error).name === 'AbortError') {
+        throw new HttpException(
+          504,
+          'Provider stream timed out',
+          'provider_timeout'
+        );
+      }
+      if (error instanceof HttpException) throw error;
       throw new HttpException(
         502,
         'Gemini stream failed',
         'gemini_stream_failed'
       );
+    } finally {
+      clearTimeout(timeout);
     }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let usage: LlmUsage | undefined;
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const events = buffer.split('\n\n');
-      buffer = events.pop() ?? '';
-
-      for (const event of events) {
-        const data = event
-          .split('\n')
-          .filter((line) => line.startsWith('data:'))
-          .map((line) => line.slice('data:'.length).trim())
-          .join('');
-
-        if (!data || data === '[DONE]') continue;
-        const payload = JSON.parse(data) as GeminiGenerateResponse;
-        const content = extractGeminiText(payload);
-        if (content) {
-          yield { type: 'delta', content };
-        }
-
-        if (payload.usageMetadata) {
-          const promptTokens = payload.usageMetadata.promptTokenCount ?? 0;
-          const completionTokens =
-            payload.usageMetadata.candidatesTokenCount ?? 0;
-          usage = {
-            promptTokens,
-            completionTokens,
-            totalTokens:
-              payload.usageMetadata.totalTokenCount ??
-              promptTokens + completionTokens,
-            estimatedCostUsd: formatEstimatedCostUsd(
-              estimateModelCostUsd({
-                provider: request.provider,
-                model: request.model,
-                promptTokens,
-                completionTokens
-              }) ?? 0
-            )
-          };
-        }
-      }
-    }
-
-    if (!usage) {
-      usage = {
-        promptTokens: 0,
-        completionTokens: 0,
-        totalTokens: 0,
-        estimatedCostUsd: '0'
-      };
-    }
-
-    yield { type: 'done', usage, finishReason: 'stop' };
   }
 }
 

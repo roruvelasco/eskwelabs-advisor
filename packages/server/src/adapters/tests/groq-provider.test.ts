@@ -783,6 +783,178 @@ describe('RoutingLlmProvider', () => {
   });
 });
 
+describe('GeminiLlmProvider', () => {
+  const geminiEnv = {
+    GEMINI_API_KEY: 'test-gemini-key',
+    GEMINI_MODEL: 'gemini-2.5-flash-lite',
+    PROVIDER_TIMEOUT_MS: 60_000,
+    DEFAULT_MAX_OUTPUT_TOKENS: 2000
+  } as ServerEnv;
+
+  const geminiRequest = {
+    provider: 'gemini',
+    model: 'gemini-2.5-flash-lite',
+    messages: [
+      { role: 'system' as const, content: 'You are a helpful advisor.' },
+      { role: 'user' as const, content: 'Hello' }
+    ]
+  };
+
+  describe('complete()', () => {
+    test('passes a signal to fetch', async () => {
+      let capturedInit: RequestInit | undefined;
+      const restore = mockFetch({
+        json: {
+          candidates: [
+            {
+              content: { parts: [{ text: 'Response' }] }
+            }
+          ],
+          usageMetadata: {
+            promptTokenCount: 5,
+            candidatesTokenCount: 3,
+            totalTokenCount: 8
+          }
+        }
+      });
+
+      globalThis.fetch = (async (
+        _url: RequestInfo | URL,
+        init?: RequestInit
+      ) => {
+        capturedInit = init;
+        return {
+          ok: true,
+          status: 200,
+          headers: new Map(),
+          json: async () => ({
+            candidates: [{ content: { parts: [{ text: 'Response' }] } }],
+            usageMetadata: {
+              promptTokenCount: 5,
+              candidatesTokenCount: 3,
+              totalTokenCount: 8
+            }
+          }),
+          text: async () => ''
+        } as unknown as Response;
+      }) as unknown as typeof fetch;
+
+      try {
+        const provider = new GeminiLlmProvider(geminiEnv);
+        await provider.complete(geminiRequest);
+        expect(capturedInit?.signal).toBeDefined();
+        expect(capturedInit?.signal instanceof AbortSignal).toBe(true);
+      } finally {
+        restore();
+      }
+    });
+
+    test('maps aborted fetch to provider_timeout', async () => {
+      const restore = mockFetch({ json: {} });
+      globalThis.fetch = (async (
+        _url: RequestInfo | URL,
+        init?: RequestInit
+      ) => {
+        return new Promise((_, reject) => {
+          const signal = init?.signal as AbortSignal;
+          if (signal.aborted) {
+            reject(new DOMException('Aborted', 'AbortError'));
+            return;
+          }
+          signal.addEventListener('abort', () => {
+            reject(new DOMException('Aborted', 'AbortError'));
+          });
+        });
+      }) as unknown as typeof fetch;
+
+      try {
+        const env = { ...geminiEnv, PROVIDER_TIMEOUT_MS: 1 } as ServerEnv;
+        const provider = new GeminiLlmProvider(env);
+        await expect(provider.complete(geminiRequest)).rejects.toMatchObject({
+          status: 504,
+          code: 'provider_timeout'
+        });
+      } finally {
+        restore();
+      }
+    });
+  });
+
+  describe('stream()', () => {
+    test('passes a signal to fetch', async () => {
+      let capturedInit: RequestInit | undefined;
+      const stream = new ControlledStream();
+
+      globalThis.fetch = (async (
+        _url: RequestInfo | URL,
+        init?: RequestInit
+      ) => {
+        capturedInit = init;
+        return {
+          ok: true,
+          status: 200,
+          headers: new Map(),
+          json: async () => ({}),
+          text: async () => '',
+          body: stream.stream
+        } as unknown as Response;
+      }) as unknown as typeof fetch;
+
+      const provider = new GeminiLlmProvider(geminiEnv);
+      const gen = provider.stream(geminiRequest);
+
+      stream.write('data: [DONE]\n\n');
+      stream.close();
+
+      await gen.next();
+
+      expect(capturedInit?.signal).toBeDefined();
+      expect(capturedInit?.signal instanceof AbortSignal).toBe(true);
+    });
+
+    test('maps abort during fetch to provider_timeout', async () => {
+      globalThis.fetch = (async (
+        _url: RequestInfo | URL,
+        init?: RequestInit
+      ) => {
+        return new Promise((_, reject) => {
+          const signal = init?.signal as AbortSignal;
+          if (signal.aborted) {
+            reject(new DOMException('Aborted', 'AbortError'));
+            return;
+          }
+          signal.addEventListener('abort', () => {
+            reject(new DOMException('Aborted', 'AbortError'));
+          });
+        });
+      }) as unknown as typeof fetch;
+
+      const env = { ...geminiEnv, PROVIDER_TIMEOUT_MS: 1 } as ServerEnv;
+      const provider = new GeminiLlmProvider(env);
+      const gen = provider.stream(geminiRequest);
+
+      await expect(gen.next()).rejects.toMatchObject({
+        status: 504,
+        code: 'provider_timeout'
+      });
+    });
+
+    test('throws if GEMINI_API_KEY is missing', async () => {
+      const env = { ...geminiEnv, GEMINI_API_KEY: '' } as ServerEnv;
+      const provider = new GeminiLlmProvider(env);
+
+      await expect(provider.complete(geminiRequest)).rejects.toMatchObject({
+        code: 'gemini_not_configured'
+      });
+
+      const gen = provider.stream(geminiRequest);
+      await expect(gen.next()).rejects.toMatchObject({
+        code: 'gemini_not_configured'
+      });
+    });
+  });
+});
+
 describe('Groq model rates', () => {
   test('estimates Groq model cost correctly', () => {
     const cost = estimateModelCostUsd({

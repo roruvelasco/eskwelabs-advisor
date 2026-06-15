@@ -92,9 +92,17 @@ export class RedisService {
       return count;
     }
 
-    const current = await this.get<number>(key);
-    const count = (current ?? 0) + 1;
-    await this.set(key, count, ttlSeconds);
+    const entry = this.memory.get(key);
+    if (!entry || (entry.expiresAt && entry.expiresAt < Date.now())) {
+      this.memory.set(key, {
+        value: 1,
+        expiresAt: Date.now() + ttlSeconds * 1000
+      });
+      return 1;
+    }
+
+    const count = (entry.value as number) + 1;
+    this.memory.set(key, { value: count, expiresAt: entry.expiresAt });
     return count;
   }
 }
