@@ -65,7 +65,7 @@ async function verifyActorSignature(
   return crypto.subtle.verify(
     'HMAC',
     key,
-    expectedSig,
+    expectedSig.slice(),
     encoder.encode(payload)
   );
 }
