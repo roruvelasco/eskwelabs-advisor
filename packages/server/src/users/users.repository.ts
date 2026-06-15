@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { count, eq } from 'drizzle-orm';
 
 import { Repository } from '../common/factories/repository.factory';
 import { usersTable, type User } from './users.schema';
@@ -6,6 +6,13 @@ import { usersTable, type User } from './users.schema';
 export class UsersRepository extends Repository {
   async list(): Promise<User[]> {
     return this.drizzle.db.select().from(usersTable);
+  }
+
+  async count(): Promise<number> {
+    const rows = await this.drizzle.db
+      .select({ count: count() })
+      .from(usersTable);
+    return rows[0]?.count ?? 0;
   }
 
   async findByEmail(email: string): Promise<User | undefined> {

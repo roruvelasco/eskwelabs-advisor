@@ -1,4 +1,4 @@
-import { desc } from 'drizzle-orm';
+import { count, desc } from 'drizzle-orm';
 
 import { Repository } from '../common/factories/repository.factory';
 import { telemetryEventsTable, type TelemetryEvent } from './telemetry.schema';
@@ -11,6 +11,13 @@ export class TelemetryRepository extends Repository {
       .select()
       .from(telemetryEventsTable)
       .orderBy(desc(telemetryEventsTable.createdAt));
+  }
+
+  async count(): Promise<number> {
+    const rows = await this.drizzle.db
+      .select({ count: count() })
+      .from(telemetryEventsTable);
+    return rows[0]?.count ?? 0;
   }
 
   async insert(input: {

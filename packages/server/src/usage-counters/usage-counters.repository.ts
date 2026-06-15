@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, count, eq, sql } from 'drizzle-orm';
 
 import { Repository } from '../common/factories/repository.factory';
 import { getPhilippinesDay } from '../common/utils/day-ph';
@@ -38,6 +38,13 @@ export class UsageCountersRepository extends Repository {
 
   async list(): Promise<UsageCounter[]> {
     return this.drizzle.db.select().from(usageCountersTable);
+  }
+
+  async count(): Promise<number> {
+    const rows = await this.drizzle.db
+      .select({ count: count() })
+      .from(usageCountersTable);
+    return rows[0]?.count ?? 0;
   }
 
   async findForUserDay(userId: string, dayPh = getPhilippinesDay()) {

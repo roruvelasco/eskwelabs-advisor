@@ -10,6 +10,10 @@ export class UsersService {
     return this.usersRepository.list();
   }
 
+  async count(): Promise<number> {
+    return this.usersRepository.count();
+  }
+
   async findByEmail(email: string): Promise<User | undefined> {
     return this.usersRepository.findByEmail(email);
   }

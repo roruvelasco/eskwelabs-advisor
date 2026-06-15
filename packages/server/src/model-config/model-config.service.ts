@@ -7,6 +7,10 @@ export class ModelConfigService {
     return this.modelConfigRepository.list();
   }
 
+  async count() {
+    return this.modelConfigRepository.count();
+  }
+
   async getForAdvisor(advisorId: string) {
     return this.modelConfigRepository.find(advisorId);
   }

@@ -1,4 +1,4 @@
-import { desc } from 'drizzle-orm';
+import { count, desc } from 'drizzle-orm';
 
 import { Repository } from '../common/factories/repository.factory';
 import { promptCacheTable, type PromptCacheEntry } from './prompt-cache.schema';
@@ -18,6 +18,13 @@ export class PromptCacheRepository extends Repository {
       .select()
       .from(promptCacheTable)
       .orderBy(desc(promptCacheTable.updatedAt));
+  }
+
+  async count(): Promise<number> {
+    const rows = await this.drizzle.db
+      .select({ count: count() })
+      .from(promptCacheTable);
+    return rows[0]?.count ?? 0;
   }
 
   async upsert(input: UpsertPromptCacheEntry) {

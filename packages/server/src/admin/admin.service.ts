@@ -16,24 +16,30 @@ export class AdminService {
   ) {}
 
   async overview() {
-    const [overview, usage, modelConfig, promptCache, telemetry, users] =
-      await Promise.all([
-        this.adminRepository.overview(),
-        this.usageCountersService.list(),
-        this.modelConfigService.list(),
-        this.promptCacheService.list(),
-        this.telemetryService.list(),
-        this.usersService.list()
-      ]);
+    const [
+      overview,
+      usageCount,
+      modelConfigCount,
+      promptCacheCount,
+      telemetryCount,
+      usersCount
+    ] = await Promise.all([
+      this.adminRepository.overview(),
+      this.usageCountersService.count(),
+      this.modelConfigService.count(),
+      this.promptCacheService.count(),
+      this.telemetryService.count(),
+      this.usersService.count()
+    ]);
 
     return {
       ...overview,
       counts: {
-        usageRows: usage.length,
-        modelConfigs: modelConfig.length,
-        promptCacheEntries: promptCache.length,
-        telemetryEvents: telemetry.length,
-        users: users.length
+        usageRows: usageCount,
+        modelConfigs: modelConfigCount,
+        promptCacheEntries: promptCacheCount,
+        telemetryEvents: telemetryCount,
+        users: usersCount
       }
     };
   }

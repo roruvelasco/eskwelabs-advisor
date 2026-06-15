@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { count, eq } from 'drizzle-orm';
 
 import { Repository } from '../common/factories/repository.factory';
 import { modelConfigTable, type ModelConfig } from './model-config.schema';
@@ -6,6 +6,13 @@ import { modelConfigTable, type ModelConfig } from './model-config.schema';
 export class ModelConfigRepository extends Repository {
   async list(): Promise<ModelConfig[]> {
     return this.drizzle.db.select().from(modelConfigTable);
+  }
+
+  async count(): Promise<number> {
+    const rows = await this.drizzle.db
+      .select({ count: count() })
+      .from(modelConfigTable);
+    return rows[0]?.count ?? 0;
   }
 
   async find(advisorId: string): Promise<ModelConfig | undefined> {

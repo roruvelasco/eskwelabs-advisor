@@ -8,6 +8,10 @@ export class UsageCountersService {
     return this.usageCountersRepository.list();
   }
 
+  async count() {
+    return this.usageCountersRepository.count();
+  }
+
   async currentForUser(userId: string) {
     return this.usageCountersRepository.findForUserDay(
       userId,

@@ -8,6 +8,10 @@ export class TelemetryService {
     return this.telemetryRepository.list();
   }
 
+  async count() {
+    return this.telemetryRepository.count();
+  }
+
   async record(
     eventName: string,
     actorId?: string,

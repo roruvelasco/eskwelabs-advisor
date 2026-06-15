@@ -24,6 +24,10 @@ export class PromptCacheService {
     return this.promptCacheRepository.list();
   }
 
+  async count() {
+    return this.promptCacheRepository.count();
+  }
+
   private async recordTelemetry(
     eventName: string,
     actorId: string | undefined,

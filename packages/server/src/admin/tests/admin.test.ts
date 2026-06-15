@@ -12,11 +12,11 @@ describe('admin service', () => {
           sections: ['usage', 'model-config', 'prompt-cache', 'telemetry']
         })
       } as never,
-      { list: async () => [] } as never,
-      { list: async () => [] } as never,
-      { list: async () => [] } as never,
-      { list: async () => [] } as never,
-      { list: async () => [] } as never
+      { count: async () => 0 } as never,
+      { count: async () => 0 } as never,
+      { count: async () => 0 } as never,
+      { count: async () => 0 } as never,
+      { count: async () => 0 } as never
     );
 
     await expect(service.overview()).resolves.toMatchObject({
