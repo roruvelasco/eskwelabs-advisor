@@ -235,7 +235,7 @@ function ChatLayoutInner() {
     isLoading,
     isError
   } = useQuery({
-    ...messagesQuery(conversationId ?? ''),
+    ...messagesQuery({ conversationId: conversationId ?? '' }),
     enabled: Boolean(conversationId) && !sendMutation.isPending
   });
   const { data: draftMessagesResponse } = useQuery<CacheData>({

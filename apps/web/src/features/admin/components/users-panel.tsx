@@ -181,7 +181,7 @@ function ActiveSwitch({ user }: { user: UserRow }) {
 }
 
 export function UsersPanel() {
-  const { data, isLoading, error } = useQuery(usersQuery);
+  const { data, isLoading, error } = useQuery(usersQuery());
   const users = (data as { data: UserRow[] } | undefined)?.data ?? [];
 
   if (error) {

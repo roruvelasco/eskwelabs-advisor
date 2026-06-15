@@ -70,7 +70,7 @@ function SortHead({
 }
 
 export function TelemetryPanel() {
-  const { data, isLoading, error, refetch } = useQuery(telemetryQuery);
+  const { data, isLoading, error, refetch } = useQuery(telemetryQuery());
 
   const events =
     (data as { data: TelemetryEventRow[] } | undefined)?.data ?? [];

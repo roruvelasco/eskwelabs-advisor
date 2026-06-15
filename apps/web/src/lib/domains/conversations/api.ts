@@ -1,9 +1,22 @@
 import { apiClient } from '@/lib/api/client';
 
-export function listConversations(advisorId?: string) {
+export function listConversations({
+  advisorId,
+  limit,
+  cursor
+}: {
+  advisorId?: string;
+  limit?: number;
+  cursor?: string;
+} = {}) {
+  const query: Record<string, string> = {};
+  if (advisorId) query.advisorId = advisorId;
+  if (limit !== undefined) query.limit = String(limit);
+  if (cursor) query.cursor = cursor;
+
   return apiClient.conversations
     .$get({
-      query: advisorId ? { advisorId } : {}
+      query
     })
     .then((response) => response.json());
 }

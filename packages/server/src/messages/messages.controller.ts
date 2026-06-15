@@ -5,6 +5,7 @@ import {
 } from '../common/middleware/auth.middleware';
 import { parseJsonBody } from '../common/middleware/validation.middleware';
 import { streamSSE } from 'hono/streaming';
+import { paginationParamsDto } from '../common/pagination';
 import { z } from 'zod';
 
 import { MessagesSerializer } from './messages.serializer';
@@ -44,10 +45,21 @@ export class MessageController extends Controller {
         const actor = c.get('actor')!;
         const conversationId = c.req.query('conversationId');
         if (!conversationId) {
-          return c.json(this.messagesSerializer.list([]));
+          return c.json(
+            this.messagesSerializer.list({ rows: [], nextCursor: null })
+          );
         }
-        const rows = await this.messagesService.list(actor, conversationId);
-        return c.json(this.messagesSerializer.list(rows));
+        const pagination = paginationParamsDto.parse({
+          limit: c.req.query('limit'),
+          cursor: c.req.query('cursor')
+        });
+        const result = await this.messagesService.list(
+          actor,
+          conversationId,
+          pagination.limit,
+          pagination.cursor
+        );
+        return c.json(this.messagesSerializer.list(result));
       })
       .post('/chat-turn', async (c) => {
         const actor = c.get('actor')!;

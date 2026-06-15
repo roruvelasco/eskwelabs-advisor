@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  index,
   integer,
   numeric,
   pgTable,
@@ -42,7 +43,17 @@ export const messagesTable = pgTable(
   (table) => ({
     userClientTurnUnique: uniqueIndex('messages_user_client_turn_unique')
       .on(table.userId, table.clientTurnId)
-      .where(sql`${table.clientTurnId} IS NOT NULL`)
+      .where(sql`${table.clientTurnId} IS NOT NULL`),
+    convoCreatedAscIdx: index('messages_convo_created_asc_idx').on(
+      table.conversationId,
+      table.createdAt.asc(),
+      table.id.asc()
+    ),
+    convoCreatedDescIdx: index('messages_convo_created_desc_idx').on(
+      table.conversationId,
+      table.createdAt.desc(),
+      table.id.desc()
+    )
   })
 );
 

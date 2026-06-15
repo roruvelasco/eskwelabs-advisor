@@ -138,7 +138,7 @@ function RefreshDialog() {
 }
 
 export function CachePanel() {
-  const { data, isLoading, error } = useQuery(promptCacheQuery);
+  const { data, isLoading, error } = useQuery(promptCacheQuery());
   const entries = (data as { data: CacheEntry[] } | undefined)?.data ?? [];
 
   if (error) {

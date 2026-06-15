@@ -1,4 +1,6 @@
 import { PromptCacheRepository } from './prompt-cache.repository';
+import type { PaginatedResult } from './prompt-cache.repository';
+import type { PromptCacheEntry } from './prompt-cache.schema';
 import type { RedisService } from '../cache/redis.service';
 import { HttpException } from '../common/http/http-exception';
 import type { TelemetryService } from '../telemetry/telemetry.service';
@@ -20,8 +22,11 @@ export class PromptCacheService {
     private telemetryService?: TelemetryService
   ) {}
 
-  async list() {
-    return this.promptCacheRepository.list();
+  async list(
+    limit?: number,
+    cursor?: string
+  ): Promise<PaginatedResult<PromptCacheEntry>> {
+    return this.promptCacheRepository.list({ limit, cursor });
   }
 
   async count() {

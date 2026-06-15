@@ -1,6 +1,7 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, lt, or } from 'drizzle-orm';
 
 import { Repository } from '../common/factories/repository.factory';
+import { decodeCursor, encodeCursor } from '../common/pagination';
 import {
   conversationsTable,
   type ConversationTitleSource,
@@ -19,6 +20,11 @@ export interface ConversationRow {
   updatedAt: string;
 }
 
+export interface PaginatedResult<T> {
+  rows: T[];
+  nextCursor: string | null;
+}
+
 function toRow(conversation: Conversation): ConversationRow {
   return {
     ...conversation,
@@ -29,21 +35,60 @@ function toRow(conversation: Conversation): ConversationRow {
 }
 
 export class ConversationsRepository extends Repository {
-  async listForUser(userId: string, advisorId?: string) {
+  async listForUser(
+    userId: string,
+    {
+      advisorId,
+      limit = 50,
+      cursor
+    }: {
+      advisorId?: string;
+      limit?: number;
+      cursor?: string;
+    } = {}
+  ): Promise<PaginatedResult<ConversationRow>> {
+    const decoded = cursor ? decodeCursor(cursor) : null;
+
+    const cursorConditions = decoded
+      ? or(
+          lt(
+            conversationsTable.updatedAt,
+            new Date(decoded.updatedAt as string)
+          ),
+          and(
+            eq(
+              conversationsTable.updatedAt,
+              new Date(decoded.updatedAt as string)
+            ),
+            lt(conversationsTable.id, decoded.id as string)
+          )
+        )
+      : undefined;
+
+    const whereConditions = [
+      eq(conversationsTable.userId, userId),
+      ...(advisorId ? [eq(conversationsTable.advisorId, advisorId)] : []),
+      ...(cursorConditions ? [cursorConditions] : [])
+    ];
+
     const rows = await this.drizzle.db
       .select()
       .from(conversationsTable)
-      .where(
-        advisorId
-          ? and(
-              eq(conversationsTable.userId, userId),
-              eq(conversationsTable.advisorId, advisorId)
-            )
-          : eq(conversationsTable.userId, userId)
-      )
-      .orderBy(desc(conversationsTable.updatedAt));
+      .where(and(...whereConditions))
+      .orderBy(desc(conversationsTable.updatedAt), desc(conversationsTable.id))
+      .limit(limit + 1);
 
-    return rows.map(toRow);
+    const hasMore = rows.length > limit;
+    const resultRows = hasMore ? rows.slice(0, limit) : rows;
+
+    const nextCursor = hasMore
+      ? encodeCursor({
+          updatedAt: resultRows[resultRows.length - 1].updatedAt.toISOString(),
+          id: resultRows[resultRows.length - 1].id
+        })
+      : null;
+
+    return { rows: resultRows.map(toRow), nextCursor };
   }
 
   async findForUser(userId: string, id: string) {

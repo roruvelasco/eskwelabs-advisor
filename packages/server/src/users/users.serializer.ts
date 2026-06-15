@@ -1,5 +1,6 @@
 import type { User } from './users.schema';
 import { userDto, type UserDto } from './dto/users.dto';
+import { paginatedResponse } from '../common/pagination';
 
 export class UsersSerializer {
   private serialize(user: User): UserDto {
@@ -10,7 +11,11 @@ export class UsersSerializer {
     return { data: this.serialize(user) };
   }
 
-  list(rows: User[]) {
-    return { data: rows.map((r) => this.serialize(r)) };
+  list(result: { rows: User[]; nextCursor: string | null }) {
+    return paginatedResponse(
+      result.rows.map((r) => this.serialize(r)),
+      result.rows.length,
+      result.nextCursor
+    );
   }
 }

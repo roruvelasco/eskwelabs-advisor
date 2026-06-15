@@ -4,7 +4,9 @@ describe('chat sidebar', () => {
   test('loads recents for the current advisor only after advisor resolution', async () => {
     const source = await Bun.file(import.meta.dir + '/chat-sidebar.tsx').text();
 
-    expect(source).toContain('conversationsQuery(currentAdvisorId)');
+    expect(source).toContain(
+      'conversationsQuery({ advisorId: currentAdvisorId })'
+    );
     expect(source).toContain('enabled: Boolean(currentAdvisorId)');
     expect(source).toContain('!isResolvingConversationAdvisor');
   });

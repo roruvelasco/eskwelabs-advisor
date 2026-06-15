@@ -91,9 +91,17 @@ export class MessagesService {
     this.env = env;
   }
 
-  async list(actor: Actor, conversationId: string) {
+  async list(
+    actor: Actor,
+    conversationId: string,
+    limit?: number,
+    cursor?: string
+  ) {
     await this.conversationsService.assertOwns(actor, conversationId);
-    return this.messagesRepository.listForConversation(conversationId);
+    return this.messagesRepository.listForConversation(conversationId, {
+      limit,
+      cursor
+    });
   }
 
   private async reserveBudget(input: {
@@ -210,14 +218,14 @@ export class MessagesService {
       });
 
       const history = (
-        await this.messagesRepository.listForConversation(conversation.id)
+        await this.messagesRepository.latestSuccessfulForConversation(
+          conversation.id,
+          MessagesService.HISTORY_MESSAGE_LIMIT
+        )
       )
         .filter(
-          (message) =>
-            message.status === 'ok' &&
-            (message.role === 'user' || message.role === 'assistant')
+          (message) => message.role === 'user' || message.role === 'assistant'
         )
-        .slice(-MessagesService.HISTORY_MESSAGE_LIMIT)
         .map((message) => ({
           role: message.role,
           content: message.content

@@ -2,10 +2,18 @@ import { queryOptions } from '@tanstack/react-query';
 
 import { getConversation, listConversations } from './api';
 
-export function conversationsQuery(advisorId?: string) {
+export function conversationsQuery({
+  advisorId,
+  limit,
+  cursor
+}: {
+  advisorId?: string;
+  limit?: number;
+  cursor?: string;
+} = {}) {
   return queryOptions({
-    queryKey: ['conversations', advisorId],
-    queryFn: () => listConversations(advisorId),
+    queryKey: ['conversations', advisorId, limit, cursor],
+    queryFn: () => listConversations({ advisorId, limit, cursor }),
     staleTime: 30_000
   });
 }

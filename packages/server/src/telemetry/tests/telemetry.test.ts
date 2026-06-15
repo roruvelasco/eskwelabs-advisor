@@ -6,10 +6,13 @@ import { TelemetryService } from '../telemetry.service';
 describe('telemetry service', () => {
   test('lists events from the repository', async () => {
     const service = new TelemetryService({
-      list: async () => []
+      list: async () => ({ rows: [], nextCursor: null })
     } as never);
 
-    await expect(service.list()).resolves.toEqual([]);
+    await expect(service.list()).resolves.toEqual({
+      rows: [],
+      nextCursor: null
+    });
   });
 });
 

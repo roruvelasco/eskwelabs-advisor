@@ -1,6 +1,7 @@
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, or } from 'drizzle-orm';
 
 import { Repository } from '../common/factories/repository.factory';
+import { decodeCursor, encodeCursor } from '../common/pagination';
 import type { DbTransaction } from '../db/drizzle.service';
 import {
   conversationsTable,
@@ -30,6 +31,11 @@ export interface MessageRow {
 
 export type MessageCreateInput = Omit<MessageRow, 'id' | 'createdAt'>;
 
+export interface PaginatedResult<T> {
+  rows: T[];
+  nextCursor: string | null;
+}
+
 function nullable<T>(value: T | null): T | undefined {
   return value ?? undefined;
 }
@@ -57,14 +63,70 @@ function toRow(message: Message): MessageRow {
 }
 
 export class MessagesRepository extends Repository {
-  async listForConversation(conversationId: string) {
+  async listForConversation(
+    conversationId: string,
+    {
+      limit = 50,
+      cursor
+    }: {
+      limit?: number;
+      cursor?: string;
+    } = {}
+  ): Promise<PaginatedResult<MessageRow>> {
+    const decoded = cursor ? decodeCursor(cursor) : null;
+
+    const cursorConditions = decoded
+      ? or(
+          gt(messagesTable.createdAt, new Date(decoded.createdAt as string)),
+          and(
+            eq(messagesTable.createdAt, new Date(decoded.createdAt as string)),
+            gt(messagesTable.id, decoded.id as string)
+          )
+        )
+      : undefined;
+
+    const whereConditions = [
+      eq(messagesTable.conversationId, conversationId),
+      ...(cursorConditions ? [cursorConditions] : [])
+    ];
+
     const rows = await this.drizzle.db
       .select()
       .from(messagesTable)
-      .where(eq(messagesTable.conversationId, conversationId))
-      .orderBy(asc(messagesTable.createdAt), desc(messagesTable.role));
+      .where(and(...whereConditions))
+      .orderBy(asc(messagesTable.createdAt), asc(messagesTable.id))
+      .limit(limit + 1);
 
-    return rows.map(toRow);
+    const hasMore = rows.length > limit;
+    const resultRows = hasMore ? rows.slice(0, limit) : rows;
+
+    const nextCursor = hasMore
+      ? encodeCursor({
+          createdAt: resultRows[resultRows.length - 1].createdAt.toISOString(),
+          id: resultRows[resultRows.length - 1].id
+        })
+      : null;
+
+    return { rows: resultRows.map(toRow), nextCursor };
+  }
+
+  async latestSuccessfulForConversation(
+    conversationId: string,
+    limit: number = 20
+  ): Promise<MessageRow[]> {
+    const rows = await this.drizzle.db
+      .select()
+      .from(messagesTable)
+      .where(
+        and(
+          eq(messagesTable.conversationId, conversationId),
+          eq(messagesTable.status, 'ok')
+        )
+      )
+      .orderBy(desc(messagesTable.createdAt), desc(messagesTable.id))
+      .limit(limit);
+
+    return rows.reverse().map(toRow);
   }
 
   async create(input: MessageCreateInput) {

@@ -52,7 +52,7 @@ export function ConversationHistory() {
     data: conversationsData,
     isLoading: conversationsLoading,
     isError
-  } = useQuery(conversationsQuery(scopedAdvisorId));
+  } = useQuery(conversationsQuery({ advisorId: scopedAdvisorId }));
 
   const advisors = advisorsData?.data ?? [];
   const advisorNameById = useMemo(

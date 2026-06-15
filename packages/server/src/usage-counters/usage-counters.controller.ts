@@ -1,4 +1,5 @@
 import { Controller } from '../common/factories/controller.factory';
+import { paginationParamsDto } from '../common/pagination';
 
 import { UsageCountersSerializer } from './usage-counters.serializer';
 import { UsageCountersService } from './usage-counters.service';
@@ -19,12 +20,34 @@ export class UsageCounterController extends Controller {
 
     return this.controller
       .get('/admin/usage-counters', async (c) => {
-        const rows = await this.usageCountersService.list();
-        return c.json(this.usageCountersSerializer.list(rows));
+        const userId = c.req.query('userId');
+        const dayPh = c.req.query('dayPh');
+        const pagination = paginationParamsDto.parse({
+          limit: c.req.query('limit'),
+          cursor: c.req.query('cursor')
+        });
+        const result = await this.usageCountersService.list(
+          userId,
+          dayPh,
+          pagination.limit,
+          pagination.cursor
+        );
+        return c.json(this.usageCountersSerializer.list(result));
       })
       .get('/admin/usage-users', async (c) => {
-        const rows = await this.usageCountersService.list();
-        return c.json(this.usageCountersSerializer.list(rows));
+        const userId = c.req.query('userId');
+        const dayPh = c.req.query('dayPh');
+        const pagination = paginationParamsDto.parse({
+          limit: c.req.query('limit'),
+          cursor: c.req.query('cursor')
+        });
+        const result = await this.usageCountersService.list(
+          userId,
+          dayPh,
+          pagination.limit,
+          pagination.cursor
+        );
+        return c.json(this.usageCountersSerializer.list(result));
       });
   }
 }

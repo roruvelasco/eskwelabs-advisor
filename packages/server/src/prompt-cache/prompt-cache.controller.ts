@@ -1,4 +1,5 @@
 import { Controller } from '../common/factories/controller.factory';
+import { paginationParamsDto } from '../common/pagination';
 
 import { PromptCacheSerializer } from './prompt-cache.serializer';
 import { PromptCacheService } from './prompt-cache.service';
@@ -18,8 +19,15 @@ export class PromptCacheController extends Controller {
 
     return this.controller
       .get('/admin/prompt-cache', async (c) => {
-        const rows = await this.promptCacheService.list();
-        return c.json(this.promptCacheSerializer.list(rows));
+        const pagination = paginationParamsDto.parse({
+          limit: c.req.query('limit'),
+          cursor: c.req.query('cursor')
+        });
+        const result = await this.promptCacheService.list(
+          pagination.limit,
+          pagination.cursor
+        );
+        return c.json(this.promptCacheSerializer.list(result));
       })
       .post('/admin/prompt-cache/refresh', async (c) => {
         const actor = c.get('actor');

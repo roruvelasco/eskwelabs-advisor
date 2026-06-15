@@ -1,4 +1,8 @@
 import { ConversationsRepository } from './conversations.repository';
+import type {
+  ConversationRow,
+  PaginatedResult
+} from './conversations.repository';
 import { AdvisorsService } from '../advisors/advisors.service';
 import { AdvisorRuntimeService } from '../advisors/advisor-runtime.service';
 import { forbidden, notFound } from '../common/http/http-exception';
@@ -13,9 +17,17 @@ export class ConversationsService {
     private advisorsService: AdvisorsService
   ) {}
 
-  async list(actor?: Actor, advisorId?: string) {
-    if (!actor) return [];
-    return this.conversationsRepository.listForUser(actor.id, advisorId);
+  async list(
+    actor: Actor,
+    advisorId?: string,
+    limit?: number,
+    cursor?: string
+  ): Promise<PaginatedResult<ConversationRow>> {
+    return this.conversationsRepository.listForUser(actor.id, {
+      advisorId,
+      limit,
+      cursor
+    });
   }
 
   async detail(actor: Actor, id: string) {

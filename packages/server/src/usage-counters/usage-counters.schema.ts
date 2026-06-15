@@ -1,5 +1,6 @@
 import {
   date,
+  index,
   integer,
   numeric,
   pgTable,
@@ -23,7 +24,11 @@ export const usageCountersTable = pgTable(
       .default('0')
   },
   (table) => ({
-    pk: primaryKey({ columns: [table.userId, table.dayPh] })
+    pk: primaryKey({ columns: [table.userId, table.dayPh] }),
+    dayPhUserIdx: index('usage_counters_day_ph_user_idx').on(
+      table.dayPh.desc(),
+      table.userId
+    )
   })
 );
 

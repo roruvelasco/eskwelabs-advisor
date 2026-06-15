@@ -73,12 +73,17 @@ function createConversationRuntimeService(config?: {
 describe('conversations service', () => {
   test('lists no conversations without an actor', async () => {
     const service = new ConversationsService(
-      {} as never,
+      {
+        listForUser: async () => ({ rows: [], nextCursor: null })
+      } as never,
       {} as never,
       {} as never
     );
 
-    await expect(service.list()).resolves.toEqual([]);
+    await expect(service.list(actor)).resolves.toEqual({
+      rows: [],
+      nextCursor: null
+    });
   });
 
   test('rejects conversation creation when runtime version is missing', async () => {

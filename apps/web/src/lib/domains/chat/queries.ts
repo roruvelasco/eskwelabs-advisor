@@ -6,9 +6,17 @@ export function messagesQueryKey(conversationId: string) {
   return ['messages', conversationId] as const;
 }
 
-export function messagesQuery(conversationId: string) {
+export function messagesQuery({
+  conversationId,
+  limit,
+  cursor
+}: {
+  conversationId: string;
+  limit?: number;
+  cursor?: string;
+}) {
   return queryOptions({
-    queryKey: messagesQueryKey(conversationId),
-    queryFn: () => listMessages(conversationId)
+    queryKey: [...messagesQueryKey(conversationId), limit, cursor],
+    queryFn: () => listMessages({ conversationId, limit, cursor })
   });
 }

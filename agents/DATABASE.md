@@ -48,6 +48,8 @@ this.db = drizzle(this.client, { schema, casing: 'snake_case' });
 
 Type: `User`
 
+Indexes: `users_created_desc_idx` on `(created_at DESC, id DESC)`.
+
 ### `advisors` (`advisorsTable` in code, `advisors` in DB)
 
 | Column        | Type                | Constraints               |
@@ -71,6 +73,8 @@ Type: `Advisor`
 | `status`     | `text`              | NOT NULL, default `'active'`                |
 | `created_at` | `timestamp with tz` | NOT NULL, default `now()`                   |
 | `updated_at` | `timestamp with tz` | NOT NULL, default `now()`                   |
+
+Indexes: `conversations_user_updated_idx` on `(user_id, updated_at DESC, id DESC)`, `conversations_user_advisor_updated_idx` on `(user_id, advisor_id, updated_at DESC, id DESC)`.
 
 Type: `Conversation`
 
@@ -96,6 +100,8 @@ Type: `Conversation`
 | `created_at`          | `timestamp with tz` | NOT NULL, default `now()` |
 
 Type: `Message`
+
+Indexes: partial unique index on `(user_id, client_turn_id)` where `client_turn_id IS NOT NULL`, `messages_convo_created_asc_idx` on `(conversation_id, created_at ASC, id ASC)`, `messages_convo_created_desc_idx` on `(conversation_id, created_at DESC, id DESC)`.
 
 ### `model_config` (`modelConfigTable` in code, `model_config` in DB)
 
@@ -123,6 +129,8 @@ Type: `ModelConfig`
 | `updated_at`         | `timestamp with tz` | NOT NULL, default `now()` |
 
 Type: `PromptCacheEntry`
+
+Indexes: `prompt_cache_updated_key_idx` on `(updated_at DESC, key)`.
 
 ### `prompt_snapshots` (`promptSnapshotsTable` in code, `prompt_snapshots` in DB)
 
@@ -169,6 +177,7 @@ Type: `DnaDigestRow`
 | `estimated_spend_today_usd` | `numeric` | NOT NULL, default `'0'` |
 
 PK: composite `(user_id, day_ph)`
+Indexes: `usage_counters_day_ph_user_idx` on `(day_ph DESC, user_id)`.
 Type: `UsageCounter`
 
 ### `telemetry_events` (`telemetryEventsTable` in code, `telemetry_events` in DB)
@@ -183,6 +192,8 @@ Type: `UsageCounter`
 | `created_at` | `timestamp with tz` | NOT NULL, default `now()`  |
 
 Type: `TelemetryEvent`
+
+Indexes: `telemetry_events_created_desc_idx` on `(created_at DESC, id DESC)`, `telemetry_events_event_created_idx` on `(event_name, created_at DESC, id DESC)`.
 
 ### `admin` (`adminSchemaPlaceholder` in code, no DB table)
 
@@ -204,6 +215,8 @@ The admin domain has no DB table — it's a service-only domain that queries acr
 | `created_at`              | `timestamp with tz` | NOT NULL, default `now()`       |
 
 Type: `AdvisorRuntimeVersion`
+
+Indexes: `advisor_runtime_versions_advisor_status_version_idx` on `(advisor_id, status, version_number DESC)`.
 
 ### `conversation_title_jobs` (`conversationTitleJobsTable` in code, `conversation_title_jobs` in DB)
 

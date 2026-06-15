@@ -201,7 +201,15 @@ function createMessageRepository(input?: {
   const createdMessages = input?.createdMessages ?? [];
 
   return {
-    listForConversation: async () => history,
+    listForConversation: async () => ({ rows: history, nextCursor: null }),
+    latestSuccessfulForConversation: async (
+      _conversationId: string,
+      limit?: number
+    ) => {
+      const ok = history.filter((m) => m.status === 'ok');
+      const take = limit ?? 20;
+      return ok.slice(-take);
+    },
     create: async (message: MessageCreateInput) => {
       const row = createMessageRow(message);
       createdMessages.push(row);

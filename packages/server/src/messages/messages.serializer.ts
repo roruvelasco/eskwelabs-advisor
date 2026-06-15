@@ -1,5 +1,11 @@
+import { paginatedResponse } from '../common/pagination';
+
 export class MessagesSerializer {
-  list(rows: unknown[]) {
-    return { data: rows };
+  list(result: { rows: unknown[]; nextCursor: string | null }) {
+    return paginatedResponse(
+      result.rows,
+      result.rows.length,
+      result.nextCursor
+    );
   }
 }

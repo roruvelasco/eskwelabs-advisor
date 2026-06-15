@@ -1,26 +1,5 @@
 ## 3. High Priority Findings
 
-### H1. No Pagination on Core List Endpoints
-
-- Category: Performance / Scalability
-- Files: conversations.repository.ts, messages.repository.ts, telemetry.repository.ts, usage-counters.repository.ts, users.repository.ts, prompt-cache.repository.ts
-- Evidence: Every list() method returns all rows with no LIMIT/OFFSET. The telemetry table grows fastest (every turn generates 2-5 events).
-- Impact: The PRD targets ~100 concurrent EIFs. Without pagination, list endpoints will degrade rapidly.
-- Remediation: Add cursor-based or offset pagination to all list endpoints. Prioritize telemetry and conversations.
-
-### H2. No Database Indexes on Primary Query Patterns
-
-- Category: Performance / Database Design
-- Files: packages/server/drizzle/ (migrations), schema files
-- Evidence: Missing indexes on:
-  - conversations(user_id, created_at DESC) — the most common query pattern
-  - messages(conversation_id, created_at ASC) — loading conversation history
-  - telemetry_events(created_at DESC) — admin dashboard
-  - telemetry_events(event_name) — filtering
-  - advisor_runtime_versions(advisor_id) — runtime resolution
-- Impact: Full table scans on the most frequent queries. Performance degrades linearly with data volume.
-- Remediation: Create a migration adding indexes for all primary query patterns.
-
 ### H3. Full Message History Loaded for Every Chat Turn
 
 - Category: Performance

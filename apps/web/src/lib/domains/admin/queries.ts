@@ -14,27 +14,69 @@ export const adminUsageQuery = queryOptions({
   queryFn: getAdminUsage
 });
 
-export const usageCountersQuery = queryOptions({
-  queryKey: ['admin', 'usage-counters'],
-  queryFn: listUsageCounters
-});
+export function usageCountersQuery({
+  userId,
+  dayPh,
+  limit,
+  cursor
+}: {
+  userId?: string;
+  dayPh?: string;
+  limit?: number;
+  cursor?: string;
+} = {}) {
+  return queryOptions({
+    queryKey: ['admin', 'usage-counters', userId, dayPh, limit, cursor],
+    queryFn: () => listUsageCounters({ userId, dayPh, limit, cursor })
+  });
+}
 
 export const modelConfigQuery = queryOptions({
   queryKey: ['admin', 'model-config'],
   queryFn: listModelConfig
 });
 
-export const promptCacheQuery = queryOptions({
-  queryKey: ['admin', 'prompt-cache'],
-  queryFn: listPromptCache
-});
+export function promptCacheQuery({
+  limit,
+  cursor
+}: {
+  limit?: number;
+  cursor?: string;
+} = {}) {
+  return queryOptions({
+    queryKey: ['admin', 'prompt-cache', limit, cursor],
+    queryFn: () => listPromptCache({ limit, cursor })
+  });
+}
 
-export const telemetryQuery = queryOptions({
-  queryKey: ['admin', 'telemetry'],
-  queryFn: listTelemetry
-});
+export function telemetryQuery({
+  eventName,
+  limit,
+  cursor
+}: {
+  eventName?: string;
+  limit?: number;
+  cursor?: string;
+} = {}) {
+  return queryOptions({
+    queryKey: ['admin', 'telemetry', eventName, limit, cursor],
+    queryFn: () => listTelemetry({ eventName, limit, cursor })
+  });
+}
 
-export const usersQuery = queryOptions({
-  queryKey: ['admin', 'users'],
-  queryFn: listUsers
-});
+export function usersQuery({
+  role,
+  search,
+  limit,
+  cursor
+}: {
+  role?: 'eif' | 'admin';
+  search?: string;
+  limit?: number;
+  cursor?: string;
+} = {}) {
+  return queryOptions({
+    queryKey: ['admin', 'users', role, search, limit, cursor],
+    queryFn: () => listUsers({ role, search, limit, cursor })
+  });
+}

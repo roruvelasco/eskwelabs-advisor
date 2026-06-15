@@ -81,8 +81,8 @@ export function UsagePanel() {
     data: countersData,
     isLoading: countersLoading,
     error: countersError
-  } = useQuery(usageCountersQuery);
-  const { data: usersData, isLoading: usersLoading } = useQuery(usersQuery);
+  } = useQuery(usageCountersQuery());
+  const { data: usersData, isLoading: usersLoading } = useQuery(usersQuery());
 
   const counters =
     (countersData as { data: UsageCounterRow[] } | undefined)?.data ?? [];

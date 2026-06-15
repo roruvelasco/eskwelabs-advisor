@@ -5,6 +5,7 @@ import {
 } from '../common/middleware/auth.middleware';
 import { parseJsonBody } from '../common/middleware/validation.middleware';
 import { validationFailed } from '../common/http/http-exception';
+import { paginationParamsDto } from '../common/pagination';
 import { z } from 'zod';
 
 import { ConversationsSerializer } from './conversations.serializer';
@@ -32,11 +33,18 @@ export class ConversationController extends Controller {
     return this.controller
       .get('/conversations', async (c) => {
         const actor = c.get('actor')!;
-        const rows = await this.conversationsService.list(
+        const advisorId = c.req.query('advisorId');
+        const pagination = paginationParamsDto.parse({
+          limit: c.req.query('limit'),
+          cursor: c.req.query('cursor')
+        });
+        const result = await this.conversationsService.list(
           actor,
-          c.req.query('advisorId')
+          advisorId,
+          pagination.limit,
+          pagination.cursor
         );
-        return c.json(this.conversationsSerializer.list(rows));
+        return c.json(this.conversationsSerializer.list(result));
       })
       .post('/conversations', async (c) => {
         const actor = c.get('actor')!;

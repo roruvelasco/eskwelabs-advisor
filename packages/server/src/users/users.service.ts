@@ -1,13 +1,19 @@
 import type { User } from './users.schema';
 import { UsersRepository } from './users.repository';
-import type { Actor } from '../common/utils/hono';
+import type { PaginatedResult } from './users.repository';
+import type { Actor, ActorRole } from '../common/utils/hono';
 import { forbidden } from '../common/http/http-exception';
 
 export class UsersService {
   constructor(private usersRepository: UsersRepository) {}
 
-  async list(): Promise<User[]> {
-    return this.usersRepository.list();
+  async list(
+    role?: ActorRole,
+    search?: string,
+    limit?: number,
+    cursor?: string
+  ): Promise<PaginatedResult<User>> {
+    return this.usersRepository.list({ role, search, limit, cursor });
   }
 
   async count(): Promise<number> {

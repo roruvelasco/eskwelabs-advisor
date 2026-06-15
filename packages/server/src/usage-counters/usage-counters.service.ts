@@ -1,11 +1,18 @@
 import { UsageCountersRepository } from './usage-counters.repository';
+import type { PaginatedResult } from './usage-counters.repository';
+import type { UsageCounterRow } from './usage-counters.repository';
 import { getPhilippinesDay } from '../common/utils/day-ph';
 
 export class UsageCountersService {
   constructor(private usageCountersRepository: UsageCountersRepository) {}
 
-  async list() {
-    return this.usageCountersRepository.list();
+  async list(
+    userId?: string,
+    dayPh?: string,
+    limit?: number,
+    cursor?: string
+  ): Promise<PaginatedResult<UsageCounterRow>> {
+    return this.usageCountersRepository.list({ userId, dayPh, limit, cursor });
   }
 
   async count() {

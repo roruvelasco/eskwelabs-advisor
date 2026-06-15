@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { UsersService } from '../users.service';
 import type { User } from '../users.schema';
+import type { PaginatedResult } from '../users.repository';
 import { createUserDto } from '../dto/create-user.dto';
 
 describe('users service', () => {
@@ -16,7 +17,7 @@ describe('users service', () => {
   };
 
   function serviceFor(repository: {
-    list?: () => Promise<User[]>;
+    list?: () => Promise<PaginatedResult<User>>;
     findByEmail?: (email: string) => Promise<User | undefined>;
     findById?: (id: string) => Promise<User | undefined>;
     createOrReactivate?: (
@@ -33,8 +34,13 @@ describe('users service', () => {
   }
 
   test('lists users from repository', async () => {
-    const service = serviceFor({ list: async () => [user] });
-    await expect(service.list()).resolves.toEqual([user]);
+    const service = serviceFor({
+      list: async () => ({ rows: [user], nextCursor: null })
+    });
+    await expect(service.list()).resolves.toEqual({
+      rows: [user],
+      nextCursor: null
+    });
   });
 
   test('normalizes create user email input', () => {

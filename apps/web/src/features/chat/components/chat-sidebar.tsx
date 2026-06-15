@@ -189,7 +189,7 @@ export function ChatSidebar({
   const queryClient = useQueryClient();
   const { isMobile, setOpenMobile } = useSidebar();
   const { data, isError, isLoading } = useQuery({
-    ...conversationsQuery(currentAdvisorId),
+    ...conversationsQuery({ advisorId: currentAdvisorId }),
     enabled: Boolean(currentAdvisorId) && !isResolvingConversationAdvisor
   });
 
@@ -205,7 +205,9 @@ export function ChatSidebar({
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteConversation(id),
     onSuccess: (_, deletedId) => {
-      queryClient.invalidateQueries(conversationsQuery(currentAdvisorId));
+      queryClient.invalidateQueries(
+        conversationsQuery({ advisorId: currentAdvisorId })
+      );
       queryClient.removeQueries({
         queryKey: conversationQuery(deletedId).queryKey
       });

@@ -18,12 +18,20 @@ export interface Message {
   createdAt: string;
 }
 
-export function listMessages(conversationId: string) {
-  return apiClient.messages
-    .$get({
-      query: { conversationId }
-    })
-    .then((response) => response.json());
+export function listMessages({
+  conversationId,
+  limit,
+  cursor
+}: {
+  conversationId: string;
+  limit?: number;
+  cursor?: string;
+}) {
+  const query: Record<string, string> = { conversationId };
+  if (limit !== undefined) query.limit = String(limit);
+  if (cursor) query.cursor = cursor;
+
+  return apiClient.messages.$get({ query }).then((response) => response.json());
 }
 
 export function createChatTurn(input: {

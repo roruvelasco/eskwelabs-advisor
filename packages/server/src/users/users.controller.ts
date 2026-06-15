@@ -2,11 +2,13 @@ import { Controller } from '../common/factories/controller.factory';
 import { parseJsonBody } from '../common/middleware/validation.middleware';
 import { notFound } from '../common/http/http-exception';
 import { requireActor } from '../common/middleware/auth.middleware';
+import { paginationParamsDto } from '../common/pagination';
 
 import { UsersSerializer } from './users.serializer';
 import { UsersService } from './users.service';
 import { createUserDto } from './dto/create-user.dto';
 import { updateUserDto } from './dto/update-user.dto';
+import { usersFiltersDto } from './dto/users.filters.dto';
 
 export class UsersController extends Controller {
   constructor(
@@ -35,8 +37,21 @@ export class UsersController extends Controller {
         return c.json(this.usersSerializer.single(row!));
       })
       .get('/admin/users', async (c) => {
-        const rows = await this.usersService.list();
-        return c.json(this.usersSerializer.list(rows));
+        const filters = usersFiltersDto.parse({
+          role: c.req.query('role'),
+          search: c.req.query('search')
+        });
+        const pagination = paginationParamsDto.parse({
+          limit: c.req.query('limit'),
+          cursor: c.req.query('cursor')
+        });
+        const result = await this.usersService.list(
+          filters.role,
+          filters.search,
+          pagination.limit,
+          pagination.cursor
+        );
+        return c.json(this.usersSerializer.list(result));
       })
       .post('/admin/users', async (c) => {
         const body = await parseJsonBody(c, createUserDto);

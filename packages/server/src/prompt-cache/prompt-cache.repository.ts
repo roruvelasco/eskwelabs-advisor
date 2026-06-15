@@ -1,6 +1,7 @@
-import { count, desc } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, lt, or } from 'drizzle-orm';
 
 import { Repository } from '../common/factories/repository.factory';
+import { decodeCursor, encodeCursor } from '../common/pagination';
 import { promptCacheTable, type PromptCacheEntry } from './prompt-cache.schema';
 
 type UpsertPromptCacheEntry = {
@@ -12,12 +13,52 @@ type UpsertPromptCacheEntry = {
   expiresAt: Date;
 };
 
+export interface PaginatedResult<T> {
+  rows: T[];
+  nextCursor: string | null;
+}
+
 export class PromptCacheRepository extends Repository {
-  async list(): Promise<PromptCacheEntry[]> {
-    return this.drizzle.db
+  async list({
+    limit = 50,
+    cursor
+  }: {
+    limit?: number;
+    cursor?: string;
+  } = {}): Promise<PaginatedResult<PromptCacheEntry>> {
+    const decoded = cursor ? decodeCursor(cursor) : null;
+
+    const cursorConditions = decoded
+      ? or(
+          lt(promptCacheTable.updatedAt, new Date(decoded.updatedAt as string)),
+          and(
+            eq(
+              promptCacheTable.updatedAt,
+              new Date(decoded.updatedAt as string)
+            ),
+            gt(promptCacheTable.key, decoded.key as string)
+          )
+        )
+      : undefined;
+
+    const rows = await this.drizzle.db
       .select()
       .from(promptCacheTable)
-      .orderBy(desc(promptCacheTable.updatedAt));
+      .where(cursorConditions ?? undefined)
+      .orderBy(desc(promptCacheTable.updatedAt), asc(promptCacheTable.key))
+      .limit(limit + 1);
+
+    const hasMore = rows.length > limit;
+    const resultRows = hasMore ? rows.slice(0, limit) : rows;
+
+    const nextCursor = hasMore
+      ? encodeCursor({
+          updatedAt: resultRows[resultRows.length - 1].updatedAt.toISOString(),
+          key: resultRows[resultRows.length - 1].key
+        })
+      : null;
+
+    return { rows: resultRows, nextCursor };
   }
 
   async count(): Promise<number> {

@@ -10,6 +10,26 @@ Common response envelope for errors:
 
 Error codes: `forbidden` (403), `unauthorized` (401), `not_found` (404), `rate_limited` (429), `validation_failed` (400), `server_error` (500).
 
+## Pagination
+
+All list endpoints support cursor-based pagination via query params:
+
+| Param    | Type   | Default | Description                                       |
+| -------- | ------ | ------- | ------------------------------------------------- |
+| `limit`  | number | 50      | Page size (min 1, max 100)                        |
+| `cursor` | string | —       | Opaque base64url-encoded cursor token from `meta` |
+
+Paginated responses include metadata:
+
+```json
+{
+  "data": [...],
+  "meta": { "nextCursor": "string | null", "limit": 50 }
+}
+```
+
+When `nextCursor` is `null`, there are no more pages. Pass the cursor to the next request to fetch the next page. Cursor tokens are opaque and endpoint-specific; do not construct them manually.
+
 ---
 
 ## Health & Info
@@ -49,12 +69,12 @@ Response: `{ data: Advisor[] }`
 **Controller**: `UsersController` (`packages/server/src/users/`)
 **Auth**: `requireActor(['eif', 'admin'])` on `/api/consent`, `requireActor(['admin'])` on admin routes
 
-| Method  | Path                   | Body                                              | Description                                                     |
-| ------- | ---------------------- | ------------------------------------------------- | --------------------------------------------------------------- |
-| `POST`  | `/api/consent`         | —                                                 | Acknowledge consent for current actor                           |
-| `GET`   | `/api/admin/users`     | —                                                 | List all users (admin only)                                     |
-| `POST`  | `/api/admin/users`     | `{ email: string, role: "eif" \| "admin" }`       | Create or reactivate user (admin only)                          |
-| `PATCH` | `/api/admin/users/:id` | `{ role?: "eif" \| "admin", isActive?: boolean }` | Update user role/status (admin only, self-deactivation guarded) |
+| Method  | Path                   | Body                                              | Description                                                         |
+| ------- | ---------------------- | ------------------------------------------------- | ------------------------------------------------------------------- |
+| `POST`  | `/api/consent`         | —                                                 | Acknowledge consent for current actor                               |
+| `GET`   | `/api/admin/users`     | —                                                 | List all users (admin only, paginated: `?role&search&limit&cursor`) |
+| `POST`  | `/api/admin/users`     | `{ email: string, role: "eif" \| "admin" }`       | Create or reactivate user (admin only)                              |
+| `PATCH` | `/api/admin/users/:id` | `{ role?: "eif" \| "admin", isActive?: boolean }` | Update user role/status (admin only, self-deactivation guarded)     |
 
 Request body (`POST /api/admin/users`):
 
@@ -79,14 +99,14 @@ Response: `{ data: User }`
 **Controller**: `ConversationController` (`packages/server/src/conversations/`)
 **Auth**: `requireActor(['eif', 'admin'])`
 
-| Method   | Path                     | Query / Body                            | Description                          |
-| -------- | ------------------------ | --------------------------------------- | ------------------------------------ |
-| `GET`    | `/api/conversations`     | `?advisorId=string`                     | List conversations for current actor |
-| `POST`   | `/api/conversations`     | `{ advisorId: string, title?: string }` | Create conversation                  |
-| `GET`    | `/api/conversations/:id` | —                                       | Get conversation detail              |
-| `DELETE` | `/api/conversations/:id` | —                                       | Delete conversation (owner-only)     |
+| Method   | Path                     | Query / Body                                   | Description                                      |
+| -------- | ------------------------ | ---------------------------------------------- | ------------------------------------------------ |
+| `GET`    | `/api/conversations`     | `?advisorId=string&limit=number&cursor=string` | List conversations for current actor (paginated) |
+| `POST`   | `/api/conversations`     | `{ advisorId: string, title?: string }`        | Create conversation                              |
+| `GET`    | `/api/conversations/:id` | —                                              | Get conversation detail                          |
+| `DELETE` | `/api/conversations/:id` | —                                              | Delete conversation (owner-only)                 |
 
-Response (list): `{ data: Conversation[] }`
+Response (list, paginated): `{ data: Conversation[], meta: { nextCursor: string | null, limit: number } }`
 Response (single): `{ data: Conversation }`
 Response (delete): `204 No Content`
 
@@ -99,11 +119,13 @@ Response (delete): `204 No Content`
 **Controller**: `MessageController` (`packages/server/src/messages/`)
 **Auth**: `requireActor(['eif', 'admin'])`
 
-| Method | Path                    | Body                                        | Description                     |
-| ------ | ----------------------- | ------------------------------------------- | ------------------------------- |
-| `GET`  | `/api/messages`         | `?conversationId=uuid`                      | List messages in a conversation |
-| `POST` | `/api/chat-turn`        | `{ conversationId: uuid, content: string }` | Send a turn, get response       |
-| `POST` | `/api/chat-turn/stream` | `{ conversationId: uuid, content: string }` | SSE-streamed chat turn          |
+| Method | Path                    | Body                                              | Description                                 |
+| ------ | ----------------------- | ------------------------------------------------- | ------------------------------------------- |
+| `GET`  | `/api/messages`         | `?conversationId=uuid&limit=number&cursor=string` | List messages in a conversation (paginated) |
+| `POST` | `/api/chat-turn`        | `{ conversationId: uuid, content: string }`       | Send a turn, get response                   |
+| `POST` | `/api/chat-turn/stream` | `{ conversationId: uuid, content: string }`       | SSE-streamed chat turn                      |
+
+Response (list, paginated): `{ data: Message[], meta: { nextCursor: string | null, limit: number } }`
 
 ### Stream Events (`POST /api/chat-turn/stream`)
 
@@ -130,14 +152,14 @@ Response (delete): `204 No Content`
 **Controller**: `PromptCacheController` (`packages/server/src/prompt-cache/`)
 **Auth**: `requireActor(['admin'])`
 
-| Method | Path                                                                         | Description                                      |
-| ------ | ---------------------------------------------------------------------------- | ------------------------------------------------ |
-| `GET`  | `/api/admin/prompt-cache`                                                    | List legacy prompt cache metadata                |
-| `POST` | `/api/admin/prompt-cache/refresh`                                            | Ingest prompt/DNA snapshots and warm Redis cache |
-| `GET`  | `/api/admin/prompt-cache/advisors/:advisorId/snapshots`                      | List advisor prompt snapshot metadata            |
-| `POST` | `/api/admin/prompt-cache/advisors/:advisorId/snapshots/:snapshotId/activate` | Roll back an advisor to a prior prompt snapshot  |
-| `GET`  | `/api/admin/prompt-cache/dna-digests`                                        | List DNA digest metadata                         |
-| `POST` | `/api/admin/prompt-cache/dna-digests/:digestId/activate`                     | Roll back to a prior DNA digest                  |
+| Method | Path                                                                         | Description                                             |
+| ------ | ---------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `GET`  | `/api/admin/prompt-cache`                                                    | List prompt cache metadata (paginated: `?limit&cursor`) |
+| `POST` | `/api/admin/prompt-cache/refresh`                                            | Ingest prompt/DNA snapshots and warm Redis cache        |
+| `GET`  | `/api/admin/prompt-cache/advisors/:advisorId/snapshots`                      | List advisor prompt snapshot metadata                   |
+| `POST` | `/api/admin/prompt-cache/advisors/:advisorId/snapshots/:snapshotId/activate` | Roll back an advisor to a prior prompt snapshot         |
+| `GET`  | `/api/admin/prompt-cache/dna-digests`                                        | List DNA digest metadata                                |
+| `POST` | `/api/admin/prompt-cache/dna-digests/:digestId/activate`                     | Roll back to a prior DNA digest                         |
 
 Prompt cache admin endpoints return metadata only. They never return advisor prompt text or DNA digest text. Refresh does not invalidate Redis first; it writes and warms new context and lets old keys expire naturally.
 
@@ -148,10 +170,10 @@ Prompt cache admin endpoints return metadata only. They never return advisor pro
 **Controller**: `UsageCounterController` (`packages/server/src/usage-counters/`)
 **Auth**: `requireActor(['admin'])`
 
-| Method | Path                        | Description         |
-| ------ | --------------------------- | ------------------- |
-| `GET`  | `/api/admin/usage-counters` | List usage counters |
-| `GET`  | `/api/admin/usage-users`    | List usage by user  |
+| Method | Path                        | Description                                                   |
+| ------ | --------------------------- | ------------------------------------------------------------- |
+| `GET`  | `/api/admin/usage-counters` | List usage counters (paginated: `?userId&dayPh&limit&cursor`) |
+| `GET`  | `/api/admin/usage-users`    | List usage by user (paginated: `?userId&dayPh&limit&cursor`)  |
 
 ---
 
@@ -160,9 +182,9 @@ Prompt cache admin endpoints return metadata only. They never return advisor pro
 **Controller**: `TelemetryController` (`packages/server/src/telemetry/`)
 **Auth**: `requireActor(['admin'])`
 
-| Method | Path                   | Description           |
-| ------ | ---------------------- | --------------------- |
-| `GET`  | `/api/admin/telemetry` | List telemetry events |
+| Method | Path                   | Description                                                  |
+| ------ | ---------------------- | ------------------------------------------------------------ |
+| `GET`  | `/api/admin/telemetry` | List telemetry events (paginated: `?eventName&limit&cursor`) |
 
 ---
 

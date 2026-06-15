@@ -1,6 +1,7 @@
-import { and, count, eq, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, lt, or, sql } from 'drizzle-orm';
 
 import { Repository } from '../common/factories/repository.factory';
+import { decodeCursor, encodeCursor } from '../common/pagination';
 import { getPhilippinesDay } from '../common/utils/day-ph';
 import { usageCountersTable, type UsageCounter } from './usage-counters.schema';
 
@@ -25,6 +26,11 @@ type AdvisoryLockTransaction = {
   execute(query: ReturnType<typeof sql>): Promise<unknown>;
 };
 
+export interface PaginatedResult<T> {
+  rows: T[];
+  nextCursor: string | null;
+}
+
 export class UsageCountersRepository extends Repository {
   private async lockUserDay(
     tx: AdvisoryLockTransaction,
@@ -36,8 +42,53 @@ export class UsageCountersRepository extends Repository {
     );
   }
 
-  async list(): Promise<UsageCounter[]> {
-    return this.drizzle.db.select().from(usageCountersTable);
+  async list({
+    userId,
+    dayPh,
+    limit = 50,
+    cursor
+  }: {
+    userId?: string;
+    dayPh?: string;
+    limit?: number;
+    cursor?: string;
+  } = {}): Promise<PaginatedResult<UsageCounterRow>> {
+    const decoded = cursor ? decodeCursor(cursor) : null;
+
+    const cursorConditions = decoded
+      ? or(
+          lt(usageCountersTable.dayPh, decoded.dayPh as string),
+          and(
+            eq(usageCountersTable.dayPh, decoded.dayPh as string),
+            gt(usageCountersTable.userId, decoded.userId as string)
+          )
+        )
+      : undefined;
+
+    const whereConditions = [
+      ...(userId ? [eq(usageCountersTable.userId, userId)] : []),
+      ...(dayPh ? [eq(usageCountersTable.dayPh, dayPh)] : []),
+      ...(cursorConditions ? [cursorConditions] : [])
+    ];
+
+    const rows = await this.drizzle.db
+      .select()
+      .from(usageCountersTable)
+      .where(whereConditions.length > 0 ? and(...whereConditions) : undefined)
+      .orderBy(desc(usageCountersTable.dayPh), asc(usageCountersTable.userId))
+      .limit(limit + 1);
+
+    const hasMore = rows.length > limit;
+    const resultRows = hasMore ? rows.slice(0, limit) : rows;
+
+    const nextCursor = hasMore
+      ? encodeCursor({
+          dayPh: resultRows[resultRows.length - 1].dayPh,
+          userId: resultRows[resultRows.length - 1].userId
+        })
+      : null;
+
+    return { rows: resultRows, nextCursor };
   }
 
   async count(): Promise<number> {
