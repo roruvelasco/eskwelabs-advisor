@@ -255,7 +255,9 @@ export function ModelConfigPanel() {
                       {row.model}
                     </TableCell>
                     <TableCell className="py-4">
-                      <Badge variant={row.isEnabled ? 'secondary' : 'outline'}>
+                      <Badge
+                        variant={row.isEnabled ? 'default' : 'destructive'}
+                      >
                         {row.isEnabled ? 'Enabled' : 'Disabled'}
                       </Badge>
                     </TableCell>

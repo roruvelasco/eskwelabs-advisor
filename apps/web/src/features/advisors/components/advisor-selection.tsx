@@ -225,7 +225,7 @@ export function AdvisorSelection() {
     isLoading,
     isError
   } = useQuery(advisorsQuery);
-  const { data: consentResponse, isLoading: isConsentLoading } = useQuery({
+  const { isLoading: isConsentLoading } = useQuery({
     queryKey: ['consent'],
     queryFn: getConsent
   });
@@ -233,22 +233,10 @@ export function AdvisorSelection() {
 
   useEffect(() => {
     if (isConsentLoading) return;
-    const consentedAt = (
-      consentResponse as { consentedAt?: string | null } | undefined
-    )?.consentedAt;
 
-    if (!consentedAt) {
-      setConsentOpen(true);
-      return;
-    }
-
-    setConsentOpen(false);
-    try {
-      window.sessionStorage.setItem(consentSessionKey, 'true');
-    } catch {
-      return;
-    }
-  }, [consentResponse, isConsentLoading]);
+    const seen = window.sessionStorage.getItem(consentSessionKey) === 'true';
+    setConsentOpen(!seen);
+  }, [isConsentLoading]);
 
   const handleAcknowledge = async () => {
     setIsAcknowledging(true);
