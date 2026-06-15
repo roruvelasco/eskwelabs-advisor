@@ -32,7 +32,7 @@ export class UsersController extends Controller {
       .post('/consent', async (c) => {
         const actor = c.get('actor')!;
         const row = await this.usersService.acknowledgeConsent(actor.id);
-        return c.json({ data: row });
+        return c.json(this.usersSerializer.single(row!));
       })
       .get('/admin/users', async (c) => {
         const rows = await this.usersService.list();
@@ -44,7 +44,7 @@ export class UsersController extends Controller {
           body.email,
           body.role
         );
-        return c.json({ data: user }, 201);
+        return c.json(this.usersSerializer.single(user), 201);
       })
       .patch('/admin/users/:userId', async (c) => {
         const actor = c.get('actor')!;
@@ -55,7 +55,7 @@ export class UsersController extends Controller {
         if (!user) {
           throw notFound('User not found');
         }
-        return c.json({ data: user });
+        return c.json(this.usersSerializer.single(user));
       });
   }
 }
