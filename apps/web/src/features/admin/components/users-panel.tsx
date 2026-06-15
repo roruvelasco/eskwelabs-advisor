@@ -41,7 +41,6 @@ interface UserRow {
   email: string;
   role: 'eif' | 'admin';
   isActive: boolean;
-  consentAcknowledgedAt: string | null;
   createdAt: string;
 }
 
@@ -214,7 +213,6 @@ export function UsersPanel() {
                 <TableRow>
                   <SortHead className="pl-6">Email</SortHead>
                   <SortHead>Role</SortHead>
-                  <SortHead>Consent</SortHead>
                   <SortHead>Created</SortHead>
                   <SortHead>Active</SortHead>
                 </TableRow>
@@ -233,13 +231,6 @@ export function UsersPanel() {
                       >
                         {user.role === 'admin' ? 'Admin' : 'EIF'}
                       </Badge>
-                    </TableCell>
-                    <TableCell className="py-4">
-                      {user.consentAcknowledgedAt ? (
-                        <Badge variant="secondary">Acknowledged</Badge>
-                      ) : (
-                        <Badge variant="outline">Pending</Badge>
-                      )}
                     </TableCell>
                     <TableCell className="text-muted-foreground py-4 text-sm">
                       {formatDate(user.createdAt)}
