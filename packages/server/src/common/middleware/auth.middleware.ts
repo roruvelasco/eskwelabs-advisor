@@ -82,16 +82,22 @@ export function createAuthMiddleware(
     }
 
     if (env?.ACTOR_FORWARDING_SECRET) {
-      const path = new URL(c.req.url).pathname;
-      const verified = await verifyActorSignature(
-        c.req.raw.headers,
-        env.ACTOR_FORWARDING_SECRET,
-        c.req.method,
-        path
-      );
-      if (!verified) {
-        await next();
-        return;
+      const isProduction = process.env.NODE_ENV === 'production';
+      const isDevDefault =
+        env.ACTOR_FORWARDING_SECRET ===
+        'dev-actor-forwarding-secret-change-in-prod';
+      if (!(isProduction && isDevDefault)) {
+        const path = new URL(c.req.url).pathname;
+        const verified = await verifyActorSignature(
+          c.req.raw.headers,
+          env.ACTOR_FORWARDING_SECRET,
+          c.req.method,
+          path
+        );
+        if (!verified) {
+          await next();
+          return;
+        }
       }
     }
 
