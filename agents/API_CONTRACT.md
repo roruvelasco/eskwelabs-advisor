@@ -188,6 +188,21 @@ Prompt cache admin endpoints return metadata only. They never return advisor pro
 
 ---
 
+## Conversation Title Jobs (Internal)
+
+**Controller**: `ConversationTitleJobsController` (`packages/server/src/conversation-titles/`)
+**Auth**: `Authorization: Bearer <CRON_SECRET>`
+
+| Method | Path                                           | Query           | Description                                       |
+| ------ | ---------------------------------------------- | --------------- | ------------------------------------------------- |
+| `GET`  | `/api/internal/jobs/conversation-titles/drain` | `?limit=number` | Claim and process pending conversation title jobs |
+
+Response: `{ recovered: { requeued, failed }, claimed, completed, retried, failed, notClaimed }`
+
+Errors: `401` when the bearer token is missing or invalid, `500` when `CRON_SECRET` is not configured, `400` for an invalid `limit`.
+
+---
+
 ## Admin Dashboard
 
 **Controller**: `AdminController` (`packages/server/src/admin/`)

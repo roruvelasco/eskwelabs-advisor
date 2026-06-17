@@ -261,6 +261,13 @@ advisor_runtime_versions ──1:N── conversations (via advisor_runtime_vers
 conversations ──1:1── conversation_title_jobs
 ```
 
+## Deletion Policy
+
+- Users are retained for audit history and access is revoked with `users.is_active = false`; there is no physical user delete flow in the API.
+- User-owned records therefore keep `NO ACTION`/restrictive user FKs so accidental hard deletion cannot orphan conversations, messages, usage counters, or telemetry.
+- Conversations can be physically deleted by their owner. Conversation-owned children (`messages`, `conversation_title_jobs`) cascade so the conversation delete is atomic and leaves no thread-local rows behind.
+- Advisor/runtime/prompt/DNA records are retained for auditability; runtime-version FKs block deletion while referenced by active advisors or historical conversations.
+
 `prompt_cache`, and `telemetry_events` are standalone tables (not directly FK-referenced). Prompt/DNA text fields are server-only and must not be serialized to clients.
 
 ## Current Status

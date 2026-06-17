@@ -119,6 +119,13 @@ Every backend domain at `packages/server/src/<domain>/` follows the same layout:
 - `PromptContextService` serves chat turns from Redis first, then active Postgres snapshots. If no active snapshot exists, chat fails safely with `prompt_context_unavailable`; it never fetches Google Docs or calls Gemini.
 - `MessagesService.prepareTurn()` receives compiled-ready context via `PROMPT_CONTEXT_LOADER`, builds the LLM request, and records the prompt snapshot hash and DNA digest hash used for the turn.
 
+### Conversation Title Flow
+
+- `SuccessfulTurnPersistenceService` enqueues one `conversation_title_jobs` row after a successful chat turn when the conversation still needs a generated title.
+- `ConversationTitleJobsRepository` claims pending/stale jobs with lease fields so multiple workers can drain safely without double-processing the same conversation.
+- `ConversationTitleWorker` resolves the runtime model, generates and normalizes a short title, updates the conversation title/source, and records completion/failure telemetry.
+- `ConversationTitleJobsController` exposes `GET /api/internal/jobs/conversation-titles/drain` for cron/worker execution. It is protected by `Authorization: Bearer <CRON_SECRET>`, not actor session auth.
+
 ### Middleware Stack (order in `application.controller.ts`)
 
 1. `securityHeadersMiddleware` — always applied first
