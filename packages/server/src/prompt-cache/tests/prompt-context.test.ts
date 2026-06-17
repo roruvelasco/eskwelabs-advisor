@@ -140,6 +140,83 @@ describe('prompt context service', () => {
 });
 
 describe('prompt ingestion service', () => {
+  test('refreshAll warms Redis for refreshed advisor prompts and DNA digest', async () => {
+    const redis = createRedis();
+    const createdPrompt = promptSnapshot({
+      contentText: 'Fresh prompt',
+      hash: sha256('Fresh prompt'),
+      revision: 'prompt-revision-2'
+    });
+    const createdDna = dnaDigest({
+      digestText: 'Fresh DNA digest',
+      hash: sha256('Fresh DNA digest'),
+      revision: 'dna-revision-2',
+      sourceHash: sha256('Fresh DNA source')
+    });
+
+    const service = new PromptIngestionService(
+      {
+        list: async () => [
+          {
+            id: 'data-dashboard',
+            name: 'Data Dashboard',
+            description: null,
+            promptDocId: 'prompt-doc',
+            isActive: true,
+            createdAt: new Date().toISOString()
+          }
+        ],
+        getActive: async () => ({
+          id: 'data-dashboard',
+          name: 'Data Dashboard',
+          description: null,
+          promptDocId: 'prompt-doc',
+          isActive: true,
+          createdAt: new Date().toISOString()
+        })
+      } as never,
+      {
+        fetchDocument: async (docId: string) =>
+          docId === 'prompt-doc'
+            ? { text: 'Fresh prompt', revision: 'prompt-revision-2' }
+            : { text: 'Fresh DNA source', revision: 'dna-revision-2' }
+      } as never,
+      {
+        summarize: async () => 'Fresh DNA digest'
+      },
+      {
+        findActive: async () => undefined,
+        createActive: async () => createdPrompt
+      } as never,
+      {
+        findActive: async () => undefined,
+        createActive: async () => createdDna
+      } as never,
+      redis as never,
+      { GOOGLE_DOCS_DNA_DOC_ID: 'dna-doc' } as never
+    );
+
+    await expect(service.refreshAll()).resolves.toMatchObject({
+      advisorPrompts: [
+        {
+          advisorId: 'data-dashboard',
+          status: 'refreshed',
+          revision: 'prompt-revision-2',
+          hash: createdPrompt.hash
+        }
+      ],
+      dnaDigest: {
+        status: 'refreshed',
+        revision: 'dna-revision-2',
+        hash: createdDna.hash
+      }
+    });
+    expect(redis.values.get('prompt-context:advisor:data-dashboard')).toBe(
+      createdPrompt
+    );
+    expect(redis.values.get('prompt-context:dna')).toBe(createdDna);
+  });
+
   test('failed refresh does not deactivate or overwrite active snapshots', async () => {
     const redis = createRedis();
     const activePrompt = promptSnapshot({ contentText: 'Last good prompt' });

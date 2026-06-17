@@ -178,10 +178,13 @@ export class GoogleDocsGeminiDnaDigestGenerator implements DnaDigestSummarizer {
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
         this.env.GEMINI_MODEL
-      )}:generateContent?key=${encodeURIComponent(this.env.GEMINI_API_KEY)}`,
+      )}:generateContent`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': this.env.GEMINI_API_KEY
+        },
         body: JSON.stringify({
           contents: [
             {
@@ -272,7 +275,14 @@ export class GeminiLlmProvider implements LlmProvider {
   ) {
     return `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
       model
-    )}:${method}?key=${encodeURIComponent(this.env.GEMINI_API_KEY)}`;
+    )}:${method}`;
+  }
+
+  private headers() {
+    return {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': this.env.GEMINI_API_KEY
+    };
   }
 
   private body(request: LlmChatRequest) {
@@ -307,7 +317,7 @@ export class GeminiLlmProvider implements LlmProvider {
         this.endpoint(request.model, 'generateContent'),
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: this.headers(),
           body: JSON.stringify(this.body(request)),
           signal: controller.signal
         }
@@ -368,10 +378,10 @@ export class GeminiLlmProvider implements LlmProvider {
 
     try {
       const response = await fetch(
-        `${this.endpoint(request.model, 'streamGenerateContent')}&alt=sse`,
+        `${this.endpoint(request.model, 'streamGenerateContent')}?alt=sse`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: this.headers(),
           body: JSON.stringify(this.body(request)),
           signal: controller.signal
         }

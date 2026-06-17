@@ -23,6 +23,25 @@ describe('auth service', () => {
     } as never);
   }
 
+  function serviceForWithCredentialLimit(
+    users: User[],
+    maxAttempts: number,
+    lockoutSeconds = 900
+  ) {
+    return new AuthService(
+      {
+        findByEmail: async (email: string) =>
+          users.find((row) => row.email === email.toLowerCase()),
+        findById: async (id: string) => users.find((row) => row.id === id)
+      } as never,
+      undefined,
+      {
+        CREDENTIAL_LOGIN_LOCKOUT_SECONDS: lockoutSeconds,
+        CREDENTIAL_LOGIN_MAX_ATTEMPTS: maxAttempts
+      }
+    );
+  }
+
   test('resolves active EIF login', async () => {
     await expect(serviceFor([user]).resolveLogin(user.email)).resolves.toEqual({
       id: user.id,
@@ -108,6 +127,82 @@ describe('auth service', () => {
           passwordPlain
         )
       ).resolves.toBeNull();
+    });
+
+    test('blocks credential attempts after the configured threshold', async () => {
+      passwordHash = await hash(passwordPlain, 10);
+      const pwUser = { ...user, passwordHash };
+      const service = serviceForWithCredentialLimit([pwUser], 2);
+
+      await expect(
+        service.resolveCredentials(user.email, 'wrong-password-1')
+      ).resolves.toBeNull();
+      await expect(
+        service.resolveCredentials(user.email, 'wrong-password-2')
+      ).resolves.toBeNull();
+      await expect(
+        service.resolveCredentials(user.email, 'wrong-password-3')
+      ).rejects.toMatchObject({
+        code: 'rate_limited',
+        status: 429,
+        safeDetails: expect.objectContaining({
+          limit: 2,
+          remaining: 0,
+          resetSeconds: 900
+        })
+      });
+    });
+
+    test('clears failed credential attempts after a successful login', async () => {
+      passwordHash = await hash(passwordPlain, 10);
+      const pwUser = { ...user, passwordHash };
+      const service = serviceForWithCredentialLimit([pwUser], 2);
+
+      await expect(
+        service.resolveCredentials(user.email, 'wrong-password')
+      ).resolves.toBeNull();
+      await expect(
+        service.resolveCredentials(user.email.toUpperCase(), passwordPlain)
+      ).resolves.toEqual({
+        id: user.id,
+        email: user.email,
+        role: 'eif',
+        isActive: true,
+        consentAcknowledgedAt: null
+      });
+      await expect(
+        service.resolveCredentials(user.email, 'wrong-password')
+      ).resolves.toBeNull();
+    });
+
+    test('uses hashed Redis keys for credential attempt counters', async () => {
+      passwordHash = await hash(passwordPlain, 10);
+      const keys: string[] = [];
+      const service = new AuthService(
+        {
+          findByEmail: async () => ({ ...user, passwordHash }),
+          findById: async (id: string) => (id === user.id ? user : undefined)
+        } as never,
+        {
+          incrWithTtl: async (key: string) => {
+            keys.push(key);
+            return 1;
+          },
+          del: async () => undefined
+        },
+        {
+          CREDENTIAL_LOGIN_LOCKOUT_SECONDS: 900,
+          CREDENTIAL_LOGIN_MAX_ATTEMPTS: 2
+        }
+      );
+
+      await expect(
+        service.resolveCredentials(user.email, 'wrong-password')
+      ).resolves.toBeNull();
+
+      expect(keys).toHaveLength(1);
+      expect(keys[0]).toStartWith('auth:credentials:');
+      expect(keys[0]).not.toContain(user.email);
     });
   });
 });

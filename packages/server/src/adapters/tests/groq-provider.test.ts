@@ -6,7 +6,8 @@ import {
   GroqLlmProvider,
   RoutingLlmProvider,
   GeminiLlmProvider,
-  DeterministicLlmProvider
+  DeterministicLlmProvider,
+  GoogleDocsGeminiDnaDigestGenerator
 } from '../advisor-adapters';
 import {
   getModelRate,
@@ -801,6 +802,47 @@ describe('GeminiLlmProvider', () => {
   };
 
   describe('complete()', () => {
+    test('sends Gemini API key in a header instead of the URL', async () => {
+      let capturedUrl = '';
+      let capturedHeaders: Record<string, string> = {};
+      const original = globalThis.fetch;
+
+      globalThis.fetch = (async (
+        url: RequestInfo | URL,
+        init?: RequestInit
+      ) => {
+        capturedUrl = url.toString();
+        capturedHeaders = init?.headers as Record<string, string>;
+        return {
+          ok: true,
+          status: 200,
+          headers: new Map(),
+          json: async () => ({
+            candidates: [{ content: { parts: [{ text: 'Response' }] } }],
+            usageMetadata: {
+              promptTokenCount: 5,
+              candidatesTokenCount: 3,
+              totalTokenCount: 8
+            }
+          }),
+          text: async () => ''
+        } as unknown as Response;
+      }) as unknown as typeof fetch;
+
+      try {
+        const provider = new GeminiLlmProvider(geminiEnv);
+        await provider.complete(geminiRequest);
+
+        expect(capturedUrl).not.toContain('key=');
+        expect(capturedUrl).toBe(
+          'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent'
+        );
+        expect(capturedHeaders['x-goog-api-key']).toBe('test-gemini-key');
+      } finally {
+        globalThis.fetch = original;
+      }
+    });
+
     test('passes a signal to fetch', async () => {
       let capturedInit: RequestInit | undefined;
       const restore = mockFetch({
@@ -881,6 +923,47 @@ describe('GeminiLlmProvider', () => {
   });
 
   describe('stream()', () => {
+    test('keeps only SSE format in the Gemini stream URL query', async () => {
+      let capturedUrl = '';
+      let capturedHeaders: Record<string, string> = {};
+      const stream = new ControlledStream();
+      const original = globalThis.fetch;
+
+      globalThis.fetch = (async (
+        url: RequestInfo | URL,
+        init?: RequestInit
+      ) => {
+        capturedUrl = url.toString();
+        capturedHeaders = init?.headers as Record<string, string>;
+        return {
+          ok: true,
+          status: 200,
+          headers: new Map(),
+          json: async () => ({}),
+          text: async () => '',
+          body: stream.stream
+        } as unknown as Response;
+      }) as unknown as typeof fetch;
+
+      try {
+        const provider = new GeminiLlmProvider(geminiEnv);
+        const gen = provider.stream(geminiRequest);
+
+        stream.write('data: [DONE]\n\n');
+        stream.close();
+
+        await gen.next();
+
+        expect(capturedUrl).toBe(
+          'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:streamGenerateContent?alt=sse'
+        );
+        expect(capturedUrl).not.toContain('key=');
+        expect(capturedHeaders['x-goog-api-key']).toBe('test-gemini-key');
+      } finally {
+        globalThis.fetch = original;
+      }
+    });
+
     test('passes a signal to fetch', async () => {
       let capturedInit: RequestInit | undefined;
       const stream = new ControlledStream();
@@ -951,6 +1034,47 @@ describe('GeminiLlmProvider', () => {
       await expect(gen.next()).rejects.toMatchObject({
         code: 'gemini_not_configured'
       });
+    });
+  });
+
+  describe('DNA digest generation', () => {
+    test('sends Gemini API key in a header instead of the URL', async () => {
+      let capturedUrl = '';
+      let capturedHeaders: Record<string, string> = {};
+      const original = globalThis.fetch;
+
+      globalThis.fetch = (async (
+        url: RequestInfo | URL,
+        init?: RequestInit
+      ) => {
+        capturedUrl = url.toString();
+        capturedHeaders = init?.headers as Record<string, string>;
+        return {
+          ok: true,
+          status: 200,
+          headers: new Map(),
+          json: async () => ({
+            candidates: [{ content: { parts: [{ text: 'Digest' }] } }]
+          }),
+          text: async () => ''
+        } as unknown as Response;
+      }) as unknown as typeof fetch;
+
+      try {
+        const generator = new GoogleDocsGeminiDnaDigestGenerator(
+          {} as never,
+          geminiEnv
+        );
+        await expect(generator.summarize('DNA text')).resolves.toBe('Digest');
+
+        expect(capturedUrl).toBe(
+          'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent'
+        );
+        expect(capturedUrl).not.toContain('key=');
+        expect(capturedHeaders['x-goog-api-key']).toBe('test-gemini-key');
+      } finally {
+        globalThis.fetch = original;
+      }
     });
   });
 });

@@ -2,6 +2,7 @@ import { HttpException } from '../common/http/http-exception';
 import type { ServerEnv } from '../config/env';
 
 import type { UsageCountersService } from './usage-counters.service';
+import { usdGreaterThan, usdToMicros } from './money';
 
 export type CostReservation = {
   userId: string;
@@ -21,7 +22,7 @@ export class CostCapEnforcer {
     estimatedCostUsd: number;
   }) {
     const usage = await this.usageCountersService.currentForUser(input.userId);
-    const spendToday = Number(usage.estimatedSpendTodayUsd);
+    const spendTodayMicros = usdToMicros(usage.estimatedSpendTodayUsd);
 
     if (usage.messagesToday >= this.env.DAILY_MESSAGE_LIMIT) {
       throw new HttpException(
@@ -39,7 +40,7 @@ export class CostCapEnforcer {
       );
     }
 
-    if (spendToday >= this.env.DAILY_SPEND_LIMIT_USD) {
+    if (!usdGreaterThan(this.env.DAILY_SPEND_LIMIT_USD, spendTodayMicros)) {
       throw new HttpException(
         429,
         'Daily spend limit reached',
@@ -58,7 +59,12 @@ export class CostCapEnforcer {
       );
     }
 
-    if (spendToday + input.estimatedCostUsd > this.env.DAILY_SPEND_LIMIT_USD) {
+    if (
+      usdGreaterThan(
+        spendTodayMicros + usdToMicros(input.estimatedCostUsd),
+        this.env.DAILY_SPEND_LIMIT_USD
+      )
+    ) {
       throw new HttpException(
         429,
         'Estimated turn would exceed daily spend limit',

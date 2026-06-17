@@ -79,6 +79,47 @@ describe('RedisService memory fallback', () => {
     const count = await redis.incrWithTtl(key, ttlSeconds);
     expect(count).toBe(1);
   });
+
+  test('deletes Redis prefixes with scan instead of keys', async () => {
+    const redis = new RedisService(env as never);
+    const deleted: string[] = [];
+    const scanCalls: Array<{ cursor: string; match?: string; count?: number }> =
+      [];
+
+    redis['redis'] = {
+      scan: async (
+        cursor: string,
+        options: { match?: string; count?: number }
+      ) => {
+        scanCalls.push({ cursor, ...options });
+        if (options.match === 'prompt:*' && cursor === '0') {
+          return ['7', ['prompt:a', 'prompt:b']];
+        }
+        if (options.match === 'prompt:*' && cursor === '7') {
+          return ['0', ['prompt:c']];
+        }
+        if (options.match === 'dna:*' && cursor === '0') {
+          return ['0', ['dna:a']];
+        }
+        return ['0', []];
+      },
+      del: async (...keys: string[]) => {
+        deleted.push(...keys);
+      },
+      keys: async () => {
+        throw new Error('KEYS should not be used for prefix deletion');
+      }
+    } as never;
+
+    await redis.delByPrefix('prompt:', 'dna:');
+
+    expect(scanCalls).toEqual([
+      { cursor: '0', match: 'prompt:*', count: 100 },
+      { cursor: '7', match: 'prompt:*', count: 100 },
+      { cursor: '0', match: 'dna:*', count: 100 }
+    ]);
+    expect(deleted).toEqual(['prompt:a', 'prompt:b', 'prompt:c', 'dna:a']);
+  });
 });
 
 function sleep(ms: number) {

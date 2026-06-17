@@ -12,6 +12,7 @@ export type DbTransaction = Parameters<
 
 export class DrizzleService {
   private client: postgres.Sql;
+  private closed = false;
   db: ReturnType<typeof drizzle<typeof schema>>;
 
   constructor(env?: Pick<ServerEnv, 'DATABASE_URL' | 'RUNTIME_PROFILE'>) {
@@ -31,5 +32,11 @@ export class DrizzleService {
       ...(isLocal ? {} : { ssl: 'require' })
     });
     this.db = drizzle(this.client, { schema, casing: 'snake_case' });
+  }
+
+  async close() {
+    if (this.closed) return;
+    this.closed = true;
+    await this.client.end();
   }
 }

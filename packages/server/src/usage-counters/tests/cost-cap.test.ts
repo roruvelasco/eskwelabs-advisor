@@ -82,4 +82,18 @@ describe('cost cap enforcer', () => {
       })
     ).rejects.toMatchObject({ code: 'estimated_spend_limit' });
   });
+
+  test('allows spend exactly at the decimal cap boundary', async () => {
+    await expect(
+      enforcerFor({
+        messagesToday: 0,
+        tokensToday: 10,
+        estimatedSpendTodayUsd: '0.1'
+      }).assertAllowed({
+        userId: 'user-id',
+        estimatedTokens: 10,
+        estimatedCostUsd: 0.2
+      })
+    ).resolves.toBeUndefined();
+  });
 });

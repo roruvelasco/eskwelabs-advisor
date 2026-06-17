@@ -4,6 +4,7 @@ import { Repository } from '../common/factories/repository.factory';
 import { decodeCursor, encodeCursor } from '../common/pagination';
 import { getPhilippinesDay } from '../common/utils/day-ph';
 import { usageCountersTable, type UsageCounter } from './usage-counters.schema';
+import { usdAmount, usdGreaterThan, usdToMicros } from './money';
 
 export type UsageCounterRow = UsageCounter;
 
@@ -131,7 +132,7 @@ export class UsageCountersRepository extends Repository {
       dayPh,
       messagesToday: input.messages,
       tokensToday: input.tokens,
-      estimatedSpendTodayUsd: input.estimatedSpendUsd.toFixed(6)
+      estimatedSpendTodayUsd: usdAmount(input.estimatedSpendUsd)
     };
 
     const rows = await this.drizzle.db
@@ -142,7 +143,7 @@ export class UsageCountersRepository extends Repository {
         set: {
           messagesToday: sql`${usageCountersTable.messagesToday} + ${input.messages}`,
           tokensToday: sql`${usageCountersTable.tokensToday} + ${input.tokens}`,
-          estimatedSpendTodayUsd: sql`${usageCountersTable.estimatedSpendTodayUsd} + ${input.estimatedSpendUsd}`
+          estimatedSpendTodayUsd: sql`${usageCountersTable.estimatedSpendTodayUsd} + ${usdAmount(input.estimatedSpendUsd)}`
         }
       })
       .returning();
@@ -175,7 +176,7 @@ export class UsageCountersRepository extends Repository {
         tokensToday: 0,
         estimatedSpendTodayUsd: '0'
       };
-      const spendToday = Number(current.estimatedSpendTodayUsd);
+      const spendTodayMicros = usdToMicros(current.estimatedSpendTodayUsd);
 
       if (current.messagesToday >= input.maxMessages) {
         return { blockedCode: 'daily_message_limit' };
@@ -185,7 +186,7 @@ export class UsageCountersRepository extends Repository {
         return { blockedCode: 'daily_token_limit' };
       }
 
-      if (spendToday >= input.maxSpendUsd) {
+      if (!usdGreaterThan(input.maxSpendUsd, spendTodayMicros)) {
         return { blockedCode: 'daily_spend_limit' };
       }
 
@@ -193,7 +194,12 @@ export class UsageCountersRepository extends Repository {
         return { blockedCode: 'estimated_token_limit' };
       }
 
-      if (spendToday + input.estimatedSpendUsd > input.maxSpendUsd) {
+      if (
+        usdGreaterThan(
+          spendTodayMicros + usdToMicros(input.estimatedSpendUsd),
+          input.maxSpendUsd
+        )
+      ) {
         return { blockedCode: 'estimated_spend_limit' };
       }
 
@@ -231,14 +237,14 @@ export class UsageCountersRepository extends Repository {
         dayPh,
         messagesToday: input.messages,
         tokensToday: input.tokens,
-        estimatedSpendTodayUsd: input.estimatedSpendUsd.toFixed(6)
+        estimatedSpendTodayUsd: usdAmount(input.estimatedSpendUsd)
       })
       .onConflictDoUpdate({
         target: [usageCountersTable.userId, usageCountersTable.dayPh],
         set: {
           messagesToday: sql`greatest(${usageCountersTable.messagesToday} + ${input.messages}, 0)`,
           tokensToday: sql`greatest(${usageCountersTable.tokensToday} + ${input.tokens}, 0)`,
-          estimatedSpendTodayUsd: sql`greatest(${usageCountersTable.estimatedSpendTodayUsd} + ${input.estimatedSpendUsd}, 0)`
+          estimatedSpendTodayUsd: sql`greatest(${usageCountersTable.estimatedSpendTodayUsd} + ${usdAmount(input.estimatedSpendUsd)}, 0)`
         }
       })
       .returning();

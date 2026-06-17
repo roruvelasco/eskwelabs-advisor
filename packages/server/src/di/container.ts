@@ -350,7 +350,12 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
     })
     .bind({
       provide: AuthService,
-      useFactory: (c) => new AuthService(c.get(UsersService))
+      useFactory: (c) =>
+        new AuthService(
+          c.get(UsersService),
+          c.get(RedisService),
+          c.get(SERVER_ENV)
+        )
     })
     .bind({
       provide: UsersController,
@@ -515,7 +520,7 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
     })
     .bind({
       provide: ApplicationModule,
-      useFactory: () => new ApplicationModule()
+      useFactory: (c) => new ApplicationModule(c.get(DrizzleService))
     });
 
   return container;
