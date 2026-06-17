@@ -90,18 +90,13 @@ export class UsersRepository extends Repository {
     role: 'eif' | 'admin'
   ): Promise<User> {
     const normalizedEmail = email.toLowerCase();
-    const existing = await this.findByEmail(normalizedEmail);
-    if (existing) {
-      const rows = await this.drizzle.db
-        .update(usersTable)
-        .set({ isActive: true, role })
-        .where(eq(usersTable.email, normalizedEmail))
-        .returning();
-      return rows[0];
-    }
     const rows = await this.drizzle.db
       .insert(usersTable)
-      .values({ email: normalizedEmail, role })
+      .values({ email: normalizedEmail, role, isActive: true })
+      .onConflictDoUpdate({
+        target: usersTable.email,
+        set: { isActive: true, role }
+      })
       .returning();
     return rows[0];
   }
