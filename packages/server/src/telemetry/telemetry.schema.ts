@@ -1,4 +1,5 @@
 import {
+  check,
   index,
   jsonb,
   pgTable,
@@ -6,6 +7,7 @@ import {
   timestamp,
   uuid
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 export const telemetryEventsTable = pgTable(
   'telemetry_events',
@@ -20,6 +22,10 @@ export const telemetryEventsTable = pgTable(
       .defaultNow()
   },
   (table) => ({
+    severityCheck: check(
+      'telemetry_events_severity_check',
+      sql`${table.severity} in ('info', 'warning', 'error')`
+    ),
     createdDescIdx: index('telemetry_events_created_desc_idx').on(
       table.createdAt.desc(),
       table.id.desc()

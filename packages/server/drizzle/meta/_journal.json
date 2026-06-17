@@ -64,6 +64,20 @@
       "when": 1781535134152,
       "tag": "0008_aspiring_gargoyle",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1781718503137,
+      "tag": "0009_stiff_switch",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1781719665371,
+      "tag": "0010_groovy_dragon_lord",
+      "breakpoints": true
     }
   ]
 }

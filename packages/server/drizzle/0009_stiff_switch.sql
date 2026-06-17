@@ -1,0 +1,2 @@
+ALTER TABLE "advisors" ADD CONSTRAINT "advisors_active_runtime_version_id_advisor_runtime_versions_id_fk" FOREIGN KEY ("active_runtime_version_id") REFERENCES "public"."advisor_runtime_versions"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "conversations" ADD CONSTRAINT "conversations_advisor_runtime_version_id_advisor_runtime_versions_id_fk" FOREIGN KEY ("advisor_runtime_version_id") REFERENCES "public"."advisor_runtime_versions"("id") ON DELETE no action ON UPDATE no action;

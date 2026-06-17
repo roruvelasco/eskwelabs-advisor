@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  check,
   index,
   integer,
   numeric,
@@ -41,6 +42,14 @@ export const messagesTable = pgTable(
       .defaultNow()
   },
   (table) => ({
+    roleCheck: check(
+      'messages_role_check',
+      sql`${table.role} in ('user', 'assistant')`
+    ),
+    statusCheck: check(
+      'messages_status_check',
+      sql`${table.status} in ('ok', 'blocked', 'error', 'pending', 'streaming')`
+    ),
     userClientTurnUnique: uniqueIndex('messages_user_client_turn_unique')
       .on(table.userId, table.clientTurnId)
       .where(sql`${table.clientTurnId} IS NOT NULL`),
