@@ -61,7 +61,8 @@ export async function streamChatTurn(
     content: string;
     clientTurnId?: string;
   },
-  onEvent: StreamEventHandler
+  onEvent: StreamEventHandler,
+  options: { signal?: AbortSignal } = {}
 ) {
   const response = await fetch('/api/chat-turn/stream', {
     method: 'POST',
@@ -69,6 +70,7 @@ export async function streamChatTurn(
       'Content-Type': 'application/json',
       Accept: 'text/event-stream'
     },
+    signal: options.signal,
     body: JSON.stringify(input)
   });
 

@@ -13,7 +13,7 @@ export type Message = {
   id: string;
   role: 'user' | 'advisor';
   content: string;
-  status?: 'streaming' | 'thinking' | 'complete' | 'error';
+  status?: 'streaming' | 'thinking' | 'complete' | 'error' | 'cancelled';
 };
 
 export function ChatMessages({ messages }: { messages: Message[] }) {
@@ -35,7 +35,8 @@ export function ChatMessages({ messages }: { messages: Message[] }) {
               msg.role === 'user'
                 ? 'bg-primary text-primary-foreground rounded-br-sm'
                 : 'bg-muted text-foreground rounded-bl-sm',
-              msg.status === 'error' && 'border-destructive/30 border'
+              msg.status === 'error' && 'border-destructive/30 border',
+              msg.status === 'cancelled' && 'border-border border'
             )}
           >
             {msg.role === 'advisor' ? (

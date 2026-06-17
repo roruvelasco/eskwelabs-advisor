@@ -34,4 +34,22 @@ describe('chat sidebar', () => {
     );
     expect(source).toContain('Boolean(conversationId) && !sidebarAdvisorId');
   });
+
+  test('chat shell can cancel active streaming turns', async () => {
+    const shellSource = await Bun.file(
+      import.meta.dir + '/new-chat-shell.tsx'
+    ).text();
+    const composerSource = await Bun.file(
+      import.meta.dir + '/chat-composer.tsx'
+    ).text();
+
+    expect(shellSource).toContain('new AbortController()');
+    expect(shellSource).toContain('{ signal: abortController.signal }');
+    expect(shellSource).toContain('streamRef.current?.abortController.abort()');
+    expect(shellSource).toContain(
+      "status: wasCancelled ? 'cancelled' : 'error'"
+    );
+    expect(composerSource).toContain('aria-label="Stop response"');
+    expect(composerSource).toContain('onStop');
+  });
 });

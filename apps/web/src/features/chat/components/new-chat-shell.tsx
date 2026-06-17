@@ -49,6 +49,10 @@ function toDisplayStatus(status?: string): Message['status'] {
   return status as Message['status'];
 }
 
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === 'AbortError';
+}
+
 function ChatLayoutInner() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -59,6 +63,7 @@ function ChatLayoutInner() {
   const [stableSidebarAdvisorId, setStableSidebarAdvisorId] =
     useState<string>();
   const streamRef = useRef<{
+    abortController: AbortController;
     clientTurnId: string;
     assistantTempId: string;
     createdConversationId?: string;
@@ -111,8 +116,9 @@ function ChatLayoutInner() {
       const clientTurnId = crypto.randomUUID();
       const userTempId = `user:${crypto.randomUUID()}`;
       const assistantTempId = `assistant:${crypto.randomUUID()}`;
+      const abortController = new AbortController();
 
-      streamRef.current = { clientTurnId, assistantTempId };
+      streamRef.current = { abortController, clientTurnId, assistantTempId };
       if (!conversationId) setActiveDraftId(clientTurnId);
 
       const optimisticTurn: CacheMessage[] = [
@@ -230,7 +236,8 @@ function ChatLayoutInner() {
                 ?.message ?? 'Chat stream failed'
             );
           }
-        }
+        },
+        { signal: abortController.signal }
       );
 
       if (!finalData) throw new Error('Chat stream ended without final data');
@@ -242,10 +249,11 @@ function ChatLayoutInner() {
       await queryClient.invalidateQueries({ queryKey: ['conversations'] });
       streamRef.current = null;
     },
-    onError: () => {
+    onError: (error) => {
       setActiveDraftId(null);
       const info = streamRef.current;
       if (!info) return;
+      const wasCancelled = isAbortError(error);
 
       const liveKey = info.createdConversationId ?? conversationId;
       const cacheKey = liveKey
@@ -259,8 +267,8 @@ function ChatLayoutInner() {
             msg.id === info.assistantTempId
               ? {
                   ...msg,
-                  content: msg.content || 'Request failed.',
-                  status: 'error'
+                  content: msg.content || 'Response stopped.',
+                  status: wasCancelled ? 'cancelled' : 'error'
                 }
               : msg
           )
@@ -270,6 +278,12 @@ function ChatLayoutInner() {
       streamRef.current = null;
     }
   });
+
+  useEffect(() => {
+    return () => {
+      streamRef.current?.abortController.abort();
+    };
+  }, []);
 
   const {
     data: messagesResponse,
@@ -330,6 +344,9 @@ function ChatLayoutInner() {
     },
     [sendMutation]
   );
+  const handleStop = useCallback(() => {
+    streamRef.current?.abortController.abort();
+  }, []);
 
   return (
     <>
@@ -390,7 +407,9 @@ function ChatLayoutInner() {
               <div className="border-border/50 shrink-0 border-t p-3">
                 <ChatComposer
                   disabled={sendMutation.isPending}
+                  isStreaming={sendMutation.isPending}
                   onSend={handleSend}
+                  onStop={handleStop}
                 />
               </div>
             </>
@@ -408,7 +427,9 @@ function ChatLayoutInner() {
 
                 <ChatComposer
                   disabled={sendMutation.isPending}
+                  isStreaming={sendMutation.isPending}
                   onSend={handleSend}
+                  onStop={handleStop}
                 />
               </Container>
             </div>

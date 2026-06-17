@@ -251,6 +251,27 @@ describe('security headers', () => {
   });
 });
 
+describe('auth diagnostics', () => {
+  test('redacts verbose token and secret details from auth probes', async () => {
+    const middlewareSource = await Bun.file(
+      import.meta.dir + '/middleware.ts'
+    ).text();
+    const tokenActorSource = await Bun.file(
+      import.meta.dir + '/lib/domains/auth/token-actor.ts'
+    ).text();
+    const combined = `${middlewareSource}\n${tokenActorSource}`;
+
+    expect(combined).toContain("process.env.NODE_ENV !== 'production'");
+    expect(combined).toContain('cookieCount');
+    expect(combined).not.toContain('secretsEqual');
+    expect(combined).not.toContain('tokenShape');
+    expect(combined).not.toContain('tokenRole');
+    expect(combined).not.toContain('tokenIsActive');
+    expect(combined).not.toContain('cookieNames,');
+    expect(combined).not.toContain('email: token.email');
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Actor header forwarding (signed)
 // ---------------------------------------------------------------------------
