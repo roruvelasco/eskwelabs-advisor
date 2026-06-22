@@ -121,11 +121,13 @@ export function ConversationHistory() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All advisors</SelectItem>
-                  {advisors.map((advisor) => (
-                    <SelectItem key={advisor.id} value={advisor.id}>
-                      {advisor.name}
-                    </SelectItem>
-                  ))}
+                  {(advisorsData?.data ?? []).map(
+                    (advisor: { id: string; name: string }) => (
+                      <SelectItem key={advisor.id} value={advisor.id}>
+                        {advisor.name}
+                      </SelectItem>
+                    )
+                  )}
                 </SelectContent>
               </Select>
               <Button
