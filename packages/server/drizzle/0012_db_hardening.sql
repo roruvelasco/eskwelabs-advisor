@@ -189,9 +189,12 @@ INSERT INTO "telemetry_events_partitioned"
 
 -- Swap names
 BEGIN;
+  -- Clean up any leftover from a prior partial run
+  DROP TABLE IF EXISTS "telemetry_events_old" CASCADE;
+  -- Rename the old table's PK index first to avoid name clash
+  ALTER INDEX IF EXISTS "telemetry_events_pkey" RENAME TO "telemetry_events_old_pkey";
   ALTER TABLE "telemetry_events" RENAME TO "telemetry_events_old";
   ALTER TABLE "telemetry_events_partitioned" RENAME TO "telemetry_events";
-  ALTER INDEX "telemetry_events_partitioned_pkey" RENAME TO "telemetry_events_pkey";
 
   -- Recreate indexes from original table
   CREATE INDEX IF NOT EXISTS "telemetry_events_event_name_idx" ON "telemetry_events" ("event_name", "created_at" DESC);

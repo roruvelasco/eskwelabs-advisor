@@ -26,7 +26,7 @@ export type AdvisorReadinessFailure = {
 };
 
 export type AdvisorReadinessResult =
-  | { ready: true; runtime: ResolvedAdvisorRuntime }
+  | { ready: true; reasons: [] }
   | { ready: false; reasons: AdvisorReadinessFailure[] };
 
 export class AdvisorRuntimeService {
@@ -129,15 +129,6 @@ export class AdvisorRuntimeService {
       });
     }
 
-    try {
-      await this.promptContextLoader.getForAdvisor(advisorId);
-    } catch {
-      reasons.push({
-        code: 'prompt_context_unavailable',
-        message: 'Prompt context is not available'
-      });
-    }
-
     const modelConfig = await this.modelConfigService.getForAdvisor(advisorId);
     if (!modelConfig) {
       reasons.push({
@@ -167,19 +158,6 @@ export class AdvisorRuntimeService {
       return { ready: false, reasons };
     }
 
-    return {
-      ready: true,
-      runtime: {
-        advisorId: advisor.id,
-        advisorName: advisor.name,
-        runtimeVersionId: runtime!.id,
-        promptContext: await this.promptContextLoader.getForAdvisor(advisorId),
-        modelConfig: {
-          provider: modelConfig!.provider,
-          model: modelConfig!.model,
-          isEnabled: modelConfig!.isEnabled
-        }
-      }
-    };
+    return { ready: true, reasons: [] };
   }
 }

@@ -168,7 +168,7 @@ function createAdvisorRuntimeService(runtime: {
     }),
     checkReadiness: async () => ({
       ready: true as const,
-      runtime: {}
+      reasons: [] as []
     })
   } as never;
 }
