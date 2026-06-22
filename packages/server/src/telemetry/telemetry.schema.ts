@@ -15,7 +15,7 @@ export const telemetryEventsTable = pgTable(
   {
     id: uuid('id').notNull().defaultRandom(),
     eventName: text('event_name').notNull(),
-    actorId: uuid('actor_id'),
+    actorId: text('actor_id'),
     severity: text('severity').notNull().default('info'),
     payload: jsonb('payload').notNull().default({}),
     createdAt: timestamp('created_at', { withTimezone: true })
