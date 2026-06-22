@@ -6,8 +6,18 @@ describe('admin login panel', () => {
       import.meta.dir + '/admin-login-panel.tsx'
     ).text();
 
-    expect(source).toContain("signIn('google-admin'");
-    expect(source).toContain('Continue with Google');
+    expect(source).toContain("googleProviderId: 'google-admin'");
+    expect(source).toContain("credentialsProviderId: 'credentials-admin'");
+    expect(source).toContain("heading: 'Admin Portal'");
     expect(source).not.toContain('Back to user login');
+  });
+
+  test('delegates to AuthLoginPanel shared component', async () => {
+    const source = await Bun.file(
+      import.meta.dir + '/admin-login-panel.tsx'
+    ).text();
+
+    expect(source).toContain('import { AuthLoginPanel');
+    expect(source).toContain('<AuthLoginPanel config={adminConfig}');
   });
 });
