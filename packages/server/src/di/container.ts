@@ -4,6 +4,7 @@ import { AdminController } from '../admin/admin.controller';
 import { AdminRepository } from '../admin/admin.repository';
 import { AdminSerializer } from '../admin/admin.serializer';
 import { AdminService } from '../admin/admin.service';
+import { AdminOverviewUseCase } from '../admin/use-cases/admin-overview.use-case';
 import {
   DeterministicDnaDigestSummarizer,
   DeterministicLlmProvider,
@@ -44,6 +45,10 @@ import { MessageController } from '../messages/messages.controller';
 import { MessagesRepository } from '../messages/messages.repository';
 import { MessagesSerializer } from '../messages/messages.serializer';
 import { MessagesService } from '../messages/messages.service';
+import {
+  ChatTurnUseCase,
+  StreamChatTurnUseCase
+} from '../messages/use-cases/chat-turn.use-case';
 import { ModelConfigController } from '../model-config/model-config.controller';
 import { ModelConfigRepository } from '../model-config/model-config.repository';
 import { ModelRateService } from '../model-config/model-rate.service';
@@ -53,6 +58,10 @@ import { PromptCacheController } from '../prompt-cache/prompt-cache.controller';
 import { PromptCacheRepository } from '../prompt-cache/prompt-cache.repository';
 import { PromptCacheSerializer } from '../prompt-cache/prompt-cache.serializer';
 import { PromptCacheService } from '../prompt-cache/prompt-cache.service';
+import {
+  PromptContextRefreshUseCase,
+  PromptRollbackUseCase
+} from '../prompt-cache/use-cases/prompt-cache-workflow.use-case';
 import { CompiledSystemPromptBuilder } from '../prompt-cache/compiled-system-prompt.builder';
 import { DnaDigestsRepository } from '../prompt-cache/dna-digests.repository';
 import {
@@ -77,6 +86,7 @@ import { UsersController } from '../users/users.controller';
 import { UsersRepository } from '../users/users.repository';
 import { UsersSerializer } from '../users/users.serializer';
 import { UsersService } from '../users/users.service';
+import { HttpException } from '../common/http/http-exception';
 
 export const SERVER_ENV = new InjectionToken<ServerEnv>('SERVER_ENV');
 export const DNA_DIGEST_SUMMARIZER = new InjectionToken<DnaDigestSummarizer>(
@@ -146,6 +156,9 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
         }
 
         if (env.LLM_PROVIDER_MODE === 'auto' && providers.size === 0) {
+          if (env.RUNTIME_PROFILE === 'production') {
+            return new RoutingLlmProvider(providers);
+          }
           providers.set('deterministic', new DeterministicLlmProvider());
         }
 
@@ -322,8 +335,10 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
           );
         }
 
-        // Google Docs configured — OAuth refresh token fetch; no service account required.
-        if (env.GOOGLE_REFRESH_TOKEN && env.GOOGLE_DOCS_DNA_DOC_ID) {
+        if (
+          (env.GOOGLE_DOCS_SERVICE_ACCOUNT_JSON || env.GOOGLE_REFRESH_TOKEN) &&
+          env.GOOGLE_DOCS_DNA_DOC_ID
+        ) {
           return new PromptContextService(
             c.get(PromptSnapshotsRepository),
             c.get(DnaDigestsRepository),
@@ -334,7 +349,18 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
           );
         }
 
-        // No Docs configured — use deterministic (safe default for local dev).
+        if (env.RUNTIME_PROFILE === 'production') {
+          return {
+            async getForAdvisor() {
+              throw new HttpException(
+                503,
+                'Google Docs prompt context is not configured',
+                'prompt_provider_not_configured'
+              );
+            }
+          };
+        }
+
         return new DeterministicPromptContextService(
           c.get(CompiledSystemPromptBuilder)
         );
@@ -428,6 +454,14 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
         )
     })
     .bind({
+      provide: ChatTurnUseCase,
+      useFactory: (c) => new ChatTurnUseCase(c.get(MessagesService))
+    })
+    .bind({
+      provide: StreamChatTurnUseCase,
+      useFactory: (c) => new StreamChatTurnUseCase(c.get(MessagesService))
+    })
+    .bind({
       provide: AdminService,
       useFactory: (c) =>
         new AdminService(
@@ -438,6 +472,19 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
           c.get(TelemetryService),
           c.get(UsersService)
         )
+    })
+    .bind({
+      provide: AdminOverviewUseCase,
+      useFactory: (c) => new AdminOverviewUseCase(c.get(AdminService))
+    })
+    .bind({
+      provide: PromptContextRefreshUseCase,
+      useFactory: (c) =>
+        new PromptContextRefreshUseCase(c.get(PromptCacheService))
+    })
+    .bind({
+      provide: PromptRollbackUseCase,
+      useFactory: (c) => new PromptRollbackUseCase(c.get(PromptCacheService))
     })
     .bind({
       provide: AdvisorController,
@@ -459,7 +506,12 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
     .bind({
       provide: MessageController,
       useFactory: (c) =>
-        new MessageController(c.get(MessagesService), c.get(MessagesSerializer))
+        new MessageController(
+          c.get(MessagesService),
+          c.get(MessagesSerializer),
+          c.get(ChatTurnUseCase),
+          c.get(StreamChatTurnUseCase)
+        )
     })
     .bind({
       provide: ModelConfigController,
@@ -475,7 +527,9 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
       useFactory: (c) =>
         new PromptCacheController(
           c.get(PromptCacheService),
-          c.get(PromptCacheSerializer)
+          c.get(PromptCacheSerializer),
+          c.get(PromptContextRefreshUseCase),
+          c.get(PromptRollbackUseCase)
         )
     })
     .bind({
@@ -497,7 +551,7 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
     .bind({
       provide: AdminController,
       useFactory: (c) =>
-        new AdminController(c.get(AdminService), c.get(AdminSerializer))
+        new AdminController(c.get(AdminOverviewUseCase), c.get(AdminSerializer))
     })
     .bind({
       provide: ApplicationController,
