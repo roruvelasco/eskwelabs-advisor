@@ -136,7 +136,7 @@ Every backend domain at `packages/server/src/<domain>/` follows the same layout:
 ### Auth Flow
 
 1. NextAuth sign-in resolves Google email against the Supabase/Postgres `users` table via `AuthService`; missing/inactive users are rejected.
-2. Login intent is role-specific at the provider layer: `/login` uses `google` / `credentials`, while `/admin/login` uses `google-admin` / `credentials-admin`. The sign-in callback rejects role mismatches before creating a JWT session.
+2. Login intent is role-specific at the provider layer: `/login` uses `google` / `credentials`, while `/admin/login` uses `google-admin` / `credentials-admin`. Both account types resolve through the `users` allow-list, and the sign-in callback rejects role mismatches before creating a JWT session.
 3. Next.js middleware (`apps/web/src/middleware.ts`) reads JWT claims, gates routes by `role`/`isActive`, signs forwarded actor headers with HMAC-SHA256 (`ACTOR_FORWARDING_SECRET`) including method, path, timestamp, and nonce, then forwards `x-eskwelabs-actor-*` and signature headers.
 4. Admin and EIF app areas are strictly separated: wrong-role page requests redirect to that role's home, and wrong-role API requests return 403.
 5. Hono `auth.middleware.ts` verifies the HMAC signature and timestamp freshness (300s TTL) before trusting forwarded actor headers. Then validates id/email against the `users` table and sets `c.set('actor', actor)` from DB role/status.
@@ -164,7 +164,7 @@ apps/web/src/app/
 ├── (app)/chat/page.tsx          # ChatShell
 ├── (app)/history/page.tsx       # ConversationHistory
 ├── (auth)/login/page.tsx        # LoginPanel
-├── (auth)/consent/page.tsx      # ConsentNotice
+├── (auth)/consent/page.tsx      # redirects; active notice is chat ConsentDialog
 ├── admin/page.tsx               # AdminDashboard
 └── api/[[...route]]/route.ts   # Hono catch-all (GET/POST/PUT/PATCH/DELETE)
 ```

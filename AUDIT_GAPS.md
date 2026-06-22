@@ -13,12 +13,6 @@
 - Category: Configuration / Maintainability
 - Evidence: postgresql://postgres:postgres@127.0.0.1:54322/postgres hardcoded in drizzle.config.ts, drizzle.service.ts, env.ts, nuke-db.ts, seed.ts, sync-advisors.ts, publish-advisor.ts.
 
-### M15. GOOGLE_GENERATIVE_AI_API_KEY Missing from Env Schema
-
-- Category: Configuration
-- Files: packages/server/src/config/env.ts
-- Evidence: Present in turbo.json and .env.example but not in the Zod validation schema.
-
 ### M16. useMediaQuery SSR Hydration Risk
 
 - Category: Frontend / Bug
@@ -30,12 +24,6 @@
 - Category: UX
 - Files: All admin panel components
 - Evidence: ChevronsUpDown icon shown but no onClick handler. Decorative only.
-
-### M18. Chat Auto-Scroll Cannot Be Paused
-
-- Category: UX
-- Files: apps/web/src/features/chat/components/chat-messages.tsx
-- Evidence: New messages force-scroll to bottom even if user scrolled up to read earlier messages.
 
 ## 5. Frontend and UX Review
 
@@ -65,9 +53,9 @@
 | Flow                                         | Issue                                                                                                                       |
 | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | Login → Consent → Advisors                   | Consent page redirects away; consent handled via dialog in advisor-selection instead. ConsentNotice component is dead code. |
-| Chat → Cancel stream                         | Not possible — no abort controller                                                                                          |
-| Chat → Retry failed message                  | Not possible — no retry button                                                                                              |
-| Chat → Read earlier messages while streaming | Broken — auto-scroll forces to bottom                                                                                       |
+| Chat → Cancel stream                         | Implemented — AbortController in new-chat-shell.tsx                                                                         |
+| Chat → Retry failed message                  | Implemented — retry button in chat-messages.tsx                                                                             |
+| Chat → Read earlier messages while streaming | Fixed — isNearBottom tracking pauses auto-scroll when user scrolls up                                                       |
 | History → Search conversations               | Not possible — no search                                                                                                    |
 | History → Delete conversation                | Not possible from this page (only in chat sidebar)                                                                          |
 | Admin → Persist section state on refresh     | Broken — section stored in useState, not URL                                                                                |
@@ -121,23 +109,23 @@
 
 ### Functional Requirements
 
-| ID    | Requirement                               | Status          | Evidence                                                                                                                                                                                                         |
-| ----- | ----------------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| FR-01 | Google OAuth2 login with allow-list       | Partial         | OAuth works, allow-list enforced via users table. But credentials login also exists (not in PRD). No clear "access denied" message for non-allow-listed users — they get generic NextAuth error.                 |
-| FR-02 | Advisor selection + multi-turn chat       | Partial         | Advisor selection works. Chat works with streaming. But no conversation resume from history into chat (FR-15).                                                                                                   |
-| FR-03 | System prompts + DNA injected server-side | Implemented     | CompiledSystemPromptBuilder assembles DNA + prompt server-side. Tests verify no leakage.                                                                                                                         |
-| FR-04 | Prompts fetched live from Google Docs     | Partial         | GoogleDocsClient exists with OAuth2 and caching. But PromptCacheService.refresh() doesn't populate Redis (M5). Deterministic stubs used when RUNTIME_PROFILE=demo.                                               |
-| FR-05 | Every turn persisted                      | Implemented     | messages table with full metadata. Tests verify persistence.                                                                                                                                                     |
-| FR-06 | Hard caps on usage and spend              | Implemented     | CostCapEnforcer checks message, token, and spend caps. PH calendar day reset. Tests verify blocking.                                                                                                             |
-| FR-07 | Rate limiting                             | Partial         | Rate limiter exists but non-atomic in fallback mode (H5). No per-route granularity. No response headers (M2).                                                                                                    |
-| FR-08 | Model config per advisor                  | Implemented     | ModelConfigController + ModelConfigService with admin-only access. Applied at call time.                                                                                                                         |
-| FR-09 | Admin usage/cost views                    | Partial         | Admin dashboard exists with usage panel. But admin overview loads all rows (C4). No date range filters. No export.                                                                                               |
-| FR-10 | Streamed responses                        | Implemented     | SSE streaming with token-by-token delivery. MessageResponse uses Streamdown for animated rendering.                                                                                                              |
-| FR-11 | Logging consent notice                    | Partial         | Consent dialog exists in advisor-selection.tsx. But ConsentNotice component is dead code. Consent API integration unclear.                                                                                       |
-| FR-12 | Graceful errors                           | Not implemented | No error.tsx files (H6). No retry buttons. No cancel stream (H7). Chat error state shows "Request failed" with no recovery.                                                                                      |
-| FR-13 | Manual cache refresh                      | Implemented     | PromptCacheController has refresh endpoint. Admin UI has refresh dialog with confirmation.                                                                                                                       |
-| FR-14 | Shared DNA grounding                      | Partial         | DnaDigestsRepository + CompiledSystemPromptBuilder exist. But digest generation depends on DeterministicPromptContextService in demo mode. No real summarization pipeline visible.                               |
-| FR-15 | See and resume past conversations         | Partial         | History page lists conversations. But clicking a conversation navigates to chat with conversationId — the resume flow depends on loading prior messages, which works. However, no pagination (H1) and no search. |
+| ID    | Requirement                               | Status      | Evidence                                                                                                                                                                                                               |
+| ----- | ----------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FR-01 | Google OAuth2 login with allow-list       | Partial     | OAuth works, allow-list enforced via users table. But credentials login also exists (not in PRD). No clear "access denied" message for non-allow-listed users — they get generic NextAuth error.                       |
+| FR-02 | Advisor selection + multi-turn chat       | Partial     | Advisor selection works. Chat works with streaming. But no conversation resume from history into chat (FR-15).                                                                                                         |
+| FR-03 | System prompts + DNA injected server-side | Implemented | CompiledSystemPromptBuilder assembles DNA + prompt server-side. Tests verify no leakage.                                                                                                                               |
+| FR-04 | Prompts fetched live from Google Docs     | Partial     | GoogleDocsClient exists with OAuth2 and caching. But PromptCacheService.refresh() doesn't populate Redis (M5). Deterministic stubs used when RUNTIME_PROFILE=demo.                                                     |
+| FR-05 | Every turn persisted                      | Implemented | messages table with full metadata. Tests verify persistence.                                                                                                                                                           |
+| FR-06 | Hard caps on usage and spend              | Implemented | CostCapEnforcer checks message, token, and spend caps. PH calendar day reset. Tests verify blocking.                                                                                                                   |
+| FR-07 | Rate limiting                             | Partial     | Rate limiter exists but non-atomic in fallback mode (H5). No per-route granularity. No response headers (M2).                                                                                                          |
+| FR-08 | Model config per advisor                  | Implemented | ModelConfigController + ModelConfigService with admin-only access. Applied at call time.                                                                                                                               |
+| FR-09 | Admin usage/cost views                    | Partial     | Admin dashboard exists with usage panel. But admin overview loads all rows (C4). No date range filters. No export.                                                                                                     |
+| FR-10 | Streamed responses                        | Implemented | SSE streaming with token-by-token delivery. MessageResponse uses Streamdown for animated rendering.                                                                                                                    |
+| FR-11 | Logging consent notice                    | Partial     | Consent dialog exists in advisor-selection.tsx. But ConsentNotice component is dead code. Consent API integration unclear.                                                                                             |
+| FR-12 | Graceful errors                           | Partial     | Route-level error.tsx with RouteStateScreen across all route groups. Retry button in chat-messages.tsx. Cancel stream via AbortController. Chat error state still lacks retry after final error display in some paths. |
+| FR-13 | Manual cache refresh                      | Implemented | PromptCacheController has refresh endpoint. Admin UI has refresh dialog with confirmation.                                                                                                                             |
+| FR-14 | Shared DNA grounding                      | Partial     | DnaDigestsRepository + CompiledSystemPromptBuilder exist. But digest generation depends on DeterministicPromptContextService in demo mode. No real summarization pipeline visible.                                     |
+| FR-15 | See and resume past conversations         | Partial     | History page lists conversations. But clicking a conversation navigates to chat with conversationId — the resume flow depends on loading prior messages, which works. However, no pagination (H1) and no search.       |
 
 ### Non-Functional Requirements
 

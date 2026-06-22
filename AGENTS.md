@@ -84,14 +84,14 @@ Cross-cutting: `auth/` (auth-request.ts, auth.service.ts), `cache/` (redis.servi
 
 ### Frontend Domains (`apps/web/src/`)
 
-| Route Group      | Pages             | Features            | Domain Libs                            |
-| ---------------- | ----------------- | ------------------- | -------------------------------------- |
-| `(auth)/login`   | login/page.tsx    | LoginPanel          | domains/auth/{api,session,queries}.ts  |
-| `(auth)/consent` | consent/page.tsx  | ConsentNotice       | domains/auth/{api,session,queries}.ts  |
-| `(app)/advisors` | advisors/page.tsx | AdvisorSelection    | domains/advisors/{api,queries}.ts      |
-| `(app)/chat`     | chat/page.tsx     | ChatShell           | domains/chat/{api,queries}.ts          |
-| `(app)/history`  | history/page.tsx  | ConversationHistory | domains/conversations/{api,queries}.ts |
-| `admin`          | admin/page.tsx    | AdminDashboard      | domains/admin/{api,queries}.ts         |
+| Route Group      | Pages             | Features                                                 | Domain Libs                            |
+| ---------------- | ----------------- | -------------------------------------------------------- | -------------------------------------- |
+| `(auth)/login`   | login/page.tsx    | LoginPanel                                               | domains/auth/{api,session,queries}.ts  |
+| `(auth)/consent` | consent/page.tsx  | Redirects to app; active notice is ConsentDialog in chat | domains/auth/{api,session,queries}.ts  |
+| `(app)/advisors` | advisors/page.tsx | AdvisorSelection                                         | domains/advisors/{api,queries}.ts      |
+| `(app)/chat`     | chat/page.tsx     | ChatShell                                                | domains/chat/{api,queries}.ts          |
+| `(app)/history`  | history/page.tsx  | ConversationHistory                                      | domains/conversations/{api,queries}.ts |
+| `admin`          | admin/page.tsx    | AdminDashboard                                           | domains/admin/{api,queries}.ts         |
 
 ### UI Components (`packages/ui/src/`)
 
@@ -125,7 +125,7 @@ To change the look, edit the CSS variables — not component files. See [UI-PRAC
 ## Auth & CSP
 
 - **Cookie-based auth**: `eskwelabs_actor_email`, `eskwelabs_actor_id`, `eskwelabs_actor_role`, `eskwelabs_actor_active` cookies set by middleware (httpOnly)
-- **Role-specific login**: EIF login uses NextAuth provider IDs `google` / `credentials`; admin login uses `google-admin` / `credentials-admin`. The sign-in callback rejects role mismatches before creating a JWT session.
+- **Role-specific login**: EIF login uses NextAuth provider IDs `google` / `credentials`; admin login uses `google-admin` / `credentials-admin`. Both Google and credentials resolve against the Supabase/Postgres `users` allow-list, and the sign-in callback rejects role mismatches before creating a JWT session.
 - **Next.js middleware** (`apps/web/src/middleware.ts`): reads JWT via `getToken()`, gates routes against JWT claims (`role`, `isActive`). Signs forwarded actor headers with HMAC-SHA256 (`ACTOR_FORWARDING_SECRET`) including method, path, timestamp, and nonce. Strips incoming forged actor/signature headers before setting trusted values. Never queries Postgres.
 - **Strict role split**: Admin sessions are redirected away from EIF app routes to `/admin`; EIF sessions are redirected away from admin pages to `/advisors`. Admin APIs and EIF APIs return 403 for the wrong role.
 - **Hono middleware** (`auth.middleware.ts`): `createAuthMiddleware(usersService, env)` verifies HMAC signature and timestamp freshness (300s TTL) before trusting forwarded `id`/`email`. Then validates against the `users` table via `UsersService`, sets `c.get('actor')` from DB role/status. Two helpers: `requireActor(roles)` for route gating.
@@ -136,7 +136,7 @@ To change the look, edit the CSS variables — not component files. See [UI-PRAC
 ## Key Env Vars
 
 Defined in `packages/server/src/config/env.ts` via zod schema. All declared in `turbo.json` `globalPassThroughEnv`:
-`DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `GOOGLE_DOCS_SERVICE_ACCOUNT_JSON`, `OPENAI_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_DOCS_DNA_DOC_ID`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `GROQ_API_KEY`, `GROQ_BASE_URL`, `DAILY_MESSAGE_LIMIT`, `DAILY_TOKEN_LIMIT`, `DAILY_SPEND_LIMIT_USD`, `DEFAULT_MAX_OUTPUT_TOKENS`, `RATE_LIMIT_WINDOW_SECONDS`, `RATE_LIMIT_MAX_REQUESTS`, `CREDENTIAL_LOGIN_MAX_ATTEMPTS`, `CREDENTIAL_LOGIN_LOCKOUT_SECONDS`, `ACTOR_FORWARDING_SECRET`
+`DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `GOOGLE_DOCS_SERVICE_ACCOUNT_JSON`, `GOOGLE_REFRESH_TOKEN`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_DOCS_DNA_DOC_ID`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `GROQ_API_KEY`, `GROQ_BASE_URL`, `PROVIDER_TIMEOUT_MS`, `DAILY_MESSAGE_LIMIT`, `DAILY_TOKEN_LIMIT`, `DAILY_SPEND_LIMIT_USD`, `DEFAULT_MAX_OUTPUT_TOKENS`, `RATE_LIMIT_WINDOW_SECONDS`, `RATE_LIMIT_MAX_REQUESTS`, `CREDENTIAL_LOGIN_MAX_ATTEMPTS`, `CREDENTIAL_LOGIN_LOCKOUT_SECONDS`, `RUNTIME_PROFILE`, `LLM_PROVIDER_MODE`, `PROMPT_PROVIDER_MODE`, `TITLE_GENERATION_PROVIDER`, `TITLE_GENERATION_MODEL`, `CRON_SECRET`, `ACTOR_FORWARDING_SECRET`
 
 ## Code Style
 
@@ -157,7 +157,7 @@ Defined in `packages/server/src/config/env.ts` via zod schema. All declared in `
 - **Tailwind v4: `not-{breakpoint}:` variant** — `not-md:` means "apply only when NOT at md breakpoint and above." This is v4-only — v3 does not have this. Do not confuse with `max-md:` ("below md").
 - **Tailwind v4: responsive variant direction** — `max-md:` = below 768px (desktop-down). `not-md:` = everywhere except exactly at `md`. Prefer mobile-first (`md:`) over `max-md:` except for targeted overrides.
 - Path alias `@/` maps to `apps/web/src/*` in web, `packages/server/src/*` in server
-- `UsersRepository` now uses **Drizzle queries**; other repos still use in-memory Maps (migration in progress)
+- All repositories use **Drizzle ORM query builder** (`this.drizzle.db`). `usage-counters` and `conversation-title-jobs` also use raw SQL via `sql\`...\``for advisory locks /`FOR UPDATE SKIP LOCKED`
 - Adapters (`advisor-adapters.ts`) are deterministic stubs — no real LLM/Google Docs calls
 - Supabase clients (`client.ts`, `server.ts`) return `null` — stubs
 - All frontend components are placeholders (feature pages), but UI components in `packages/ui` are real shadcn components

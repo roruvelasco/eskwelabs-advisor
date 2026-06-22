@@ -99,12 +99,12 @@ Response: `{ data: User }`
 **Controller**: `ConversationController` (`packages/server/src/conversations/`)
 **Auth**: `requireActor(['eif', 'admin'])`
 
-| Method   | Path                     | Query / Body                                   | Description                                      |
-| -------- | ------------------------ | ---------------------------------------------- | ------------------------------------------------ |
-| `GET`    | `/api/conversations`     | `?advisorId=string&limit=number&cursor=string` | List conversations for current actor (paginated) |
-| `POST`   | `/api/conversations`     | `{ advisorId: string, title?: string }`        | Create conversation                              |
-| `GET`    | `/api/conversations/:id` | —                                              | Get conversation detail                          |
-| `DELETE` | `/api/conversations/:id` | —                                              | Delete conversation (owner-only)                 |
+| Method   | Path                     | Query / Body                            | Description                                      |
+| -------- | ------------------------ | --------------------------------------- | ------------------------------------------------ |
+| `GET`    | `/api/conversations`     | `?advisorId&search&limit&cursor`        | List conversations for current actor (paginated) |
+| `POST`   | `/api/conversations`     | `{ advisorId: string, title?: string }` | Create conversation                              |
+| `GET`    | `/api/conversations/:id` | —                                       | Get conversation detail                          |
+| `DELETE` | `/api/conversations/:id` | —                                       | Delete conversation (owner-only)                 |
 
 Response (list, paginated): `{ data: Conversation[], meta: { nextCursor: string | null, limit: number } }`
 Response (single): `{ data: Conversation }`
@@ -170,10 +170,9 @@ Prompt cache admin endpoints return metadata only. They never return advisor pro
 **Controller**: `UsageCounterController` (`packages/server/src/usage-counters/`)
 **Auth**: `requireActor(['admin'])`
 
-| Method | Path                        | Description                                                   |
-| ------ | --------------------------- | ------------------------------------------------------------- |
-| `GET`  | `/api/admin/usage-counters` | List usage counters (paginated: `?userId&dayPh&limit&cursor`) |
-| `GET`  | `/api/admin/usage-users`    | List usage by user (paginated: `?userId&dayPh&limit&cursor`)  |
+| Method | Path                        | Description                                                                     |
+| ------ | --------------------------- | ------------------------------------------------------------------------------- |
+| `GET`  | `/api/admin/usage-counters` | List usage counters (paginated: `?userId&dayPh&fromDayPh&toDayPh&limit&cursor`) |
 
 ---
 
