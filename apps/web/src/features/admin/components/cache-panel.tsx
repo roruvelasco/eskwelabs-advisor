@@ -26,7 +26,10 @@ import {
   toast
 } from '@eskwelabs-advisor/ui';
 
-import { refreshPromptCache } from '@/lib/domains/admin/api';
+import {
+  refreshPromptCache,
+  type RefreshStatus
+} from '@/lib/domains/admin/api';
 import { promptCacheQuery } from '@/lib/domains/admin/queries';
 
 interface CacheEntry {
@@ -41,7 +44,7 @@ interface CacheEntry {
 
 interface RefreshResult {
   data?: {
-    status: 'skipped' | 'partial' | 'refreshed';
+    status: RefreshStatus;
   };
 }
 

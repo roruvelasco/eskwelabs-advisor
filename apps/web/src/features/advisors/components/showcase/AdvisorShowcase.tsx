@@ -125,6 +125,10 @@ export function AdvisorSelection() {
           );
         })}
       </main>
+      <footer className="bg-background text-muted-foreground px-6 py-4 text-center text-xs">
+        Conversations are logged and monitored for quality, safety, and usage
+        reporting.
+      </footer>
     </>
   );
 }

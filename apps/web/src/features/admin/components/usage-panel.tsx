@@ -1,13 +1,21 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronsUpDown } from 'lucide-react';
+import { ChevronsUpDown, Download } from 'lucide-react';
 
 import {
+  Button,
   Card,
   CardContent,
   CardDescription,
   CardHeader,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Skeleton,
   Table,
   TableBody,
@@ -21,6 +29,7 @@ import { usageCountersQuery, usersQuery } from '@/lib/domains/admin/queries';
 
 interface UsageCounterRow {
   userId: string;
+  userEmail?: string | null;
   dayPh: string;
   messagesToday: number;
   tokensToday: number;
@@ -31,6 +40,11 @@ interface UserRow {
   id: string;
   email: string;
 }
+
+type UsageResponse = {
+  data?: UsageCounterRow[];
+  meta?: { nextCursor: string | null };
+};
 
 function StatCard({
   label,
@@ -77,18 +91,48 @@ function SortHead({
 }
 
 export function UsagePanel() {
+  const todayPh = new Date().toLocaleDateString('en-CA', {
+    timeZone: 'Asia/Manila'
+  });
+  const [fromDayPh, setFromDayPh] = useState(todayPh);
+  const [toDayPh, setToDayPh] = useState(todayPh);
+  const [userId, setUserId] = useState('all');
+  const [cursor, setCursor] = useState<string | undefined>();
+  const [pages, setPages] = useState<UsageCounterRow[]>([]);
+  const scopedUserId = userId === 'all' ? undefined : userId;
   const {
     data: countersData,
     isLoading: countersLoading,
+    isFetching: countersFetching,
     error: countersError
-  } = useQuery(usageCountersQuery());
+  } = useQuery(
+    usageCountersQuery({
+      userId: scopedUserId,
+      fromDayPh,
+      toDayPh,
+      limit: 50,
+      cursor
+    })
+  );
   const { data: usersData, isLoading: usersLoading } = useQuery(usersQuery());
 
-  const counters =
-    (countersData as { data: UsageCounterRow[] } | undefined)?.data ?? [];
+  useEffect(() => {
+    setCursor(undefined);
+    setPages([]);
+  }, [fromDayPh, scopedUserId, toDayPh]);
+
+  useEffect(() => {
+    const rows = (countersData as UsageResponse | undefined)?.data;
+    if (!rows) return;
+    setPages((current) => (cursor ? [...current, ...rows] : rows));
+  }, [countersData, cursor]);
+
+  const counters = pages;
+  const nextCursor = (countersData as UsageResponse | undefined)?.meta
+    ?.nextCursor;
   const users = (usersData as { data: UserRow[] } | undefined)?.data ?? [];
   const emailById = new Map(users.map((user) => [user.id, user.email]));
-  const isLoading = countersLoading || usersLoading;
+  const isLoading = (countersLoading && counters.length === 0) || usersLoading;
 
   const totalMessages = counters.reduce(
     (sum, row) => sum + row.messagesToday,
@@ -99,6 +143,32 @@ export function UsagePanel() {
     (sum, row) => sum + Number(row.estimatedSpendTodayUsd),
     0
   );
+
+  const handleExport = () => {
+    const rows = [
+      ['User', 'Day', 'Messages', 'Tokens', 'Estimated Spend USD'],
+      ...counters.map((row) => [
+        row.userEmail ?? emailById.get(row.userId) ?? row.userId,
+        row.dayPh,
+        String(row.messagesToday),
+        String(row.tokensToday),
+        row.estimatedSpendTodayUsd
+      ])
+    ];
+    const csv = rows
+      .map((row) =>
+        row.map((cell) => `"${cell.replaceAll('"', '""')}"`).join(',')
+      )
+      .join('\n');
+    const url = URL.createObjectURL(
+      new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    );
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `usage-${fromDayPh}-to-${toDayPh}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   if (countersError) {
     return (
@@ -112,6 +182,45 @@ export function UsagePanel() {
 
   return (
     <div className="flex flex-1 flex-col gap-6">
+      <Card>
+        <CardContent className="grid gap-3 p-4 md:grid-cols-[1fr_1fr_1.5fr_auto]">
+          <Input
+            type="date"
+            value={fromDayPh}
+            onChange={(event) => setFromDayPh(event.target.value)}
+            aria-label="From day"
+          />
+          <Input
+            type="date"
+            value={toDayPh}
+            onChange={(event) => setToDayPh(event.target.value)}
+            aria-label="To day"
+          />
+          <Select value={userId} onValueChange={setUserId}>
+            <SelectTrigger>
+              <SelectValue placeholder="All users" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All users</SelectItem>
+              {users.map((user) => (
+                <SelectItem key={user.id} value={user.id}>
+                  {user.email}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleExport}
+            disabled={counters.length === 0}
+          >
+            <Download className="size-4" />
+            Export
+          </Button>
+        </CardContent>
+      </Card>
+
       <div className="grid shrink-0 grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard
           label="Messages Today"
@@ -160,7 +269,8 @@ export function UsagePanel() {
                   {counters.map((row) => (
                     <TableRow key={`${row.userId}-${row.dayPh}`}>
                       <TableCell className="py-4 pl-6 font-medium">
-                        {emailById.get(row.userId) ??
+                        {row.userEmail ??
+                          emailById.get(row.userId) ??
                           `${row.userId.slice(0, 8)}...`}
                       </TableCell>
                       <TableCell className="text-muted-foreground py-4 text-sm">
@@ -179,6 +289,19 @@ export function UsagePanel() {
                   ))}
                 </TableBody>
               </Table>
+              {nextCursor && (
+                <div className="border-border border-t p-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    disabled={countersFetching}
+                    onClick={() => setCursor(nextCursor)}
+                  >
+                    {countersFetching ? 'Loading...' : 'Load more'}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </CardContent>

@@ -1,4 +1,5 @@
 import { apiClient } from '@/lib/api/client';
+import { parseApiResponse, queryParams } from '@/lib/api/api-error';
 
 type ModelConfigUpdateInput = {
   provider: string;
@@ -8,42 +9,55 @@ type ModelConfigUpdateInput = {
 type CreateUserInput = { email: string; role: 'eif' | 'admin' };
 type UpdateUserInput = { role?: 'eif' | 'admin'; isActive?: boolean };
 
-export function getAdminUsage() {
-  return apiClient.admin.usage.$get().then((response) => response.json());
+interface DataResponse<T> {
+  data: T;
+}
+
+export type RefreshStatus = 'skipped' | 'partial' | 'refreshed';
+
+export interface PaginatedData<T> {
+  data: T[];
+  meta: { nextCursor: string | null; limit: number };
+}
+
+export function getAdminUsage(): Promise<DataResponse<unknown>> {
+  return apiClient.admin.usage.$get().then(parseApiResponse) as Promise<
+    DataResponse<unknown>
+  >;
 }
 
 export function listUsageCounters({
   userId,
   dayPh,
+  fromDayPh,
+  toDayPh,
   limit,
   cursor
 }: {
   userId?: string;
   dayPh?: string;
+  fromDayPh?: string;
+  toDayPh?: string;
   limit?: number;
   cursor?: string;
-} = {}) {
-  const query: Record<string, string> = {};
-  if (userId) query.userId = userId;
-  if (dayPh) query.dayPh = dayPh;
-  if (limit !== undefined) query.limit = String(limit);
-  if (cursor) query.cursor = cursor;
-
+} = {}): Promise<PaginatedData<unknown>> {
   return apiClient.admin['usage-counters']
-    .$get({ query })
-    .then((response) => response.json());
+    .$get({
+      query: queryParams({ userId, dayPh, fromDayPh, toDayPh, limit, cursor })
+    })
+    .then(parseApiResponse) as Promise<PaginatedData<unknown>>;
 }
 
-export function listModelConfig() {
+export function listModelConfig(): Promise<DataResponse<unknown[]>> {
   return apiClient.admin['model-config']
     .$get()
-    .then((response) => response.json());
+    .then(parseApiResponse) as Promise<DataResponse<unknown[]>>;
 }
 
 export function updateModelConfig(
   advisorId: string,
   input: ModelConfigUpdateInput
-) {
+): Promise<DataResponse<unknown>> {
   const update = apiClient.admin['model-config'][':advisorId'].$put as (input: {
     param: { advisorId: string };
     json: ModelConfigUpdateInput;
@@ -52,13 +66,15 @@ export function updateModelConfig(
   return update({
     param: { advisorId },
     json: input
-  }).then((response) => response.json());
+  }).then(parseApiResponse) as Promise<DataResponse<unknown>>;
 }
 
-export function refreshPromptCache() {
+export function refreshPromptCache(): Promise<
+  DataResponse<{ status: RefreshStatus }>
+> {
   return apiClient.admin['prompt-cache'].refresh
     .$post()
-    .then((response) => response.json());
+    .then(parseApiResponse) as Promise<DataResponse<{ status: RefreshStatus }>>;
 }
 
 export function listPromptCache({
@@ -67,14 +83,10 @@ export function listPromptCache({
 }: {
   limit?: number;
   cursor?: string;
-} = {}) {
-  const query: Record<string, string> = {};
-  if (limit !== undefined) query.limit = String(limit);
-  if (cursor) query.cursor = cursor;
-
+} = {}): Promise<PaginatedData<unknown>> {
   return apiClient.admin['prompt-cache']
-    .$get({ query })
-    .then((response) => response.json());
+    .$get({ query: queryParams({ limit, cursor }) })
+    .then(parseApiResponse) as Promise<PaginatedData<unknown>>;
 }
 
 export function listTelemetry({
@@ -85,15 +97,10 @@ export function listTelemetry({
   eventName?: string;
   limit?: number;
   cursor?: string;
-} = {}) {
-  const query: Record<string, string> = {};
-  if (eventName) query.eventName = eventName;
-  if (limit !== undefined) query.limit = String(limit);
-  if (cursor) query.cursor = cursor;
-
+} = {}): Promise<PaginatedData<unknown>> {
   return apiClient.admin.telemetry
-    .$get({ query })
-    .then((response) => response.json());
+    .$get({ query: queryParams({ eventName, limit, cursor }) })
+    .then(parseApiResponse) as Promise<PaginatedData<unknown>>;
 }
 
 export function listUsers({
@@ -106,25 +113,24 @@ export function listUsers({
   search?: string;
   limit?: number;
   cursor?: string;
-} = {}) {
-  const query: Record<string, string> = {};
-  if (role) query.role = role;
-  if (search) query.search = search;
-  if (limit !== undefined) query.limit = String(limit);
-  if (cursor) query.cursor = cursor;
-
+} = {}): Promise<PaginatedData<unknown>> {
   return apiClient.admin.users
-    .$get({ query })
-    .then((response) => response.json());
+    .$get({ query: queryParams({ role, search, limit, cursor }) })
+    .then(parseApiResponse) as Promise<PaginatedData<unknown>>;
 }
 
-export function createUser(input: CreateUserInput) {
+export function createUser(
+  input: CreateUserInput
+): Promise<DataResponse<unknown>> {
   return apiClient.admin.users
     .$post({ json: input })
-    .then((response) => response.json());
+    .then(parseApiResponse) as Promise<DataResponse<unknown>>;
 }
 
-export function updateUser(userId: string, input: UpdateUserInput) {
+export function updateUser(
+  userId: string,
+  input: UpdateUserInput
+): Promise<DataResponse<unknown>> {
   const update = apiClient.admin.users[':userId'].$patch as (input: {
     param: { userId: string };
     json: UpdateUserInput;
@@ -133,5 +139,5 @@ export function updateUser(userId: string, input: UpdateUserInput) {
   return update({
     param: { userId },
     json: input
-  }).then((response) => response.json());
+  }).then(parseApiResponse) as Promise<DataResponse<unknown>>;
 }

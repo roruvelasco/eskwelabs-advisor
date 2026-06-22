@@ -23,12 +23,15 @@ export function VisualFrame({
   caption,
   children,
   theme,
-  className = '',
+  className = ''
 }: VisualFrameProps) {
   return (
     <div
       className={`overflow-hidden rounded-2xl shadow-sm ${className}`}
-      style={{ border: `1px solid ${theme.cardBorder}`, background: theme.cardBg }}
+      style={{
+        border: `1px solid ${theme.cardBorder}`,
+        background: theme.cardBg
+      }}
     >
       {imageSrc ? (
         <div className="relative aspect-[4/3] w-full">
@@ -43,8 +46,9 @@ export function VisualFrame({
             <div
               className="absolute bottom-0 left-0 right-0 px-4 py-3 text-xs"
               style={{
-                background: 'linear-gradient(to top, rgba(0,0,0,0.5), transparent)',
-                color: '#f0ede6',
+                background:
+                  'linear-gradient(to top, rgba(0,0,0,0.5), transparent)',
+                color: 'var(--background)'
               }}
             >
               {caption}

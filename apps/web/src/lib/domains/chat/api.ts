@@ -1,4 +1,6 @@
 import { apiClient } from '@/lib/api/client';
+import { ApiError, parseApiResponse, queryParams } from '@/lib/api/api-error';
+import type { PaginatedData } from '../admin/api';
 
 export interface Message {
   id: string;
@@ -26,24 +28,22 @@ export function listMessages({
   conversationId: string;
   limit?: number;
   cursor?: string;
-}) {
-  const query: Record<string, string> = { conversationId };
-  if (limit !== undefined) query.limit = String(limit);
-  if (cursor) query.cursor = cursor;
-
-  return apiClient.messages.$get({ query }).then((response) => response.json());
+}): Promise<PaginatedData<Message>> {
+  return apiClient.messages
+    .$get({ query: queryParams({ conversationId, limit, cursor }) })
+    .then(parseApiResponse) as Promise<PaginatedData<Message>>;
 }
 
 export function createChatTurn(input: {
   conversationId: string;
   content: string;
   clientTurnId?: string;
-}) {
+}): Promise<{ data: unknown }> {
   return apiClient['chat-turn']
     .$post({
       json: input
     })
-    .then((response) => response.json());
+    .then(parseApiResponse) as Promise<{ data: unknown }>;
 }
 
 export type StreamEvent =
@@ -75,7 +75,15 @@ export async function streamChatTurn(
   });
 
   if (!response.ok || !response.body) {
-    throw new Error(`Stream failed with ${response.status}`);
+    const payload = (await response.json().catch(() => null)) as {
+      error?: { code?: string; message?: string; details?: unknown };
+    } | null;
+    throw new ApiError(
+      response.status,
+      payload?.error?.code ?? 'chat_stream_error',
+      payload?.error?.message ?? `Stream failed with ${response.status}`,
+      payload?.error?.details ?? payload
+    );
   }
 
   const reader = response.body.getReader();

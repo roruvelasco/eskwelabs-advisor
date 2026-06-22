@@ -17,17 +17,31 @@ export const adminUsageQuery = queryOptions({
 export function usageCountersQuery({
   userId,
   dayPh,
+  fromDayPh,
+  toDayPh,
   limit,
   cursor
 }: {
   userId?: string;
   dayPh?: string;
+  fromDayPh?: string;
+  toDayPh?: string;
   limit?: number;
   cursor?: string;
 } = {}) {
   return queryOptions({
-    queryKey: ['admin', 'usage-counters', userId, dayPh, limit, cursor],
-    queryFn: () => listUsageCounters({ userId, dayPh, limit, cursor })
+    queryKey: [
+      'admin',
+      'usage-counters',
+      userId,
+      dayPh,
+      fromDayPh,
+      toDayPh,
+      limit,
+      cursor
+    ],
+    queryFn: () =>
+      listUsageCounters({ userId, dayPh, fromDayPh, toDayPh, limit, cursor })
   });
 }
 
