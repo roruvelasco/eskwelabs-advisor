@@ -1,8 +1,6 @@
 import { ConversationsRepository } from './conversations.repository';
-import type {
-  ConversationRow,
-  PaginatedResult
-} from './conversations.repository';
+import type { ConversationRow } from './conversations.repository';
+import type { PaginatedResult } from '../common/pagination';
 import { AdvisorsService } from '../advisors/advisors.service';
 import { AdvisorRuntimeService } from '../advisors/advisor-runtime.service';
 import { forbidden, notFound } from '../common/http/http-exception';

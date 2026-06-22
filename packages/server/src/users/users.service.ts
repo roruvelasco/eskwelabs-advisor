@@ -1,6 +1,6 @@
 import type { User } from './users.schema';
 import { UsersRepository } from './users.repository';
-import type { PaginatedResult } from './users.repository';
+import type { PaginatedResult } from '../common/pagination';
 import type { Actor, ActorRole } from '../common/utils/hono';
 import { forbidden } from '../common/http/http-exception';
 

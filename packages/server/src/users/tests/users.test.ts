@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { UsersService } from '../users.service';
 import type { User } from '../users.schema';
 import { UsersRepository } from '../users.repository';
-import type { PaginatedResult } from '../users.repository';
+import type { PaginatedResult } from '../../common/pagination';
 import { createUserDto } from '../dto/create-user.dto';
 
 const user: User = {

@@ -1,5 +1,5 @@
 import { PromptCacheRepository } from './prompt-cache.repository';
-import type { PaginatedResult } from './prompt-cache.repository';
+import type { PaginatedResult } from '../common/pagination';
 import type { PromptCacheEntry } from './prompt-cache.schema';
 import type { RedisService } from '../cache/redis.service';
 import { HttpException } from '../common/http/http-exception';

@@ -1,5 +1,5 @@
 import { TelemetryRepository } from './telemetry.repository';
-import type { PaginatedResult } from './telemetry.repository';
+import type { PaginatedResult } from '../common/pagination';
 import type { TelemetrySeverity } from './telemetry.repository';
 import type { TelemetryEvent } from './telemetry.schema';
 

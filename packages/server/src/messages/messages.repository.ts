@@ -1,7 +1,8 @@
 import { and, asc, desc, eq, gt, inArray } from 'drizzle-orm';
 
 import { Repository } from '../common/factories/repository.factory';
-import { decodeCursor, encodeCursor } from '../common/pagination';
+import { decodeCursor, paginateResult } from '../common/pagination';
+import type { PaginatedResult } from '../common/pagination';
 import type { DbTransaction } from '../db/drizzle.service';
 import {
   conversationsTable,
@@ -31,11 +32,6 @@ export interface MessageRow {
 }
 
 export type MessageCreateInput = Omit<MessageRow, 'id' | 'seq' | 'createdAt'>;
-
-export interface PaginatedResult<T> {
-  rows: T[];
-  nextCursor: string | null;
-}
 
 function nullable<T>(value: T | null): T | undefined {
   return value ?? undefined;
@@ -93,16 +89,15 @@ export class MessagesRepository extends Repository {
       .orderBy(asc(messagesTable.seq))
       .limit(limit + 1);
 
-    const hasMore = rows.length > limit;
-    const resultRows = hasMore ? rows.slice(0, limit) : rows;
+    const { rows: trimmed, nextCursor } = paginateResult(
+      rows,
+      limit,
+      (last) => ({
+        seq: last.seq
+      })
+    );
 
-    const nextCursor = hasMore
-      ? encodeCursor({
-          seq: resultRows[resultRows.length - 1].seq
-        })
-      : null;
-
-    return { rows: resultRows.map(toRow), nextCursor };
+    return { rows: trimmed.map(toRow), nextCursor };
   }
 
   async latestSuccessfulForConversation(

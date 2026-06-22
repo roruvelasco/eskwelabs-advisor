@@ -13,7 +13,8 @@ import {
 } from 'drizzle-orm';
 
 import { Repository } from '../common/factories/repository.factory';
-import { decodeCursor, encodeCursor } from '../common/pagination';
+import { decodeCursor, paginateResult } from '../common/pagination';
+import type { PaginatedResult } from '../common/pagination';
 import { getPhilippinesDay } from '../common/utils/day-ph';
 import { usageCountersTable, type UsageCounter } from './usage-counters.schema';
 import { usdAmount, usdGreaterThan, usdToMicros } from './money';
@@ -46,11 +47,6 @@ type UsageAdjustment = {
 type AdvisoryLockTransaction = {
   execute(query: ReturnType<typeof sql>): Promise<unknown>;
 };
-
-export interface PaginatedResult<T> {
-  rows: T[];
-  nextCursor: string | null;
-}
 
 export class UsageCountersRepository extends Repository {
   private async lockUserDay(
@@ -113,17 +109,10 @@ export class UsageCountersRepository extends Repository {
       .orderBy(desc(usageCountersTable.dayPh), asc(usageCountersTable.userId))
       .limit(limit + 1);
 
-    const hasMore = rows.length > limit;
-    const resultRows = hasMore ? rows.slice(0, limit) : rows;
-
-    const nextCursor = hasMore
-      ? encodeCursor({
-          dayPh: resultRows[resultRows.length - 1].dayPh,
-          userId: resultRows[resultRows.length - 1].userId
-        })
-      : null;
-
-    return { rows: resultRows, nextCursor };
+    return paginateResult(rows, limit, (last) => ({
+      dayPh: last.dayPh,
+      userId: last.userId
+    }));
   }
 
   async count(): Promise<number> {

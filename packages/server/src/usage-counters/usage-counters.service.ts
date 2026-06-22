@@ -1,5 +1,5 @@
 import { UsageCountersRepository } from './usage-counters.repository';
-import type { PaginatedResult } from './usage-counters.repository';
+import type { PaginatedResult } from '../common/pagination';
 import type { UsageCounterRow } from './usage-counters.repository';
 import { getPhilippinesDay } from '../common/utils/day-ph';
 

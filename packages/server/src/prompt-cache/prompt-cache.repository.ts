@@ -1,7 +1,8 @@
 import { and, asc, count, desc, eq, gt, lt, or } from 'drizzle-orm';
 
 import { Repository } from '../common/factories/repository.factory';
-import { decodeCursor, encodeCursor } from '../common/pagination';
+import { decodeCursor, paginateResult } from '../common/pagination';
+import type { PaginatedResult } from '../common/pagination';
 import { promptCacheTable, type PromptCacheEntry } from './prompt-cache.schema';
 
 type UpsertPromptCacheEntry = {
@@ -12,11 +13,6 @@ type UpsertPromptCacheEntry = {
   lastGoodAt?: Date | null;
   expiresAt: Date;
 };
-
-export interface PaginatedResult<T> {
-  rows: T[];
-  nextCursor: string | null;
-}
 
 export class PromptCacheRepository extends Repository {
   async list({
@@ -48,17 +44,10 @@ export class PromptCacheRepository extends Repository {
       .orderBy(desc(promptCacheTable.updatedAt), asc(promptCacheTable.key))
       .limit(limit + 1);
 
-    const hasMore = rows.length > limit;
-    const resultRows = hasMore ? rows.slice(0, limit) : rows;
-
-    const nextCursor = hasMore
-      ? encodeCursor({
-          updatedAt: resultRows[resultRows.length - 1].updatedAt.toISOString(),
-          key: resultRows[resultRows.length - 1].key
-        })
-      : null;
-
-    return { rows: resultRows, nextCursor };
+    return paginateResult(rows, limit, (last) => ({
+      updatedAt: last.updatedAt.toISOString(),
+      key: last.key
+    }));
   }
 
   async count(): Promise<number> {

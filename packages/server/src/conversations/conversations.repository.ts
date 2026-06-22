@@ -1,7 +1,8 @@
 import { and, desc, eq, ilike, isNull, lt, or } from 'drizzle-orm';
 
 import { Repository } from '../common/factories/repository.factory';
-import { decodeCursor, encodeCursor } from '../common/pagination';
+import { decodeCursor, paginateResult } from '../common/pagination';
+import type { PaginatedResult } from '../common/pagination';
 import {
   conversationsTable,
   type ConversationTitleSource,
@@ -21,10 +22,7 @@ export interface ConversationRow {
   updatedAt: string;
 }
 
-export interface PaginatedResult<T> {
-  rows: T[];
-  nextCursor: string | null;
-}
+export type { PaginatedResult } from '../common/pagination';
 
 function toRow(conversation: Conversation): ConversationRow {
   return {
@@ -84,17 +82,16 @@ export class ConversationsRepository extends Repository {
       .orderBy(desc(conversationsTable.updatedAt), desc(conversationsTable.id))
       .limit(limit + 1);
 
-    const hasMore = rows.length > limit;
-    const resultRows = hasMore ? rows.slice(0, limit) : rows;
+    const { rows: trimmed, nextCursor } = paginateResult(
+      rows,
+      limit,
+      (last) => ({
+        updatedAt: last.updatedAt.toISOString(),
+        id: last.id
+      })
+    );
 
-    const nextCursor = hasMore
-      ? encodeCursor({
-          updatedAt: resultRows[resultRows.length - 1].updatedAt.toISOString(),
-          id: resultRows[resultRows.length - 1].id
-        })
-      : null;
-
-    return { rows: resultRows.map(toRow), nextCursor };
+    return { rows: trimmed.map(toRow), nextCursor };
   }
 
   async findForUser(userId: string, id: string) {
