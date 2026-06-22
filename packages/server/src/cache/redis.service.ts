@@ -106,6 +106,31 @@ export class RedisService {
     return count;
   }
 
+  async incrWithTtlAtomic(key: string, ttlSeconds: number) {
+    if (this.redis) {
+      const result = await (
+        this.redis as unknown as {
+          eval: (
+            script: string,
+            keys: string[],
+            args: string[]
+          ) => Promise<number | string>;
+        }
+      ).eval(
+        [
+          'local count = redis.call("INCR", KEYS[1])',
+          'if count == 1 then redis.call("EXPIRE", KEYS[1], ARGV[1]) end',
+          'return count'
+        ].join('\n'),
+        [key],
+        [String(ttlSeconds)]
+      );
+      return Number(result);
+    }
+
+    return this.incrWithTtl(key, ttlSeconds);
+  }
+
   private async delRedisKeysByPattern(pattern: string) {
     if (!this.redis) return;
 

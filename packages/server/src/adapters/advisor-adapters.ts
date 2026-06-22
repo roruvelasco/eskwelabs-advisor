@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, createSign } from 'node:crypto';
 
 import { HttpException } from '../common/http/http-exception';
 import type { ServerEnv } from '../config/env';
@@ -82,6 +82,76 @@ export class GoogleDocsClient {
       return this.accessToken.value;
     }
 
+    if (this.env.GOOGLE_DOCS_SERVICE_ACCOUNT_JSON) {
+      return this.getServiceAccountAccessToken();
+    }
+
+    return this.getRefreshTokenAccessToken();
+  }
+
+  private async getServiceAccountAccessToken() {
+    const credentials = JSON.parse(
+      this.env.GOOGLE_DOCS_SERVICE_ACCOUNT_JSON
+    ) as {
+      client_email?: string;
+      private_key?: string;
+      token_uri?: string;
+    };
+
+    if (!credentials.client_email || !credentials.private_key) {
+      throw new HttpException(
+        503,
+        'Google Docs service account credentials are invalid',
+        'docs_credentials_invalid'
+      );
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    const header = base64UrlJson({ alg: 'RS256', typ: 'JWT' });
+    const claims = base64UrlJson({
+      iss: credentials.client_email,
+      scope: 'https://www.googleapis.com/auth/documents.readonly',
+      aud: credentials.token_uri ?? 'https://oauth2.googleapis.com/token',
+      iat: now,
+      exp: now + 3600
+    });
+    const unsigned = `${header}.${claims}`;
+    const signature = createSign('RSA-SHA256')
+      .update(unsigned)
+      .sign(credentials.private_key, 'base64url');
+
+    const response = await fetch(
+      credentials.token_uri ?? 'https://oauth2.googleapis.com/token',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+          assertion: `${unsigned}.${signature}`
+        })
+      }
+    );
+
+    if (!response.ok) {
+      throw new HttpException(
+        503,
+        'Google Docs authentication failed',
+        'docs_auth_failed'
+      );
+    }
+
+    const payload = (await response.json()) as {
+      access_token: string;
+      expires_in?: number;
+    };
+    this.accessToken = {
+      value: payload.access_token,
+      expiresAt: Date.now() + (payload.expires_in ?? 3600) * 1000
+    };
+    return this.accessToken.value;
+  }
+
+  private async getRefreshTokenAccessToken() {
     const { GOOGLE_REFRESH_TOKEN, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET } =
       this.env;
     if (!GOOGLE_REFRESH_TOKEN || !GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
@@ -158,6 +228,10 @@ export class GoogleDocsClient {
       revision: document.revisionId ?? sha256(text)
     };
   }
+}
+
+function base64UrlJson(value: unknown) {
+  return Buffer.from(JSON.stringify(value)).toString('base64url');
 }
 
 export class GoogleDocsGeminiDnaDigestGenerator implements DnaDigestSummarizer {

@@ -21,8 +21,9 @@ export function createRateLimitMiddleware(
   return async (c, next) => {
     const actor = c.get('actor');
     const subject = actor?.id ?? getClientIp(c);
+    const scope = rateLimitScope(c.req.path, c.req.method);
     try {
-      const result = await rateLimitService.assertAllowed('api', subject);
+      const result = await rateLimitService.assertAllowed(scope, subject);
       setRateLimitHeaders(c, result);
     } catch (error) {
       if (error instanceof HttpException && error.code === 'rate_limited') {
@@ -46,6 +47,7 @@ export function createRateLimitMiddleware(
                 ? String(error.code)
                 : 'rate_limited',
             reason: 'rate',
+            scope,
             subject
           }
         );
@@ -56,6 +58,13 @@ export function createRateLimitMiddleware(
     }
     await next();
   };
+}
+
+function rateLimitScope(path: string, method: string) {
+  if (path.includes('/chat-turn')) return 'api:chat-turn';
+  if (path.includes('/admin/') && method !== 'GET') return 'api:admin-write';
+  if (path.includes('/admin/')) return 'api:admin-read';
+  return 'api:default';
 }
 
 function setRateLimitHeaders(

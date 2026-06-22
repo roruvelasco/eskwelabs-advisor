@@ -21,7 +21,7 @@ export class RateLimitService {
     subject: string
   ): Promise<RateLimitResult> {
     const key = `rate-limit:${scope}:${subject}`;
-    const count = await this.redisService.incrWithTtl(
+    const count = await this.redisService.incrWithTtlAtomic(
       key,
       this.env.RATE_LIMIT_WINDOW_SECONDS
     );
