@@ -466,7 +466,8 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
       useFactory: (c) =>
         new ModelConfigController(
           c.get(ModelConfigService),
-          c.get(ModelConfigSerializer)
+          c.get(ModelConfigSerializer),
+          c.get(TelemetryService)
         )
     })
     .bind({

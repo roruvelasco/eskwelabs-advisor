@@ -97,11 +97,22 @@ export class MessagesService {
     limit?: number,
     cursor?: string
   ) {
-    await this.conversationsService.assertOwns(actor, conversationId);
-    return this.messagesRepository.listForConversation(conversationId, {
-      limit,
-      cursor
-    });
+    const conversation = await this.conversationsService.assertOwns(
+      actor,
+      conversationId
+    );
+    const result = await this.messagesRepository.listForConversation(
+      conversationId,
+      { limit, cursor }
+    );
+    if (!cursor && result.rows.length > 0) {
+      await this.recordTelemetry('conversation_resumed', actor, 'info', {
+        conversationId,
+        advisorId: conversation.advisorId,
+        messageCount: result.rows.length
+      });
+    }
+    return result;
   }
 
   private async reserveBudget(input: {
@@ -205,6 +216,10 @@ export class MessagesService {
         runtimeVersionId: runtime.runtimeVersionId
       });
       isNewConversation = true;
+      await this.recordTelemetry('advisor_selected', actor, 'info', {
+        advisorId: input.advisorId!,
+        conversationId: conversation.id
+      });
     }
 
     let reservation: CostReservation | undefined;

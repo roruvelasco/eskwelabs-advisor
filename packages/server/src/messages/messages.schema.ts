@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  bigint,
   check,
   index,
   integer,
@@ -37,6 +38,9 @@ export const messagesTable = pgTable(
     blockReason: text('block_reason'),
     promptDocRevision: text('prompt_doc_revision'),
     dnaDigestVersion: text('dna_digest_version'),
+    seq: bigint('seq', { mode: 'number' })
+      .notNull()
+      .default(sql`nextval('messages_seq_seq')`),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow()
@@ -62,6 +66,14 @@ export const messagesTable = pgTable(
       table.conversationId,
       table.createdAt.desc(),
       table.id.desc()
+    ),
+    convoSeqAscIdx: index('messages_convo_seq_asc_idx').on(
+      table.conversationId,
+      table.seq.asc()
+    ),
+    convoSeqDescIdx: index('messages_convo_seq_desc_idx').on(
+      table.conversationId,
+      table.seq.desc()
     )
   })
 );

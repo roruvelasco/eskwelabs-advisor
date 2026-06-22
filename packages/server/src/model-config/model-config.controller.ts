@@ -2,6 +2,7 @@ import { Controller } from '../common/factories/controller.factory';
 
 import { ModelConfigSerializer } from './model-config.serializer';
 import { ModelConfigService } from './model-config.service';
+import type { TelemetryService } from '../telemetry/telemetry.service';
 import { requireActor } from '../common/middleware/auth.middleware';
 import { parseJsonBody } from '../common/middleware/validation.middleware';
 import { updateModelConfigDto } from './dto/model-config.dto';
@@ -9,7 +10,8 @@ import { updateModelConfigDto } from './dto/model-config.dto';
 export class ModelConfigController extends Controller {
   constructor(
     private modelConfigService: ModelConfigService,
-    private modelConfigSerializer: ModelConfigSerializer
+    private modelConfigSerializer: ModelConfigSerializer,
+    private telemetryService: TelemetryService
   ) {
     super();
   }
@@ -25,14 +27,26 @@ export class ModelConfigController extends Controller {
       })
       .put('/admin/model-config/:advisorId', async (c) => {
         const actor = c.get('actor')!;
+        const advisorId = c.req.param('advisorId');
         const input = await parseJsonBody(c, updateModelConfigDto);
-        const row = await this.modelConfigService.update(
-          c.req.param('advisorId'),
-          {
-            ...input,
-            updatedBy: actor.id
-          }
-        );
+        const row = await this.modelConfigService.update(advisorId, {
+          ...input,
+          updatedBy: actor.id
+        });
+        try {
+          await this.telemetryService.record(
+            'admin_model_changed',
+            actor.id,
+            'info',
+            {
+              advisorId,
+              provider: input.provider,
+              model: input.model
+            }
+          );
+        } catch {
+          // telemetry failure must not block the response
+        }
         return c.json({ data: row });
       });
   }

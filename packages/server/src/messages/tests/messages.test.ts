@@ -185,9 +185,11 @@ async function* streamShouldNotBeCalled(): AsyncGenerator<LlmChatChunk> {
   throw new Error('stream should not be called');
 }
 
+let testSeq = 0;
 function createMessageRow(input: MessageCreateInput): MessageRow {
   return {
     id: crypto.randomUUID(),
+    seq: ++testSeq,
     createdAt: new Date().toISOString(),
     ...input
   };
@@ -506,6 +508,7 @@ describe('messages service', () => {
         role: index % 2 === 0 ? 'user' : 'assistant',
         content: `history-${index}`,
         status: 'ok',
+        seq: index + 1,
         createdAt: new Date(index).toISOString()
       })
     );
@@ -518,6 +521,7 @@ describe('messages service', () => {
       content: 'blocked-history',
       status: 'blocked',
       blockReason: 'daily_message_limit',
+      seq: 100,
       createdAt: new Date().toISOString()
     });
 

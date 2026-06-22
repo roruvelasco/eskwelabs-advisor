@@ -403,7 +403,7 @@ function ChatLayoutInner() {
             </div>
           ) : hasMessages ? (
             <>
-              <ChatMessages messages={loadedMessages} />
+              <ChatMessages messages={loadedMessages} onRetry={handleSend} />
               <div className="border-border/50 shrink-0 border-t p-3">
                 <ChatComposer
                   disabled={sendMutation.isPending}

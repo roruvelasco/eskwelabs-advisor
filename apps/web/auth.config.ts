@@ -1,7 +1,11 @@
 import type { NextAuthOptions } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import Google from 'next-auth/providers/google';
-import { createContainer, AuthService } from '@eskwelabs-advisor/server';
+import {
+  createContainer,
+  AuthService,
+  TelemetryService
+} from '@eskwelabs-advisor/server';
 import type { ActorRole } from '@eskwelabs-advisor/server';
 
 type AuthResolver = Pick<
@@ -16,7 +20,21 @@ type SessionUserWithActor = {
   isActive?: boolean;
 };
 
-const defaultAuthService = createContainer().get(AuthService);
+const defaultContainer = createContainer();
+const defaultAuthService = defaultContainer.get(AuthService);
+const defaultTelemetry = defaultContainer.get(TelemetryService);
+
+async function recordLoginTelemetry(
+  telemetry: TelemetryService,
+  event: string,
+  payload: Record<string, unknown>
+) {
+  try {
+    await telemetry.record(event, undefined, 'info', payload);
+  } catch {
+    // telemetry failure must never block login
+  }
+}
 const roleLogin: Record<ActorRole, string> = {
   eif: '/login',
   admin: '/admin/login'
@@ -200,15 +218,37 @@ export function createAuthConfig(authService: AuthResolver): NextAuthOptions {
         const requiredRole = providerRole[account?.provider ?? ''] ?? 'eif';
         const actor = await resolveLoginForAuth(authService, email, 'signIn');
         if (actor === 'service_unavailable') {
+          await recordLoginTelemetry(defaultTelemetry, 'login_denied', {
+            email,
+            reason: 'service_unavailable',
+            provider: account?.provider
+          });
           return roleLogin[requiredRole];
         }
         if (!actor) {
           console.warn('auth_rejected_not_in_allowlist', { email });
+          await recordLoginTelemetry(defaultTelemetry, 'login_denied', {
+            email,
+            reason: 'not_in_allowlist',
+            provider: account?.provider
+          });
           return roleLogin[requiredRole];
         }
         if (actor.role !== requiredRole) {
+          await recordLoginTelemetry(defaultTelemetry, 'login_denied', {
+            email,
+            reason: 'role_mismatch',
+            provider: account?.provider,
+            expectedRole: requiredRole,
+            actualRole: actor.role
+          });
           return '/admin/login';
         }
+        await recordLoginTelemetry(defaultTelemetry, 'login_success', {
+          email,
+          role: actor.role,
+          provider: account?.provider
+        });
         return true;
       }
     },

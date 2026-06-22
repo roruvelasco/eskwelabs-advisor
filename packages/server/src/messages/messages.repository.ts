@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, inArray, or } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray } from 'drizzle-orm';
 
 import { Repository } from '../common/factories/repository.factory';
 import { decodeCursor, encodeCursor } from '../common/pagination';
@@ -26,10 +26,11 @@ export interface MessageRow {
   promptDocRevision?: string;
   dnaDigestVersion?: string;
   clientTurnId?: string;
+  seq: number;
   createdAt: string;
 }
 
-export type MessageCreateInput = Omit<MessageRow, 'id' | 'createdAt'>;
+export type MessageCreateInput = Omit<MessageRow, 'id' | 'seq' | 'createdAt'>;
 
 export interface PaginatedResult<T> {
   rows: T[];
@@ -58,6 +59,7 @@ function toRow(message: Message): MessageRow {
     promptDocRevision: nullable(message.promptDocRevision),
     dnaDigestVersion: nullable(message.dnaDigestVersion),
     clientTurnId: nullable(message.clientTurnId),
+    seq: message.seq,
     createdAt: message.createdAt.toISOString()
   };
 }
@@ -76,13 +78,7 @@ export class MessagesRepository extends Repository {
     const decoded = cursor ? decodeCursor(cursor) : null;
 
     const cursorConditions = decoded
-      ? or(
-          gt(messagesTable.createdAt, new Date(decoded.createdAt as string)),
-          and(
-            eq(messagesTable.createdAt, new Date(decoded.createdAt as string)),
-            gt(messagesTable.id, decoded.id as string)
-          )
-        )
+      ? gt(messagesTable.seq, Number(decoded.seq))
       : undefined;
 
     const whereConditions = [
@@ -94,7 +90,7 @@ export class MessagesRepository extends Repository {
       .select()
       .from(messagesTable)
       .where(and(...whereConditions))
-      .orderBy(asc(messagesTable.createdAt), asc(messagesTable.id))
+      .orderBy(asc(messagesTable.seq))
       .limit(limit + 1);
 
     const hasMore = rows.length > limit;
@@ -102,8 +98,7 @@ export class MessagesRepository extends Repository {
 
     const nextCursor = hasMore
       ? encodeCursor({
-          createdAt: resultRows[resultRows.length - 1].createdAt.toISOString(),
-          id: resultRows[resultRows.length - 1].id
+          seq: resultRows[resultRows.length - 1].seq
         })
       : null;
 
@@ -123,7 +118,7 @@ export class MessagesRepository extends Repository {
           eq(messagesTable.status, 'ok')
         )
       )
-      .orderBy(desc(messagesTable.createdAt), desc(messagesTable.id))
+      .orderBy(desc(messagesTable.seq))
       .limit(limit);
 
     return rows.reverse().map(toRow);
