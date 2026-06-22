@@ -1,12 +1,32 @@
-import { and, asc, count, desc, eq, gt, lt, or, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gte,
+  gt,
+  lte,
+  lt,
+  or,
+  sql
+} from 'drizzle-orm';
 
 import { Repository } from '../common/factories/repository.factory';
 import { decodeCursor, encodeCursor } from '../common/pagination';
 import { getPhilippinesDay } from '../common/utils/day-ph';
 import { usageCountersTable, type UsageCounter } from './usage-counters.schema';
 import { usdAmount, usdGreaterThan, usdToMicros } from './money';
+import { usersTable } from '../users/users.schema';
 
-export type UsageCounterRow = UsageCounter;
+export type UsageCounterRow = Pick<
+  UsageCounter,
+  | 'userId'
+  | 'dayPh'
+  | 'messagesToday'
+  | 'tokensToday'
+  | 'estimatedSpendTodayUsd'
+> & { userEmail?: string | null };
 
 type UsageLimitCheck = {
   messages: number;
@@ -46,11 +66,15 @@ export class UsageCountersRepository extends Repository {
   async list({
     userId,
     dayPh,
+    fromDayPh,
+    toDayPh,
     limit = 50,
     cursor
   }: {
     userId?: string;
     dayPh?: string;
+    fromDayPh?: string;
+    toDayPh?: string;
     limit?: number;
     cursor?: string;
   } = {}): Promise<PaginatedResult<UsageCounterRow>> {
@@ -69,12 +93,22 @@ export class UsageCountersRepository extends Repository {
     const whereConditions = [
       ...(userId ? [eq(usageCountersTable.userId, userId)] : []),
       ...(dayPh ? [eq(usageCountersTable.dayPh, dayPh)] : []),
+      ...(fromDayPh ? [gte(usageCountersTable.dayPh, fromDayPh)] : []),
+      ...(toDayPh ? [lte(usageCountersTable.dayPh, toDayPh)] : []),
       ...(cursorConditions ? [cursorConditions] : [])
     ];
 
     const rows = await this.drizzle.db
-      .select()
+      .select({
+        userId: usageCountersTable.userId,
+        dayPh: usageCountersTable.dayPh,
+        messagesToday: usageCountersTable.messagesToday,
+        tokensToday: usageCountersTable.tokensToday,
+        estimatedSpendTodayUsd: usageCountersTable.estimatedSpendTodayUsd,
+        userEmail: usersTable.email
+      })
       .from(usageCountersTable)
+      .leftJoin(usersTable, eq(usersTable.id, usageCountersTable.userId))
       .where(whereConditions.length > 0 ? and(...whereConditions) : undefined)
       .orderBy(desc(usageCountersTable.dayPh), asc(usageCountersTable.userId))
       .limit(limit + 1);
@@ -117,7 +151,8 @@ export class UsageCountersRepository extends Repository {
         dayPh,
         messagesToday: 0,
         tokensToday: 0,
-        estimatedSpendTodayUsd: '0'
+        estimatedSpendTodayUsd: '0',
+        updatedAt: new Date()
       }
     );
   }
@@ -174,7 +209,8 @@ export class UsageCountersRepository extends Repository {
         dayPh,
         messagesToday: 0,
         tokensToday: 0,
-        estimatedSpendTodayUsd: '0'
+        estimatedSpendTodayUsd: '0',
+        updatedAt: new Date()
       };
       const spendTodayMicros = usdToMicros(current.estimatedSpendTodayUsd);
 

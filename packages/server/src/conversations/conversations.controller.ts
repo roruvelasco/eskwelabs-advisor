@@ -34,16 +34,17 @@ export class ConversationController extends Controller {
       .get('/conversations', async (c) => {
         const actor = c.get('actor')!;
         const advisorId = c.req.query('advisorId');
+        const search = c.req.query('search');
         const pagination = paginationParamsDto.parse({
           limit: c.req.query('limit'),
           cursor: c.req.query('cursor')
         });
-        const result = await this.conversationsService.list(
-          actor,
+        const result = await this.conversationsService.list(actor, {
           advisorId,
-          pagination.limit,
-          pagination.cursor
-        );
+          search,
+          limit: pagination.limit,
+          cursor: pagination.cursor
+        });
         return c.json(this.conversationsSerializer.list(result));
       })
       .post('/conversations', async (c) => {

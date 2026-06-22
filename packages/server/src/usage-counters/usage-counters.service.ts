@@ -6,13 +6,29 @@ import { getPhilippinesDay } from '../common/utils/day-ph';
 export class UsageCountersService {
   constructor(private usageCountersRepository: UsageCountersRepository) {}
 
-  async list(
-    userId?: string,
-    dayPh?: string,
-    limit?: number,
-    cursor?: string
-  ): Promise<PaginatedResult<UsageCounterRow>> {
-    return this.usageCountersRepository.list({ userId, dayPh, limit, cursor });
+  async list({
+    userId,
+    dayPh,
+    fromDayPh,
+    toDayPh,
+    limit,
+    cursor
+  }: {
+    userId?: string;
+    dayPh?: string;
+    fromDayPh?: string;
+    toDayPh?: string;
+    limit?: number;
+    cursor?: string;
+  } = {}): Promise<PaginatedResult<UsageCounterRow>> {
+    return this.usageCountersRepository.list({
+      userId,
+      dayPh,
+      fromDayPh,
+      toDayPh,
+      limit,
+      cursor
+    });
   }
 
   async count() {

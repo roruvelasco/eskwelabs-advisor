@@ -1,4 +1,4 @@
-import { and, desc, eq, lt, or } from 'drizzle-orm';
+import { and, desc, eq, ilike, isNull, lt, or } from 'drizzle-orm';
 
 import { Repository } from '../common/factories/repository.factory';
 import { decodeCursor, encodeCursor } from '../common/pagination';
@@ -16,6 +16,7 @@ export interface ConversationRow {
   title: string;
   titleSource: string;
   status: string;
+  deletedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -29,6 +30,7 @@ function toRow(conversation: Conversation): ConversationRow {
   return {
     ...conversation,
     advisorRuntimeVersionId: conversation.advisorRuntimeVersionId ?? undefined,
+    deletedAt: conversation.deletedAt?.toISOString() ?? null,
     createdAt: conversation.createdAt.toISOString(),
     updatedAt: conversation.updatedAt.toISOString()
   };
@@ -39,10 +41,12 @@ export class ConversationsRepository extends Repository {
     userId: string,
     {
       advisorId,
+      search,
       limit = 50,
       cursor
     }: {
       advisorId?: string;
+      search?: string;
       limit?: number;
       cursor?: string;
     } = {}
@@ -67,7 +71,9 @@ export class ConversationsRepository extends Repository {
 
     const whereConditions = [
       eq(conversationsTable.userId, userId),
+      isNull(conversationsTable.deletedAt),
       ...(advisorId ? [eq(conversationsTable.advisorId, advisorId)] : []),
+      ...(search ? [ilike(conversationsTable.title, `%${search}%`)] : []),
       ...(cursorConditions ? [cursorConditions] : [])
     ];
 
@@ -98,7 +104,8 @@ export class ConversationsRepository extends Repository {
       .where(
         and(
           eq(conversationsTable.id, id),
-          eq(conversationsTable.userId, userId)
+          eq(conversationsTable.userId, userId),
+          isNull(conversationsTable.deletedAt)
         )
       )
       .limit(1);
@@ -155,11 +162,13 @@ export class ConversationsRepository extends Repository {
 
   async deleteForUser(userId: string, conversationId: string) {
     const deleted = await this.drizzle.db
-      .delete(conversationsTable)
+      .update(conversationsTable)
+      .set({ status: 'deleted', deletedAt: new Date(), updatedAt: new Date() })
       .where(
         and(
           eq(conversationsTable.id, conversationId),
-          eq(conversationsTable.userId, userId)
+          eq(conversationsTable.userId, userId),
+          isNull(conversationsTable.deletedAt)
         )
       )
       .returning({ id: conversationsTable.id });

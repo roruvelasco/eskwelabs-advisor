@@ -6,6 +6,7 @@ export const conversationDto = z.object({
   advisorId: z.string(),
   title: z.string(),
   status: z.string(),
+  deletedAt: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string()
 });

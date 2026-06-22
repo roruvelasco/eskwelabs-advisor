@@ -19,14 +19,18 @@ export class ConversationsService {
 
   async list(
     actor: Actor,
-    advisorId?: string,
-    limit?: number,
-    cursor?: string
+    filters: {
+      advisorId?: string;
+      search?: string;
+      limit?: number;
+      cursor?: string;
+    } = {}
   ): Promise<PaginatedResult<ConversationRow>> {
     return this.conversationsRepository.listForUser(actor.id, {
-      advisorId,
-      limit,
-      cursor
+      advisorId: filters.advisorId,
+      search: filters.search,
+      limit: filters.limit,
+      cursor: filters.cursor
     });
   }
 

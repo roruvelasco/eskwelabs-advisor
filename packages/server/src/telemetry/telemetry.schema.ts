@@ -3,6 +3,7 @@ import {
   index,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uuid
@@ -12,7 +13,7 @@ import { sql } from 'drizzle-orm';
 export const telemetryEventsTable = pgTable(
   'telemetry_events',
   {
-    id: uuid('id').primaryKey().defaultRandom(),
+    id: uuid('id').notNull().defaultRandom(),
     eventName: text('event_name').notNull(),
     actorId: uuid('actor_id'),
     severity: text('severity').notNull().default('info'),
@@ -22,6 +23,7 @@ export const telemetryEventsTable = pgTable(
       .defaultNow()
   },
   (table) => ({
+    pk: primaryKey({ columns: [table.id, table.createdAt] }),
     severityCheck: check(
       'telemetry_events_severity_check',
       sql`${table.severity} in ('info', 'warning', 'error')`

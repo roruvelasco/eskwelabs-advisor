@@ -20,6 +20,9 @@ export const advisorsTable = pgTable('advisors', {
   ),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
+    .defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
     .defaultNow()
 });
 

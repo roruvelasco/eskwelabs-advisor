@@ -39,6 +39,7 @@ export const conversationsTable = pgTable(
     title: text('title').notNull().default('Untitled conversation'),
     titleSource: text('title_source').notNull().default('fallback'),
     status: text('status').notNull().default('active'),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -49,7 +50,7 @@ export const conversationsTable = pgTable(
   (table) => ({
     statusCheck: check(
       'conversations_status_check',
-      sql`${table.status} in ('active')`
+      sql`${table.status} in ('active', 'deleted')`
     ),
     titleSourceCheck: check(
       'conversations_title_source_check',
