@@ -17,6 +17,8 @@ const actor: Actor = {
   isActive: true
 };
 
+let testSeq = 0;
+
 type StreamEvent =
   | { type: 'conversation.ready'; data: { conversationId: string } }
   | { type: 'chunk'; content: string }
@@ -42,6 +44,7 @@ function createPersistenceService() {
           role: 'user' as const,
           content: i.userMessage.content,
           status: 'ok' as const,
+          seq: ++testSeq,
           createdAt: new Date().toISOString()
         },
         assistantMessage: {
@@ -59,6 +62,7 @@ function createPersistenceService() {
           latencyMs: i.assistantMessage.latencyMs,
           promptDocRevision: i.assistantMessage.promptDocRevision,
           dnaDigestVersion: i.assistantMessage.dnaDigestVersion,
+          seq: ++testSeq,
           createdAt: new Date().toISOString()
         }
       };
@@ -185,7 +189,6 @@ async function* streamShouldNotBeCalled(): AsyncGenerator<LlmChatChunk> {
   throw new Error('stream should not be called');
 }
 
-let testSeq = 0;
 function createMessageRow(input: MessageCreateInput): MessageRow {
   return {
     id: crypto.randomUUID(),
@@ -369,6 +372,7 @@ describe('messages service', () => {
 
   test('runs a chat turn without leaking system prompt content', async () => {
     const conversationId = crypto.randomUUID();
+    const telemetry: Array<{ eventName: string; payload: unknown }> = [];
     const messagesService = new MessagesService(
       createMessageRepository() as never,
       {
@@ -407,7 +411,16 @@ describe('messages service', () => {
       },
       createCostCapEnforcer(),
       { incrementTurn: async () => undefined } as never,
-      { record: async () => undefined } as never,
+      {
+        record: async (
+          eventName: string,
+          _actorId: string,
+          _severity: string,
+          payload: unknown
+        ) => {
+          telemetry.push({ eventName, payload });
+        }
+      } as never,
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
       createPersistenceService(),
       createTitleWorker(),
@@ -422,6 +435,23 @@ describe('messages service', () => {
     expect(turn.assistantMessage.content).toContain('Draft response');
     expect(JSON.stringify(turn)).not.toContain('System instructions');
     expect(JSON.stringify(turn)).not.toContain('DNA digest');
+    expect(telemetry.map((event) => event.eventName)).toEqual([
+      'message_sent',
+      'llm_call_started',
+      'llm_call_completed',
+      'chat_turn_completed'
+    ]);
+    expect(telemetry).toContainEqual({
+      eventName: 'llm_call_completed',
+      payload: expect.objectContaining({
+        conversationId,
+        provider: 'deterministic',
+        model: 'deterministic-model',
+        promptTokens: 100,
+        completionTokens: 20,
+        estimatedCostUsd: '0.001'
+      })
+    });
   });
 
   test('streams chunks and a final safe payload', async () => {
@@ -590,6 +620,7 @@ describe('messages service', () => {
   test('requires terminal stream usage before persisting streamed assistant usage', async () => {
     const createdMessages: MessageRow[] = [];
     const increments: unknown[] = [];
+    const telemetry: Array<{ eventName: string; payload: unknown }> = [];
     const service = new MessagesService(
       createMessageRepository({ createdMessages }) as never,
       {
@@ -626,7 +657,16 @@ describe('messages service', () => {
           increments.push(input);
         }
       } as never,
-      { record: async () => undefined } as never,
+      {
+        record: async (
+          eventName: string,
+          _actorId: string,
+          _severity: string,
+          payload: unknown
+        ) => {
+          telemetry.push({ eventName, payload });
+        }
+      } as never,
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
       createPersistenceService(),
       createTitleWorker(),
@@ -650,6 +690,13 @@ describe('messages service', () => {
       role: 'assistant',
       status: 'error',
       blockReason: 'missing_stream_usage'
+    });
+    expect(telemetry).toContainEqual({
+      eventName: 'provider_error',
+      payload: expect.objectContaining({
+        conversationId: 'conversation-id',
+        code: 'missing_stream_usage'
+      })
     });
   });
 
@@ -799,6 +846,7 @@ describe('messages service', () => {
   test('persists paired user and assistant error rows when provider fails after preflight', async () => {
     const createdMessages: MessageRow[] = [];
     const increments: unknown[] = [];
+    const telemetry: Array<{ eventName: string; payload: unknown }> = [];
     const service = new MessagesService(
       createMessageRepository({ createdMessages }) as never,
       {
@@ -834,7 +882,16 @@ describe('messages service', () => {
           increments.push(input);
         }
       } as never,
-      { record: async () => undefined } as never,
+      {
+        record: async (
+          eventName: string,
+          _actorId: string,
+          _severity: string,
+          payload: unknown
+        ) => {
+          telemetry.push({ eventName, payload });
+        }
+      } as never,
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
       createPersistenceService(),
       createTitleWorker(),
@@ -859,6 +916,97 @@ describe('messages service', () => {
       role: 'assistant',
       status: 'error',
       blockReason: 'provider_error'
+    });
+    expect(telemetry.map((event) => event.eventName)).toContain(
+      'provider_error'
+    );
+    expect(telemetry).toContainEqual({
+      eventName: 'provider_error',
+      payload: expect.objectContaining({
+        conversationId: 'conversation-id',
+        provider: 'deterministic',
+        model: 'deterministic-model',
+        code: 'provider_error'
+      })
+    });
+  });
+
+  test('records supabase_write_error when successful turn persistence fails', async () => {
+    const createdMessages: MessageRow[] = [];
+    const telemetry: Array<{ eventName: string; payload: unknown }> = [];
+    const persistenceError = new Error('write failed') as Error & {
+      code: string;
+    };
+    persistenceError.code = 'supabase_write_failed';
+    const service = new MessagesService(
+      createMessageRepository({ createdMessages }) as never,
+      {
+        assertOwns: async () => ({
+          id: 'conversation-id',
+          userId: actor.id,
+          advisorId: 'data-dashboard',
+          title: 'Untitled',
+          status: 'active',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }),
+        touch: async () => undefined
+      } as never,
+      createModelRateService(),
+      createAdvisorRuntimeService({
+        advisorId: 'data-dashboard',
+        modelConfig: { provider: 'deterministic', model: 'deterministic-model' }
+      }),
+      createPromptContext({
+        advisorPromptText: 'System instructions',
+        dnaDigestText: 'shared dna digest'
+      }),
+      {
+        complete: async () => ({
+          content: 'ok',
+          promptTokens: 10,
+          completionTokens: 2,
+          latencyMs: 1,
+          estimatedCostUsd: '0.0001'
+        }),
+        stream: streamShouldNotBeCalled
+      },
+      createCostCapEnforcer(),
+      { incrementTurn: async () => undefined } as never,
+      {
+        record: async (
+          eventName: string,
+          _actorId: string,
+          _severity: string,
+          payload: unknown
+        ) => {
+          telemetry.push({ eventName, payload });
+        }
+      } as never,
+      { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
+      {
+        persist: async () => {
+          throw persistenceError;
+        }
+      } as never,
+      createTitleWorker(),
+      createDeferredRunner()
+    );
+
+    await expect(
+      service.chatTurn(actor, {
+        conversationId: crypto.randomUUID(),
+        content: 'persist this'
+      })
+    ).rejects.toThrow('write failed');
+
+    expect(createdMessages).toHaveLength(2);
+    expect(telemetry).toContainEqual({
+      eventName: 'supabase_write_error',
+      payload: expect.objectContaining({
+        conversationId: 'conversation-id',
+        code: 'supabase_write_failed'
+      })
     });
   });
 

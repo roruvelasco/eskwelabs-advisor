@@ -97,11 +97,12 @@ Type: `Conversation`
 | `block_reason`        | `text`              | nullable                  |
 | `prompt_doc_revision` | `text`              | nullable                  |
 | `dna_digest_version`  | `text`              | nullable                  |
+| `seq`                 | `bigint`            | NOT NULL, sequence-backed |
 | `created_at`          | `timestamp with tz` | NOT NULL, default `now()` |
 
 Type: `Message`
 
-Indexes: partial unique index on `(user_id, client_turn_id)` where `client_turn_id IS NOT NULL`, `messages_convo_created_asc_idx` on `(conversation_id, created_at ASC, id ASC)`, `messages_convo_created_desc_idx` on `(conversation_id, created_at DESC, id DESC)`.
+Indexes: partial unique index on `(user_id, client_turn_id)` where `client_turn_id IS NOT NULL`, `messages_convo_created_asc_idx` on `(conversation_id, created_at ASC, id ASC)`, `messages_convo_created_desc_idx` on `(conversation_id, created_at DESC, id DESC)`, `messages_convo_seq_asc_idx` on `(conversation_id, seq ASC)`, `messages_convo_seq_desc_idx` on `(conversation_id, seq DESC)`.
 
 ### `model_config` (`modelConfigTable` in code, `model_config` in DB)
 

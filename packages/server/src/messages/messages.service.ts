@@ -356,24 +356,34 @@ export class MessagesService {
       latencyMs: number;
     }
   ) {
-    const turn = await this.successfulTurnPersistenceService.persist({
-      userMessage: this.userMessageInput(
-        actor,
+    let turn: Awaited<ReturnType<SuccessfulTurnPersistenceService['persist']>>;
+
+    try {
+      turn = await this.successfulTurnPersistenceService.persist({
+        userMessage: this.userMessageInput(
+          actor,
+          conversationId,
+          prepared.userContent,
+          prepared.clientTurnId
+        ),
+        assistantMessage: this.assistantMessageInput(
+          actor,
+          conversationId,
+          prepared,
+          completion
+        ),
+        titleGenerationModel: {
+          provider: prepared.provider,
+          model: prepared.model
+        }
+      });
+    } catch (error) {
+      await this.recordTelemetry('supabase_write_error', actor, 'error', {
         conversationId,
-        prepared.userContent,
-        prepared.clientTurnId
-      ),
-      assistantMessage: this.assistantMessageInput(
-        actor,
-        conversationId,
-        prepared,
-        completion
-      ),
-      titleGenerationModel: {
-        provider: prepared.provider,
-        model: prepared.model
-      }
-    });
+        code: this.errorTelemetryCode(error)
+      });
+      throw error;
+    }
 
     await this.finalizeBudget(actor, prepared.reservation, completion);
 
@@ -392,10 +402,26 @@ export class MessagesService {
     return turn;
   }
 
+  private baseTurnTelemetry(prepared: PreparedTurn) {
+    return {
+      conversationId: prepared.conversation.id,
+      provider: prepared.provider,
+      model: prepared.model,
+      promptSnapshotHash: prepared.promptSnapshotHash,
+      dnaDigestVersion: prepared.dnaDigestVersion
+    };
+  }
+
   private blockTelemetryReason(code: string) {
     if (code.includes('spend') || code.includes('budget')) return 'budget';
     if (code.includes('limit') || code.includes('disabled')) return 'cap';
     return code;
+  }
+
+  private errorTelemetryCode(error: unknown, fallback = 'unknown_error') {
+    return error instanceof Error && 'code' in error
+      ? String(error.code)
+      : fallback;
   }
 
   private isAuthorizationFailure(error: HttpException) {
@@ -422,10 +448,28 @@ export class MessagesService {
 
   async chatTurn(actor: Actor, input: StartTurnInput) {
     let prepared: PreparedTurn | undefined;
+    let providerCallStarted = false;
+    let providerCallCompleted = false;
 
     try {
       prepared = await this.prepareTurn(actor, input);
+      await this.recordTelemetry('message_sent', actor, 'info', {
+        ...this.baseTurnTelemetry(prepared),
+        isNewConversation: prepared.isNewConversation
+      });
+      await this.recordTelemetry('llm_call_started', actor, 'info', {
+        ...this.baseTurnTelemetry(prepared)
+      });
+      providerCallStarted = true;
       const completion = await this.llmProvider.complete(prepared.request);
+      providerCallCompleted = true;
+      await this.recordTelemetry('llm_call_completed', actor, 'info', {
+        ...this.baseTurnTelemetry(prepared),
+        promptTokens: completion.promptTokens,
+        completionTokens: completion.completionTokens,
+        estimatedCostUsd: completion.estimatedCostUsd,
+        latencyMs: completion.latencyMs
+      });
 
       const turn = await this.persistSuccessfulTurn(
         actor,
@@ -453,6 +497,12 @@ export class MessagesService {
           error instanceof Error && 'code' in error
             ? String(error.code)
             : 'chat_turn_error';
+        if (providerCallStarted && !providerCallCompleted) {
+          await this.recordTelemetry('provider_error', actor, 'error', {
+            ...this.baseTurnTelemetry(prepared),
+            code: blockReason
+          });
+        }
         try {
           await this.messagesRepository.createErroredTurn(
             this.userMessageInput(
@@ -468,7 +518,11 @@ export class MessagesService {
               { content: 'Request failed.', blockReason }
             )
           );
-        } catch {
+        } catch (writeError) {
+          await this.recordTelemetry('supabase_write_error', actor, 'error', {
+            ...this.baseTurnTelemetry(prepared),
+            code: this.errorTelemetryCode(writeError)
+          });
           // conversation may have been deleted concurrently; skip persistence
         }
         await this.recordTelemetry('chat_turn_error', actor, 'error', {
@@ -490,9 +544,15 @@ export class MessagesService {
 
   async *streamChatTurn(actor: Actor, input: StartTurnInput) {
     let prepared: PreparedTurn | undefined;
+    let providerCallStarted = false;
+    let providerCallCompleted = false;
 
     try {
       prepared = await this.prepareTurn(actor, input);
+      await this.recordTelemetry('message_sent', actor, 'info', {
+        ...this.baseTurnTelemetry(prepared),
+        isNewConversation: prepared.isNewConversation
+      });
 
       if (prepared.isNewConversation) {
         yield {
@@ -505,6 +565,10 @@ export class MessagesService {
       let content = '';
       let usage: LlmUsage | undefined;
 
+      await this.recordTelemetry('llm_call_started', actor, 'info', {
+        ...this.baseTurnTelemetry(prepared)
+      });
+      providerCallStarted = true;
       for await (const chunk of this.llmProvider.stream(prepared.request)) {
         if (chunk.type === 'delta') {
           content += chunk.content;
@@ -514,6 +578,7 @@ export class MessagesService {
 
         usage = chunk.usage;
       }
+      providerCallCompleted = Boolean(usage);
 
       if (!usage) {
         throw new HttpException(
@@ -530,6 +595,13 @@ export class MessagesService {
         estimatedCostUsd: usage.estimatedCostUsd,
         latencyMs: Date.now() - startedAt
       };
+      await this.recordTelemetry('llm_call_completed', actor, 'info', {
+        ...this.baseTurnTelemetry(prepared),
+        promptTokens: completion.promptTokens,
+        completionTokens: completion.completionTokens,
+        estimatedCostUsd: completion.estimatedCostUsd,
+        latencyMs: completion.latencyMs
+      });
 
       const turn = await this.persistSuccessfulTurn(
         actor,
@@ -558,6 +630,12 @@ export class MessagesService {
           error instanceof Error && 'code' in error
             ? String(error.code)
             : 'chat_stream_error';
+        if (providerCallStarted && !providerCallCompleted) {
+          await this.recordTelemetry('provider_error', actor, 'error', {
+            ...this.baseTurnTelemetry(prepared),
+            code: blockReason
+          });
+        }
         try {
           await this.messagesRepository.createErroredTurn(
             this.userMessageInput(
@@ -573,7 +651,11 @@ export class MessagesService {
               { content: 'Stream failed.', blockReason }
             )
           );
-        } catch {
+        } catch (writeError) {
+          await this.recordTelemetry('supabase_write_error', actor, 'error', {
+            ...this.baseTurnTelemetry(prepared),
+            code: this.errorTelemetryCode(writeError)
+          });
           // conversation may have been deleted concurrently; skip persistence
         }
         await this.recordTelemetry('chat_turn_stream_error', actor, 'error', {

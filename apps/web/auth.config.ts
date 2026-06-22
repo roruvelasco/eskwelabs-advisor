@@ -19,13 +19,14 @@ type SessionUserWithActor = {
   role?: string;
   isActive?: boolean;
 };
+type LoginTelemetryRecorder = Pick<TelemetryService, 'record'>;
 
 const defaultContainer = createContainer();
 const defaultAuthService = defaultContainer.get(AuthService);
 const defaultTelemetry = defaultContainer.get(TelemetryService);
 
 async function recordLoginTelemetry(
-  telemetry: TelemetryService,
+  telemetry: LoginTelemetryRecorder,
   event: string,
   payload: Record<string, unknown>
 ) {
@@ -97,7 +98,10 @@ async function authorizeCredentialsForAuth(
   }
 }
 
-export function createAuthConfig(authService: AuthResolver): NextAuthOptions {
+export function createAuthConfig(
+  authService: AuthResolver,
+  telemetry: LoginTelemetryRecorder = defaultTelemetry
+): NextAuthOptions {
   return {
     providers: [
       Credentials({
@@ -218,7 +222,7 @@ export function createAuthConfig(authService: AuthResolver): NextAuthOptions {
         const requiredRole = providerRole[account?.provider ?? ''] ?? 'eif';
         const actor = await resolveLoginForAuth(authService, email, 'signIn');
         if (actor === 'service_unavailable') {
-          await recordLoginTelemetry(defaultTelemetry, 'login_denied', {
+          await recordLoginTelemetry(telemetry, 'login_denied', {
             email,
             reason: 'service_unavailable',
             provider: account?.provider
@@ -227,7 +231,7 @@ export function createAuthConfig(authService: AuthResolver): NextAuthOptions {
         }
         if (!actor) {
           console.warn('auth_rejected_not_in_allowlist', { email });
-          await recordLoginTelemetry(defaultTelemetry, 'login_denied', {
+          await recordLoginTelemetry(telemetry, 'login_denied', {
             email,
             reason: 'not_in_allowlist',
             provider: account?.provider
@@ -235,7 +239,7 @@ export function createAuthConfig(authService: AuthResolver): NextAuthOptions {
           return roleLogin[requiredRole];
         }
         if (actor.role !== requiredRole) {
-          await recordLoginTelemetry(defaultTelemetry, 'login_denied', {
+          await recordLoginTelemetry(telemetry, 'login_denied', {
             email,
             reason: 'role_mismatch',
             provider: account?.provider,
@@ -244,7 +248,7 @@ export function createAuthConfig(authService: AuthResolver): NextAuthOptions {
           });
           return '/admin/login';
         }
-        await recordLoginTelemetry(defaultTelemetry, 'login_success', {
+        await recordLoginTelemetry(telemetry, 'login_success', {
           email,
           role: actor.role,
           provider: account?.provider

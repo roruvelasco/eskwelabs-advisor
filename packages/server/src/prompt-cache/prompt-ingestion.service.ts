@@ -98,11 +98,17 @@ export class PromptIngestionService {
       });
       return document;
     } catch (error) {
+      const code = this.errorCode(error);
       await this.recordTelemetry('google_docs_fetch', 'error', {
         ...payload,
         docId,
         status: 'failed',
-        code: this.errorCode(error)
+        code
+      });
+      await this.recordTelemetry('doc_fetch_error', 'error', {
+        ...payload,
+        docId,
+        code
       });
       throw error;
     }

@@ -223,6 +223,7 @@ describe('prompt ingestion service', () => {
     const activeDna = dnaDigest({ digestText: 'Last good DNA' });
     let promptWrites = 0;
     let dnaWrites = 0;
+    const telemetry: Array<{ eventName: string; payload: unknown }> = [];
 
     const service = new PromptIngestionService(
       {
@@ -272,7 +273,17 @@ describe('prompt ingestion service', () => {
         }
       } as never,
       redis as never,
-      { GOOGLE_DOCS_DNA_DOC_ID: 'dna-doc' } as never
+      { GOOGLE_DOCS_DNA_DOC_ID: 'dna-doc' } as never,
+      {
+        record: async (
+          eventName: string,
+          _actorId: string | undefined,
+          _severity: string,
+          payload: unknown
+        ) => {
+          telemetry.push({ eventName, payload });
+        }
+      } as never
     );
 
     const result = await service.refreshAll();
@@ -292,6 +303,23 @@ describe('prompt ingestion service', () => {
     expect(dnaWrites).toBe(0);
     expect(activePrompt.contentText).toBe('Last good prompt');
     expect(activeDna.digestText).toBe('Last good DNA');
+    expect(telemetry).toContainEqual({
+      eventName: 'doc_fetch_error',
+      payload: expect.objectContaining({
+        documentType: 'advisor_prompt',
+        advisorId: 'data-dashboard',
+        docId: 'prompt-doc',
+        code: 'docs_fetch_failed'
+      })
+    });
+    expect(telemetry).toContainEqual({
+      eventName: 'doc_fetch_error',
+      payload: expect.objectContaining({
+        documentType: 'dna_digest',
+        docId: 'dna-doc',
+        code: 'docs_fetch_failed'
+      })
+    });
   });
 
   test('skips Gemini when the raw DNA document hash is unchanged', async () => {
