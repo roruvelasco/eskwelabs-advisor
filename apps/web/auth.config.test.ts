@@ -97,7 +97,7 @@ describe('auth config', () => {
 
     await expect(
       config.callbacks?.signIn?.(signInInput(actor.email, 'google-admin'))
-    ).resolves.toBe('/admin/login');
+    ).resolves.toBe('/admin/login?error=AdminRequired');
     expect(telemetry).toEqual([
       {
         eventName: 'login_denied',
@@ -117,7 +117,7 @@ describe('auth config', () => {
 
     await expect(
       config.callbacks?.signIn?.(signInInput(adminActor.email, 'google'))
-    ).resolves.toBe('/admin/login');
+    ).resolves.toBe('/login?error=UseAdminLogin');
   });
 
   test('redirects missing allow-list users to a stable login error', async () => {
@@ -129,7 +129,7 @@ describe('auth config', () => {
 
     await expect(
       config.callbacks?.signIn?.(signInInput('missing@example.com'))
-    ).resolves.toBe('/login');
+    ).resolves.toBe('/login?error=NotAllowlisted');
     expect(telemetry).toEqual([
       {
         eventName: 'login_denied',
@@ -150,7 +150,7 @@ describe('auth config', () => {
 
     await expect(
       config.callbacks?.signIn?.(signInInput(actor.email))
-    ).resolves.toBe('/login');
+    ).resolves.toBe('/login?error=AuthServiceUnavailable');
   });
 
   test('redirects admin auth service failures to the admin login', async () => {
@@ -161,6 +161,18 @@ describe('auth config', () => {
 
     await expect(
       config.callbacks?.signIn?.(signInInput(adminActor.email, 'google-admin'))
-    ).resolves.toBe('/admin/login');
+    ).resolves.toBe('/admin/login?error=AuthServiceUnavailable');
+  });
+
+  test('keeps credentials users behind the same allow-list and role checks', async () => {
+    const config = createAuthConfig({
+      resolveLogin: async () => actor,
+      resolveActor: async () => actor,
+      resolveCredentials: async () => actor
+    });
+
+    await expect(
+      config.callbacks?.signIn?.(signInInput(actor.email, 'credentials'))
+    ).resolves.toBe(true);
   });
 });

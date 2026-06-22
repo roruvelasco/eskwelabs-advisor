@@ -41,6 +41,20 @@ const roleLogin: Record<ActorRole, string> = {
   admin: '/admin/login'
 };
 
+const loginError: Record<'not_in_allowlist' | 'service_unavailable', string> = {
+  not_in_allowlist: 'NotAllowlisted',
+  service_unavailable: 'AuthServiceUnavailable'
+};
+
+function loginRedirect(role: ActorRole, reason: keyof typeof loginError) {
+  return `${roleLogin[role]}?error=${loginError[reason]}`;
+}
+
+function roleMismatchRedirect(requiredRole: ActorRole, actualRole: ActorRole) {
+  const error = actualRole === 'admin' ? 'UseAdminLogin' : 'AdminRequired';
+  return `${roleLogin[requiredRole]}?error=${error}`;
+}
+
 const providerRole: Record<string, ActorRole> = {
   google: 'eif',
   credentials: 'eif',
@@ -227,7 +241,7 @@ export function createAuthConfig(
             reason: 'service_unavailable',
             provider: account?.provider
           });
-          return roleLogin[requiredRole];
+          return loginRedirect(requiredRole, 'service_unavailable');
         }
         if (!actor) {
           console.warn('auth_rejected_not_in_allowlist', { email });
@@ -236,7 +250,7 @@ export function createAuthConfig(
             reason: 'not_in_allowlist',
             provider: account?.provider
           });
-          return roleLogin[requiredRole];
+          return loginRedirect(requiredRole, 'not_in_allowlist');
         }
         if (actor.role !== requiredRole) {
           await recordLoginTelemetry(telemetry, 'login_denied', {
@@ -246,7 +260,7 @@ export function createAuthConfig(
             expectedRole: requiredRole,
             actualRole: actor.role
           });
-          return '/admin/login';
+          return roleMismatchRedirect(requiredRole, actor.role);
         }
         await recordLoginTelemetry(telemetry, 'login_success', {
           email,

@@ -17,8 +17,10 @@ describe('chat consent notice', () => {
       import.meta.dir + '/../../chat/components/new-chat-shell.tsx'
     ).text();
 
-    expect(chatSource).toContain('window.sessionStorage.setItem');
-    expect(chatSource).toContain('window.sessionStorage.getItem');
+    expect(chatSource).not.toContain('window.sessionStorage.setItem');
+    expect(chatSource).not.toContain('window.sessionStorage.getItem');
+    expect(chatSource).toContain('consentedAt');
+    expect(chatSource).toContain('refetchConsent');
     expect(chatSource).toContain('getConsent');
     expect(chatSource).toContain('acknowledgeConsent()');
   });
