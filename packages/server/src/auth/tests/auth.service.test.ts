@@ -12,7 +12,8 @@ describe('auth service', () => {
     role: 'eif',
     isActive: true,
     consentAcknowledgedAt: null,
-    createdAt: new Date(0)
+    createdAt: new Date(0),
+    updatedAt: new Date(0)
   };
 
   function serviceFor(users: User[]) {

@@ -34,7 +34,8 @@ function promptSnapshot(input?: Partial<PromptSnapshotRow>): PromptSnapshotRow {
     contentText: 'Advisor prompt',
     hash: 'prompt-hash',
     isActive: true,
-    createdAt: new Date(),
+    createdAt: new Date(0),
+    updatedAt: new Date(0),
     ...input
   };
 }
@@ -48,7 +49,8 @@ function dnaDigest(input?: Partial<DnaDigestRow>): DnaDigestRow {
     digestText: 'DNA digest',
     hash: 'dna-hash',
     isActive: true,
-    createdAt: new Date(),
+    createdAt: new Date(0),
+    updatedAt: new Date(0),
     ...input
   };
 }
