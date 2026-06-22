@@ -1,4 +1,5 @@
 import { Controller } from '../common/factories/controller.factory';
+import { dataResponse } from '../common/pagination';
 
 import { ModelConfigSerializer } from './model-config.serializer';
 import { ModelConfigService } from './model-config.service';
@@ -47,7 +48,7 @@ export class ModelConfigController extends Controller {
         } catch {
           // telemetry failure must not block the response
         }
-        return c.json({ data: row });
+        return c.json(dataResponse(row));
       });
   }
 }

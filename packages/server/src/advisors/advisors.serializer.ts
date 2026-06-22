@@ -1,3 +1,5 @@
+import { dataResponse } from '../common/pagination';
+
 export class AdvisorsSerializer {
   list(
     rows: Array<{
@@ -14,8 +16,8 @@ export class AdvisorsSerializer {
       };
     }>
   ) {
-    return {
-      data: rows.map(
+    return dataResponse(
+      rows.map(
         ({
           id,
           name,
@@ -36,6 +38,6 @@ export class AdvisorsSerializer {
           availability
         })
       )
-    };
+    );
   }
 }

@@ -16,38 +16,25 @@ export class UsageCounterController extends Controller {
   routes() {
     this.controller.use('/admin/usage-counters/*', requireActor(['admin']));
     this.controller.use('/admin/usage-counters', requireActor(['admin']));
-    this.controller.use('/admin/usage-users', requireActor(['admin']));
 
-    return this.controller
-      .get('/admin/usage-counters', async (c) => {
-        const userId = c.req.query('userId');
-        const dayPh = c.req.query('dayPh');
-        const pagination = paginationParamsDto.parse({
-          limit: c.req.query('limit'),
-          cursor: c.req.query('cursor')
-        });
-        const result = await this.usageCountersService.list(
-          userId,
-          dayPh,
-          pagination.limit,
-          pagination.cursor
-        );
-        return c.json(this.usageCountersSerializer.list(result));
-      })
-      .get('/admin/usage-users', async (c) => {
-        const userId = c.req.query('userId');
-        const dayPh = c.req.query('dayPh');
-        const pagination = paginationParamsDto.parse({
-          limit: c.req.query('limit'),
-          cursor: c.req.query('cursor')
-        });
-        const result = await this.usageCountersService.list(
-          userId,
-          dayPh,
-          pagination.limit,
-          pagination.cursor
-        );
-        return c.json(this.usageCountersSerializer.list(result));
+    return this.controller.get('/admin/usage-counters', async (c) => {
+      const userId = c.req.query('userId');
+      const dayPh = c.req.query('dayPh');
+      const fromDayPh = c.req.query('fromDayPh');
+      const toDayPh = c.req.query('toDayPh');
+      const pagination = paginationParamsDto.parse({
+        limit: c.req.query('limit'),
+        cursor: c.req.query('cursor')
       });
+      const result = await this.usageCountersService.list({
+        userId,
+        dayPh,
+        fromDayPh,
+        toDayPh,
+        limit: pagination.limit,
+        cursor: pagination.cursor
+      });
+      return c.json(this.usageCountersSerializer.list(result));
+    });
   }
 }

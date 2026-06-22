@@ -47,3 +47,11 @@ export function paginatedResponse<T>(
     meta: { nextCursor, limit }
   };
 }
+
+export interface DataResponse<T> {
+  data: T;
+}
+
+export function dataResponse<T>(data: T): DataResponse<T> {
+  return { data };
+}
