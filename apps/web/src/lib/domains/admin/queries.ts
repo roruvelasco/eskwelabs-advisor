@@ -2,6 +2,7 @@ import { queryOptions } from '@tanstack/react-query';
 
 import {
   getAdminUsage,
+  getUsageLimits,
   listPromptCache,
   listUsageCounters,
   listModelConfig,
@@ -12,6 +13,11 @@ import {
 export const adminUsageQuery = queryOptions({
   queryKey: ['admin', 'usage'],
   queryFn: getAdminUsage
+});
+
+export const usageLimitsQuery = queryOptions({
+  queryKey: ['admin', 'usage-limits'],
+  queryFn: getUsageLimits
 });
 
 export function usageCountersQuery({

@@ -300,6 +300,94 @@ export class GoogleDocsGeminiDnaDigestGenerator implements DnaDigestSummarizer {
   }
 }
 
+export class GroqDnaDigestSummarizer implements DnaDigestSummarizer {
+  constructor(private env: ServerEnv) {}
+
+  async summarize(text: string) {
+    if (!this.env.GROQ_API_KEY) {
+      throw new HttpException(
+        503,
+        'Groq API key is not configured',
+        'groq_not_configured'
+      );
+    }
+
+    const baseUrl = this.env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1';
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      this.env.PROVIDER_TIMEOUT_MS
+    );
+
+    try {
+      const response = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.env.GROQ_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          stream: false,
+          temperature: 0.2,
+          max_tokens: 700,
+          messages: [
+            {
+              role: 'system',
+              content:
+                'You are a precise document summarizer. You produce concise, faithful digests that preserve identity, voice, lexicon, formatting guardrails, and advisory posture. Never add facts, interpretations, or commentary not present in the source.'
+            },
+            {
+              role: 'user',
+              content: `Summarize this Eskwelabs DNA reference into a compact system digest for AI advisors. Preserve identity, voice, lexicon, formatting guardrails, and advisory posture. Do not add facts not present in the source.\n\n${text}`
+            }
+          ]
+        }),
+        signal: controller.signal
+      });
+
+      if (!response.ok) {
+        throw new HttpException(
+          503,
+          'DNA digest generation failed',
+          'dna_digest_failed'
+        );
+      }
+
+      const body = (await response.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+      };
+      const digest = body.choices?.[0]?.message?.content?.trim() ?? '';
+
+      if (!digest) {
+        throw new HttpException(
+          503,
+          'DNA digest generation returned no content',
+          'dna_digest_empty'
+        );
+      }
+
+      return digest;
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      if ((error as Error).name === 'AbortError') {
+        throw new HttpException(
+          504,
+          'Provider request timed out',
+          'provider_timeout'
+        );
+      }
+      throw new HttpException(
+        503,
+        'DNA digest generation failed',
+        'dna_digest_failed'
+      );
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+}
+
 type GeminiGenerateResponse = {
   candidates?: Array<{
     content?: {
@@ -317,8 +405,8 @@ function extractGeminiText(payload: GeminiGenerateResponse) {
   return (
     payload.candidates?.[0]?.content?.parts
       ?.map((part) => part.text ?? '')
-      .join('')
-      .trim() ?? ''
+      ?.join('')
+      ?.trim() ?? ''
   );
 }
 

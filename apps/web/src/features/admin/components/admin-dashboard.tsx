@@ -48,12 +48,19 @@ import {
 import { cn } from '@/lib/utils';
 import { adminUsageQuery } from '@/lib/domains/admin/queries';
 import { CachePanel } from './cache-panel';
+import { LimitsPanel } from './limits-panel';
 import { ModelConfigPanel } from './model-config-panel';
 import { TelemetryPanel } from './telemetry-panel';
 import { UsagePanel } from './usage-panel';
 import { UsersPanel } from './users-panel';
 
-type AdminSection = 'usage' | 'model-config' | 'cache' | 'telemetry' | 'users';
+type AdminSection =
+  | 'usage'
+  | 'model-config'
+  | 'cache'
+  | 'limits'
+  | 'telemetry'
+  | 'users';
 
 interface AdminOverview {
   counts: {
@@ -72,6 +79,7 @@ const sections: Array<{
   { id: 'usage', label: 'Usage', icon: BarChart3Icon },
   { id: 'model-config', label: 'Models', icon: DatabaseIcon },
   { id: 'cache', label: 'Cache', icon: RadioTowerIcon },
+  { id: 'limits', label: 'Limits', icon: BarChart3Icon },
   { id: 'telemetry', label: 'Events', icon: LayoutDashboardIcon },
   { id: 'users', label: 'Users', icon: UsersIcon }
 ];
@@ -114,6 +122,7 @@ function OverviewCards() {
 function AdminPanel({ section }: { section: AdminSection }) {
   if (section === 'model-config') return <ModelConfigPanel />;
   if (section === 'cache') return <CachePanel />;
+  if (section === 'limits') return <LimitsPanel />;
   if (section === 'telemetry') return <TelemetryPanel />;
   if (section === 'users') return <UsersPanel />;
   return <UsagePanel />;

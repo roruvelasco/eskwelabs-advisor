@@ -11,6 +11,7 @@ import {
   GeminiLlmProvider,
   GoogleDocsClient,
   GoogleDocsGeminiDnaDigestGenerator,
+  GroqDnaDigestSummarizer,
   GroqLlmProvider,
   RoutingLlmProvider,
   type DnaDigestSummarizer,
@@ -81,6 +82,10 @@ import { UsageCounterController } from '../usage-counters/usage-counters.control
 import { UsageCountersRepository } from '../usage-counters/usage-counters.repository';
 import { UsageCountersSerializer } from '../usage-counters/usage-counters.serializer';
 import { UsageCountersService } from '../usage-counters/usage-counters.service';
+import { UsageLimitsController } from '../usage-limits/usage-limits.controller';
+import { UsageLimitsRepository } from '../usage-limits/usage-limits.repository';
+import { UsageLimitsSerializer } from '../usage-limits/usage-limits.serializer';
+import { UsageLimitsService } from '../usage-limits/usage-limits.service';
 import { AuthService } from '../auth/auth.service';
 import { UsersController } from '../users/users.controller';
 import { UsersRepository } from '../users/users.repository';
@@ -91,6 +96,9 @@ import { HttpException } from '../common/http/http-exception';
 export const SERVER_ENV = new InjectionToken<ServerEnv>('SERVER_ENV');
 export const DNA_DIGEST_SUMMARIZER = new InjectionToken<DnaDigestSummarizer>(
   'DNA_DIGEST_SUMMARIZER'
+);
+export const USAGE_LIMITS_SERVICE = new InjectionToken<UsageLimitsService>(
+  'USAGE_LIMITS_SERVICE'
 );
 export const LLM_PROVIDER = new InjectionToken<LlmProvider>('LLM_PROVIDER');
 export const PROMPT_CONTEXT_LOADER = new InjectionToken<PromptContextLoader>(
@@ -116,17 +124,28 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
     .bind({
       provide: RateLimitService,
       useFactory: (c) =>
-        new RateLimitService(c.get(RedisService), c.get(SERVER_ENV))
+        new RateLimitService(
+          c.get(RedisService),
+          c.get(USAGE_LIMITS_SERVICE),
+          c.get(SERVER_ENV)
+        )
     })
     .bind({
       provide: CostCapEnforcer,
       useFactory: (c) =>
-        new CostCapEnforcer(c.get(UsageCountersService), c.get(SERVER_ENV))
+        new CostCapEnforcer(
+          c.get(UsageCountersService),
+          c.get(USAGE_LIMITS_SERVICE),
+          c.get(SERVER_ENV)
+        )
     })
     .bind({
       provide: DNA_DIGEST_SUMMARIZER,
       useFactory: (c) => {
         const env = c.get(SERVER_ENV);
+        if (env.GROQ_API_KEY) {
+          return new GroqDnaDigestSummarizer(env);
+        }
         if (env.GEMINI_API_KEY) {
           return new GoogleDocsGeminiDnaDigestGenerator(
             new GoogleDocsClient(env),
@@ -211,6 +230,10 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
       useFactory: (c) => new UsageCountersRepository(c.get(DrizzleService))
     })
     .bind({
+      provide: UsageLimitsRepository,
+      useFactory: (c) => new UsageLimitsRepository(c.get(DrizzleService))
+    })
+    .bind({
       provide: UsersRepository,
       useFactory: (c) => new UsersRepository(c.get(DrizzleService))
     })
@@ -246,6 +269,10 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
     .bind({
       provide: UsageCountersSerializer,
       useFactory: () => new UsageCountersSerializer()
+    })
+    .bind({
+      provide: UsageLimitsSerializer,
+      useFactory: () => new UsageLimitsSerializer()
     })
     .bind({ provide: UsersSerializer, useFactory: () => new UsersSerializer() })
     .bind({
@@ -284,6 +311,11 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
       provide: UsageCountersService,
       useFactory: (c) =>
         new UsageCountersService(c.get(UsageCountersRepository))
+    })
+    .bind({
+      provide: USAGE_LIMITS_SERVICE,
+      useFactory: (c) =>
+        new UsageLimitsService(c.get(UsageLimitsRepository), c.get(SERVER_ENV))
     })
     .bind({
       provide: PromptCacheService,
@@ -541,6 +573,14 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
         )
     })
     .bind({
+      provide: UsageLimitsController,
+      useFactory: (c) =>
+        new UsageLimitsController(
+          c.get(USAGE_LIMITS_SERVICE),
+          c.get(UsageLimitsSerializer)
+        )
+    })
+    .bind({
       provide: TelemetryController,
       useFactory: (c) =>
         new TelemetryController(
@@ -568,6 +608,7 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
           c.get(ModelConfigController),
           c.get(PromptCacheController),
           c.get(UsageCounterController),
+          c.get(UsageLimitsController),
           c.get(TelemetryController),
           c.get(AdminController),
           c.get(ConversationTitleJobsController)

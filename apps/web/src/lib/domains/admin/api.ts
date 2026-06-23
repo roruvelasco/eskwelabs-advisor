@@ -127,6 +127,59 @@ export function createUser(
     .then(parseApiResponse) as Promise<DataResponse<unknown>>;
 }
 
+interface UsageLimitsResponse {
+  data: {
+    config: {
+      id: string;
+      maxMessagesPerUserPerDay: number;
+      maxTokensPerUserPerDay: number;
+      dailyBudgetUsd: string;
+      monthlyBudgetUsd: string;
+      rateLimitWindowSeconds: number;
+      rateLimitMaxRequests: number;
+      updatedBy: string | null;
+      updatedAt: string;
+    };
+    status: {
+      daily: {
+        periodKey: string;
+        spentUsd: string;
+        budgetUsd: string;
+        remainingUsd: string;
+      };
+      monthly: {
+        periodKey: string;
+        spentUsd: string;
+        budgetUsd: string;
+        remainingUsd: string;
+      };
+    } | null;
+  };
+}
+
+type UpdateUsageLimitsInput = {
+  maxMessagesPerUserPerDay: number;
+  maxTokensPerUserPerDay: number;
+  dailyBudgetUsd: string;
+  monthlyBudgetUsd: string;
+  rateLimitWindowSeconds: number;
+  rateLimitMaxRequests: number;
+};
+
+export function getUsageLimits(): Promise<UsageLimitsResponse> {
+  return apiClient.admin['usage-limits']
+    .$get()
+    .then(parseApiResponse) as Promise<UsageLimitsResponse>;
+}
+
+export function updateUsageLimits(
+  input: UpdateUsageLimitsInput
+): Promise<UsageLimitsResponse> {
+  return apiClient.admin['usage-limits']
+    .$put({ json: input })
+    .then(parseApiResponse) as Promise<UsageLimitsResponse>;
+}
+
 export function updateUser(
   userId: string,
   input: UpdateUserInput

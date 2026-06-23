@@ -8,5 +8,6 @@ export * from '../prompt-cache/prompt-cache.schema';
 export * from '../prompt-cache/prompt-snapshots.schema';
 export * from '../prompt-cache/dna-digests.schema';
 export * from '../usage-counters/usage-counters.schema';
+export * from '../usage-limits/usage-limits.schema';
 export * from '../telemetry/telemetry.schema';
 export * from '../conversation-titles/conversation-title-jobs.schema';

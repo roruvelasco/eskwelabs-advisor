@@ -103,7 +103,7 @@ export async function streamChatTurn(
       const type = lines
         .find((line) => line.startsWith('event:'))
         ?.slice('event:'.length)
-        .trim();
+        ?.trim();
       const data = lines
         .filter((line) => line.startsWith('data:'))
         .map((line) => {

@@ -7,6 +7,7 @@ import { ModelConfigController } from './model-config/model-config.controller';
 import { PromptCacheController } from './prompt-cache/prompt-cache.controller';
 import { TelemetryController } from './telemetry/telemetry.controller';
 import { UsageCounterController } from './usage-counters/usage-counters.controller';
+import { UsageLimitsController } from './usage-limits/usage-limits.controller';
 import { UsersController } from './users/users.controller';
 import { ConversationController } from './conversations/conversations.controller';
 import { ConversationTitleJobsController } from './conversation-titles/conversation-title-jobs.controller';
@@ -36,6 +37,7 @@ export class ApplicationController {
     private modelConfigController: ModelConfigController,
     private promptCacheController: PromptCacheController,
     private usageCounterController: UsageCounterController,
+    private usageLimitsController: UsageLimitsController,
     private telemetryController: TelemetryController,
     private adminController: AdminController,
     private conversationTitleJobsController: ConversationTitleJobsController
@@ -64,6 +66,7 @@ export class ApplicationController {
       .route('/', this.modelConfigController.routes())
       .route('/', this.promptCacheController.routes())
       .route('/', this.usageCounterController.routes())
+      .route('/', this.usageLimitsController.routes())
       .route('/', this.telemetryController.routes())
       .route('/', this.adminController.routes())
       .route('/', this.conversationTitleJobsController.routes());

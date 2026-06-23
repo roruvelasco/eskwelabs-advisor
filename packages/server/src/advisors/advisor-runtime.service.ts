@@ -38,6 +38,47 @@ export class AdvisorRuntimeService {
     private promptContextLoader: PromptContextLoader
   ) {}
 
+  async resolveModelConfig(advisorId: string) {
+    const advisor = await this.advisorsRepository.findById(advisorId);
+
+    if (!advisor) {
+      throw new HttpException(404, 'Advisor not found', 'advisor_not_found');
+    }
+
+    if (!advisor.isActive || advisor.status === 'disabled') {
+      throw new HttpException(
+        422,
+        'Advisor is not available for chat',
+        'advisor_inactive'
+      );
+    }
+
+    const modelConfig = await this.modelConfigService.getForAdvisor(advisorId);
+
+    if (!modelConfig?.isEnabled) {
+      throw new HttpException(
+        422,
+        'Advisor model configuration is disabled',
+        'advisor_model_disabled'
+      );
+    }
+
+    this.modelRateService.assertRateConfigured(
+      modelConfig.provider,
+      modelConfig.model
+    );
+
+    return {
+      advisorId: advisor.id,
+      advisorName: advisor.name,
+      modelConfig: {
+        provider: modelConfig.provider,
+        model: modelConfig.model,
+        isEnabled: modelConfig.isEnabled
+      }
+    };
+  }
+
   async resolveRunnableVersion(
     advisorId: string
   ): Promise<ResolvedAdvisorRuntime> {

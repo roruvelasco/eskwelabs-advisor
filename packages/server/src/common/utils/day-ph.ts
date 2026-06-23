@@ -6,3 +6,11 @@ export function getPhilippinesDay(date = new Date()) {
     day: '2-digit'
   }).format(date);
 }
+
+export function getPhilippinesMonth(date = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Manila',
+    year: 'numeric',
+    month: '2-digit'
+  }).format(date);
+}

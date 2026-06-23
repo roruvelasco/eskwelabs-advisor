@@ -324,7 +324,7 @@ describe('prompt ingestion service', () => {
     });
   });
 
-  test('skips Gemini when the raw DNA document hash is unchanged', async () => {
+  test('skips DNA summarization when the raw DNA document hash is unchanged', async () => {
     const redis = createRedis();
     const text = 'Same DNA source';
     const activeDna = dnaDigest({

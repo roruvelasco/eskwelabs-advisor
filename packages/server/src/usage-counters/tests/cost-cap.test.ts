@@ -22,6 +22,19 @@ function enforcerFor(input: {
         ...input
       })
     } as never,
+    {
+      getEffectiveLimits: async () => ({
+        id: 'default',
+        maxMessagesPerUserPerDay: env.DAILY_MESSAGE_LIMIT,
+        maxTokensPerUserPerDay: env.DAILY_TOKEN_LIMIT,
+        dailyBudgetUsd: String(env.DAILY_SPEND_LIMIT_USD),
+        monthlyBudgetUsd: String(env.DAILY_SPEND_LIMIT_USD * 30),
+        rateLimitWindowSeconds: 60,
+        rateLimitMaxRequests: 100,
+        updatedBy: null,
+        updatedAt: new Date(0)
+      })
+    } as never,
     env
   );
 }

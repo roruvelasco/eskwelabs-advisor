@@ -144,6 +144,15 @@ function createAdvisorRuntimeService(runtime: {
   };
 }) {
   return {
+    resolveModelConfig: async () => ({
+      advisorId: runtime.advisorId,
+      advisorName: runtime.advisorName ?? runtime.advisorId,
+      modelConfig: {
+        provider: runtime.modelConfig?.provider ?? 'deterministic',
+        model: runtime.modelConfig?.model ?? 'deterministic-model',
+        isEnabled: runtime.modelConfig?.isEnabled ?? true
+      }
+    }),
     resolveRunnableVersion: async () => ({
       advisorId: runtime.advisorId,
       advisorName: runtime.advisorName ?? runtime.advisorId,

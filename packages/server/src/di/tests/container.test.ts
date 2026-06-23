@@ -9,6 +9,7 @@ import { ModelConfigController } from '../../model-config/model-config.controlle
 import { PromptCacheController } from '../../prompt-cache/prompt-cache.controller';
 import { TelemetryController } from '../../telemetry/telemetry.controller';
 import { UsageCounterController } from '../../usage-counters/usage-counters.controller';
+import { UsageLimitsController } from '../../usage-limits/usage-limits.controller';
 import { UsersController } from '../../users/users.controller';
 import { createContainer } from '../container';
 
@@ -36,6 +37,9 @@ describe('dependency container', () => {
     );
     expect(container.get(UsageCounterController)).toBeInstanceOf(
       UsageCounterController
+    );
+    expect(container.get(UsageLimitsController)).toBeInstanceOf(
+      UsageLimitsController
     );
     expect(container.get(UsersController)).toBeInstanceOf(UsersController);
   });

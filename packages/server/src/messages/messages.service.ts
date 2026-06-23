@@ -192,45 +192,56 @@ export class MessagesService {
       id: string;
       advisorId: string;
       advisorRuntimeVersionId?: string | null;
-    };
-    let runtime: Awaited<
-      ReturnType<AdvisorRuntimeService['resolveRunnableVersion']>
-    >;
+    } = undefined!;
     let isNewConversation = false;
 
     if (hasConversationId) {
-      conversation = await this.conversationsService.assertOwns(
+      const owned = await this.conversationsService.assertOwns(
         actor,
         input.conversationId!
       );
-      runtime = await this.advisorRuntimeService.resolveRunnableVersion(
-        conversation.advisorId
-      );
-    } else {
-      runtime = await this.advisorRuntimeService.resolveRunnableVersion(
-        input.advisorId!
-      );
-      conversation = await this.conversationsService.createImplicit(actor, {
-        advisorId: input.advisorId!,
-        fallbackTitle: input.content.slice(0, 80),
-        runtimeVersionId: runtime.runtimeVersionId
-      });
-      isNewConversation = true;
-      await this.recordTelemetry('advisor_selected', actor, 'info', {
-        advisorId: input.advisorId!,
-        conversationId: conversation.id
-      });
+      conversation = {
+        id: owned.id,
+        advisorId: owned.advisorId
+      };
     }
+
+    const advisorId = hasConversationId
+      ? conversation.advisorId
+      : input.advisorId!;
+
+    if (!hasConversationId) {
+      conversation = { id: '', advisorId };
+    }
+
+    const modelConfigResult =
+      await this.advisorRuntimeService.resolveModelConfig(advisorId);
 
     let reservation: CostReservation | undefined;
 
     try {
-      const budget = this.estimatedTurnBudget(runtime.modelConfig);
+      const budget = this.estimatedTurnBudget(modelConfigResult.modelConfig);
 
       reservation = await this.reserveBudget({
         userId: actor.id,
         ...budget
       });
+
+      const runtime =
+        await this.advisorRuntimeService.resolveRunnableVersion(advisorId);
+
+      if (!hasConversationId) {
+        conversation = await this.conversationsService.createImplicit(actor, {
+          advisorId,
+          fallbackTitle: input.content.slice(0, 80),
+          runtimeVersionId: runtime.runtimeVersionId
+        });
+        isNewConversation = true;
+        await this.recordTelemetry('advisor_selected', actor, 'info', {
+          advisorId,
+          conversationId: conversation.id
+        });
+      }
 
       const history = (
         await this.messagesRepository.latestSuccessfulForConversation(
