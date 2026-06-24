@@ -18,13 +18,16 @@ export class ModelRateService {
 
   estimatedTurnBudget(
     config: { provider: string; model: string },
+    estimatedInputTokens: number,
     maxOutputTokens: number
   ) {
+    const promptTokens = estimatedInputTokens;
+    const completionTokens = maxOutputTokens;
     const estimatedCostUsd = estimateModelCostUsd({
       provider: config.provider,
       model: config.model,
-      promptTokens: maxOutputTokens,
-      completionTokens: maxOutputTokens
+      promptTokens,
+      completionTokens
     });
 
     if (estimatedCostUsd === null) {
@@ -36,7 +39,7 @@ export class ModelRateService {
     }
 
     return {
-      estimatedTokens: maxOutputTokens * 2,
+      estimatedTokens: promptTokens + completionTokens,
       estimatedCostUsd
     };
   }
