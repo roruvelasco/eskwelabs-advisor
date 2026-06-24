@@ -305,6 +305,8 @@ export class KnowledgeRepository extends Repository {
         ? inArray(knowledgeUnitsTable.contentType, input.contentTypes)
         : undefined;
 
+    const distanceExpr = sql<number>`${knowledgeEmbeddingsTable.embedding} <=> ${vectorParam}::vector`;
+
     const rows = await this.drizzle.db
       .select({
         id: knowledgeUnitsTable.id,
@@ -323,7 +325,7 @@ export class KnowledgeRepository extends Repository {
         metadata: knowledgeUnitsTable.metadata,
         createdAt: knowledgeUnitsTable.createdAt,
         updatedAt: knowledgeUnitsTable.updatedAt,
-        distance: sql<number>`${knowledgeEmbeddingsTable.embedding} <=> ${vectorParam}::vector`
+        distance: distanceExpr
       })
       .from(knowledgeUnitsTable)
       .innerJoin(
@@ -336,16 +338,19 @@ export class KnowledgeRepository extends Repository {
           scopeConditions,
           activeDateCondition,
           contentTypeCondition,
-          isNotNull(knowledgeEmbeddingsTable.embedding),
-          sql`${knowledgeEmbeddingsTable.embedding} <=> ${vectorParam}::vector < 0.3`
+          isNotNull(knowledgeEmbeddingsTable.embedding)
         )
       )
-      .orderBy(
-        sql`${knowledgeEmbeddingsTable.embedding} <=> ${vectorParam}::vector`
-      )
+      .orderBy(distanceExpr)
       .limit(limit);
 
-    return rows as KnowledgeUnit[];
+    return rows
+      .filter((row) => row.distance < 0.3)
+      .map((row) => {
+        const { distance, ...unit } = row;
+        void distance;
+        return unit;
+      }) as KnowledgeUnit[];
   }
 
   async findPublishedRules(input: {
