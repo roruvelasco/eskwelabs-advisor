@@ -179,7 +179,7 @@ Prompt cache admin endpoints return metadata only. They never return advisor pro
 | `POST` | `/api/admin/knowledge/refresh`                   | Refresh all currently published sources                               |
 | `GET`  | `/api/admin/knowledge/sources/:sourceId/units`   | List source-backed unit metadata                                      |
 | `GET`  | `/api/admin/knowledge/health`                    | Return knowledge source health summary                                |
-| `GET`  | `/api/admin/knowledge/search`                    | Metadata-only lexical search preview (`?query&advisorId&limit`)       |
+| `GET`  | `/api/admin/knowledge/search`                    | Metadata-only admin search preview (`?query&advisorId&limit`)         |
 
 Knowledge admin endpoints do not return raw unit text by default. Chat-time evidence selection is server-only and audited in `message_knowledge_audit`.
 

@@ -60,8 +60,8 @@ import {
 import { KnowledgeIngestionService } from '../knowledge/knowledge-ingestion.service';
 import { KnowledgeJobsController } from '../knowledge/knowledge-jobs.controller';
 import {
-  DeterministicEmbeddingProvider,
-  NoopKnowledgeIndexProvider,
+  GroqEmbeddingProvider,
+  PostgresKnowledgeIndexProvider,
   type EmbeddingProvider,
   type KnowledgeIndexProvider
 } from '../knowledge/knowledge-providers';
@@ -372,17 +372,26 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
           return new NoopKnowledgeContextResolver();
         }
         return new RepositoryKnowledgeContextResolver(
-          c.get(KnowledgeRepository)
+          c.get(KnowledgeRepository),
+          c.get(EMBEDDING_PROVIDER)
         );
       }
     })
     .bind({
       provide: EMBEDDING_PROVIDER,
-      useFactory: () => new DeterministicEmbeddingProvider()
+      useFactory: (c) => {
+        const env = c.get(SERVER_ENV);
+        return new GroqEmbeddingProvider(env.GROQ_API_KEY, env.GROQ_BASE_URL);
+      }
     })
     .bind({
       provide: KNOWLEDGE_INDEX_PROVIDER,
-      useFactory: () => new NoopKnowledgeIndexProvider()
+      useFactory: (c) => {
+        return new PostgresKnowledgeIndexProvider(
+          c.get(DrizzleService),
+          c.get(EMBEDDING_PROVIDER)
+        );
+      }
     })
     .bind({
       provide: UsageCountersService,

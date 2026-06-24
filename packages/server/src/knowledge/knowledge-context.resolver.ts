@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import type { AnswerMode } from '../messages/query-policy.types';
+import type { EmbeddingProvider } from './knowledge-providers';
 import type { KnowledgeRepository } from './knowledge.repository';
 import type { KnowledgeRule } from './knowledge-rules.schema';
 import type { KnowledgeUnit } from './knowledge-units.schema';
@@ -13,11 +14,11 @@ export type KnowledgeEvidence = {
   title: string;
   text: string;
   score?: string;
-  strategy: 'structured_rule' | 'lexical' | 'none';
+  strategy: 'structured_rule' | 'semantic' | 'none';
 };
 
 export type KnowledgeContext = {
-  mode: 'none' | 'structured_rule' | 'lexical' | 'hybrid';
+  mode: 'none' | 'structured_rule' | 'semantic';
   evidence: KnowledgeEvidence[];
   contextText: string;
   contextHash: string;
@@ -70,7 +71,10 @@ export class NoopKnowledgeContextResolver implements KnowledgeContextResolver {
 }
 
 export class RepositoryKnowledgeContextResolver implements KnowledgeContextResolver {
-  constructor(private knowledgeRepository: KnowledgeRepository) {}
+  constructor(
+    private knowledgeRepository: KnowledgeRepository,
+    private embeddingProvider: EmbeddingProvider
+  ) {}
 
   async resolve(input: KnowledgeContextInput) {
     if (
@@ -96,17 +100,32 @@ export class RepositoryKnowledgeContextResolver implements KnowledgeContextResol
       );
     }
 
-    const units = await this.knowledgeRepository.searchPublishedUnits({
-      query: input.userContent,
-      advisorId: input.advisorId,
-      contentTypes: this.contentTypesForMode(input.answerMode),
-      limit: 6
-    });
+    const contentTypes = this.contentTypesForMode(input.answerMode);
 
-    return contextFromEvidence(
-      units.length > 0 ? 'lexical' : 'none',
-      units.map((unit, index) => this.unitEvidence(unit, index))
-    );
+    try {
+      const embeddings = await this.embeddingProvider.embedTexts([
+        input.userContent
+      ]);
+      const embeddingVector = embeddings[0]?.vector;
+
+      if (!embeddingVector) {
+        return contextFromEvidence('none', []);
+      }
+
+      const units = await this.knowledgeRepository.searchUnitsByVector({
+        embeddingVector,
+        advisorId: input.advisorId,
+        contentTypes,
+        limit: 6
+      });
+
+      return contextFromEvidence(
+        units.length > 0 ? 'semantic' : 'none',
+        units.map((unit, index) => this.unitEvidence(unit, index))
+      );
+    } catch {
+      return contextFromEvidence('none', []);
+    }
   }
 
   private contentTypesForMode(answerMode: AnswerMode) {
@@ -139,7 +158,7 @@ export class RepositoryKnowledgeContextResolver implements KnowledgeContextResol
       title: unit.sectionPath || unit.contentType,
       text: unit.summary ? `${unit.summary}\n\n${unit.text}` : unit.text,
       score: String(1 - index / 10),
-      strategy: 'lexical'
+      strategy: 'semantic'
     };
   }
 }

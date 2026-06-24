@@ -7,6 +7,7 @@ import {
   gt,
   ilike,
   inArray,
+  isNotNull,
   isNull,
   lt,
   or,
@@ -16,6 +17,7 @@ import {
 import { Repository } from '../common/factories/repository.factory';
 import { decodeCursor, paginateResult } from '../common/pagination';
 import type { PaginatedResult } from '../common/pagination';
+import { knowledgeEmbeddingsTable } from './knowledge-embeddings.schema';
 import {
   knowledgeRulesTable,
   type KnowledgeRule
@@ -271,6 +273,79 @@ export class KnowledgeRepository extends Repository {
       .limit(limit);
 
     return rows;
+  }
+
+  async searchUnitsByVector(input: {
+    embeddingVector: number[];
+    advisorId?: string;
+    contentTypes?: string[];
+    limit?: number;
+  }): Promise<KnowledgeUnit[]> {
+    const limit = input.limit ?? 6;
+    const now = new Date();
+    const vectorParam = JSON.stringify(input.embeddingVector);
+
+    const scopeConditions = input.advisorId
+      ? inArray(knowledgeUnitsTable.advisorScope, ['global', input.advisorId])
+      : eq(knowledgeUnitsTable.advisorScope, 'global');
+
+    const activeDateCondition = and(
+      or(
+        isNull(knowledgeUnitsTable.effectiveFrom),
+        lt(knowledgeUnitsTable.effectiveFrom, now)
+      ),
+      or(
+        isNull(knowledgeUnitsTable.effectiveTo),
+        gt(knowledgeUnitsTable.effectiveTo, now)
+      )
+    );
+
+    const contentTypeCondition =
+      input.contentTypes && input.contentTypes.length > 0
+        ? inArray(knowledgeUnitsTable.contentType, input.contentTypes)
+        : undefined;
+
+    const rows = await this.drizzle.db
+      .select({
+        id: knowledgeUnitsTable.id,
+        sourceId: knowledgeUnitsTable.sourceId,
+        sourceRevision: knowledgeUnitsTable.sourceRevision,
+        sectionPath: knowledgeUnitsTable.sectionPath,
+        contentType: knowledgeUnitsTable.contentType,
+        advisorScope: knowledgeUnitsTable.advisorScope,
+        audience: knowledgeUnitsTable.audience,
+        status: knowledgeUnitsTable.status,
+        text: knowledgeUnitsTable.text,
+        summary: knowledgeUnitsTable.summary,
+        contentHash: knowledgeUnitsTable.contentHash,
+        effectiveFrom: knowledgeUnitsTable.effectiveFrom,
+        effectiveTo: knowledgeUnitsTable.effectiveTo,
+        metadata: knowledgeUnitsTable.metadata,
+        createdAt: knowledgeUnitsTable.createdAt,
+        updatedAt: knowledgeUnitsTable.updatedAt,
+        distance: sql<number>`${knowledgeEmbeddingsTable.embedding} <=> ${vectorParam}::vector`
+      })
+      .from(knowledgeUnitsTable)
+      .innerJoin(
+        knowledgeEmbeddingsTable,
+        eq(knowledgeUnitsTable.id, knowledgeEmbeddingsTable.unitId)
+      )
+      .where(
+        and(
+          eq(knowledgeUnitsTable.status, 'published'),
+          scopeConditions,
+          activeDateCondition,
+          contentTypeCondition,
+          isNotNull(knowledgeEmbeddingsTable.embedding),
+          sql`${knowledgeEmbeddingsTable.embedding} <=> ${vectorParam}::vector < 0.3`
+        )
+      )
+      .orderBy(
+        sql`${knowledgeEmbeddingsTable.embedding} <=> ${vectorParam}::vector`
+      )
+      .limit(limit);
+
+    return rows as KnowledgeUnit[];
   }
 
   async findPublishedRules(input: {

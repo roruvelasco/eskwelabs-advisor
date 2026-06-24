@@ -194,13 +194,13 @@ Indexes: `knowledge_units_source_revision_idx`, `knowledge_units_scope_status_id
 
 ### `knowledge_embeddings` (`knowledgeEmbeddingsTable` in code, `knowledge_embeddings` in DB)
 
-Provider-neutral embedding/index metadata for future vector or managed retrieval providers.
+pgvector-powered embedding storage for semantic retrieval. Uses HNSW index with cosine distance.
 
-Key columns: `id`, `unit_id`, `provider`, `model`, `dimensions`, `vector_payload`, `external_vector_id`, `embedding_hash`, `indexed_at`.
+Key columns: `id`, `unit_id`, `provider`, `model`, `dimensions`, `embedding` (vector(768)), `external_vector_id`, `embedding_hash`, `indexed_at`.
 
 ### `knowledge_rules` (`knowledgeRulesTable` in code, `knowledge_rules` in DB)
 
-Structured high-confidence operational facts used before lexical/vector retrieval.
+Structured high-confidence operational facts used before vector retrieval.
 
 Key columns: `id`, `topic`, `applies_to`, `canonical_answer`, `source_unit_id`, `priority`, `status`, `effective_from`, `effective_to`, timestamps.
 

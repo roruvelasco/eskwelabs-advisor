@@ -5,16 +5,25 @@ import { KnowledgeIngestionService } from '../knowledge-ingestion.service';
 import { KnowledgeService } from '../knowledge.service';
 import type { AnswerMode } from '../../messages/query-policy.types';
 
+function fakeEmbeddingProvider(vector: number[] = [0.1, 0.2, 0.3]) {
+  return {
+    embedTexts: async () => [{ text: '', vector, hash: 'hash-abc' }]
+  };
+}
+
 describe('knowledge context resolver', () => {
   test('skips retrieval for mentoring turns', async () => {
     let searched = false;
-    const resolver = new RepositoryKnowledgeContextResolver({
-      findPublishedRules: async () => [],
-      searchPublishedUnits: async () => {
-        searched = true;
-        return [];
-      }
-    } as never);
+    const resolver = new RepositoryKnowledgeContextResolver(
+      {
+        findPublishedRules: async () => [],
+        searchUnitsByVector: async () => {
+          searched = true;
+          return [];
+        }
+      } as never,
+      fakeEmbeddingProvider()
+    );
 
     const result = await resolver.resolve({
       advisorId: 'data-dashboard',
@@ -28,18 +37,21 @@ describe('knowledge context resolver', () => {
   });
 
   test('prefers structured rules for factual policy turns', async () => {
-    const resolver = new RepositoryKnowledgeContextResolver({
-      findPublishedRules: async () => [
-        {
-          id: 'rule-1',
-          topic: 'Refund policy',
-          canonicalAnswer: 'Refund requests must be escalated to operations.'
+    const resolver = new RepositoryKnowledgeContextResolver(
+      {
+        findPublishedRules: async () => [
+          {
+            id: 'rule-1',
+            topic: 'Refund policy',
+            canonicalAnswer: 'Refund requests must be escalated to operations.'
+          }
+        ],
+        searchUnitsByVector: async () => {
+          throw new Error('should not search when a rule matches');
         }
-      ],
-      searchPublishedUnits: async () => {
-        throw new Error('should not search when a rule matches');
-      }
-    } as never);
+      } as never,
+      fakeEmbeddingProvider()
+    );
 
     const result = await resolver.resolve({
       advisorId: 'data-dashboard',
@@ -57,24 +69,31 @@ describe('knowledge context resolver', () => {
     expect(result.contextText).toContain('Refund requests');
   });
 
-  test('uses scoped lexical units when no structured rule matches', async () => {
-    const resolver = new RepositoryKnowledgeContextResolver({
-      findPublishedRules: async () => [],
-      searchPublishedUnits: async (input: { advisorId?: string }) => {
-        expect(input.advisorId).toBe('data-dashboard');
-        return [
-          {
-            id: 'unit-1',
-            sourceRevision: 'rev-1',
-            contentHash: 'hash-1',
-            sectionPath: 'Dashboard rubric',
-            contentType: 'rubric',
-            text: 'Use clear KPI hierarchy.',
-            summary: 'Dashboard rubric summary.'
-          }
-        ];
-      }
-    } as never);
+  test('uses semantic vector search when no structured rule matches', async () => {
+    const resolver = new RepositoryKnowledgeContextResolver(
+      {
+        findPublishedRules: async () => [],
+        searchUnitsByVector: async (input: {
+          embeddingVector: number[];
+          advisorId?: string;
+        }) => {
+          expect(input.advisorId).toBe('data-dashboard');
+          expect(input.embeddingVector).toEqual([0.1, 0.2, 0.3]);
+          return [
+            {
+              id: 'unit-1',
+              sourceRevision: 'rev-1',
+              contentHash: 'hash-1',
+              sectionPath: 'Dashboard rubric',
+              contentType: 'rubric',
+              text: 'Use clear KPI hierarchy.',
+              summary: 'Dashboard rubric summary.'
+            }
+          ];
+        }
+      } as never,
+      fakeEmbeddingProvider()
+    );
 
     const result = await resolver.resolve({
       advisorId: 'data-dashboard',
@@ -82,10 +101,10 @@ describe('knowledge context resolver', () => {
       answerMode: 'technical_guidance'
     });
 
-    expect(result.mode).toBe('lexical');
+    expect(result.mode).toBe('semantic');
     expect(result.evidence[0]).toMatchObject({
       unitId: 'unit-1',
-      strategy: 'lexical',
+      strategy: 'semantic',
       sourceRevision: 'rev-1',
       contentHash: 'hash-1'
     });
@@ -95,8 +114,8 @@ describe('knowledge context resolver', () => {
     label: string;
     answerMode: AnswerMode;
     userContent: string;
-    expectedMode: 'none' | 'structured_rule' | 'lexical';
-    expectedStrategy?: 'structured_rule' | 'lexical' | 'none';
+    expectedMode: 'none' | 'structured_rule' | 'semantic';
+    expectedStrategy?: 'structured_rule' | 'semantic' | 'none';
     shouldSearch: boolean;
   }> = [
     {
@@ -132,8 +151,8 @@ describe('knowledge context resolver', () => {
       label: 'technical: KPI structuring',
       answerMode: 'technical_guidance',
       userContent: 'How should I structure dashboard KPIs?',
-      expectedMode: 'lexical',
-      expectedStrategy: 'lexical',
+      expectedMode: 'semantic',
+      expectedStrategy: 'semantic',
       shouldSearch: true
     }
   ];
@@ -141,35 +160,38 @@ describe('knowledge context resolver', () => {
   for (const fixture of goldenFixtures) {
     test(`golden: ${fixture.label}`, async () => {
       let searched = false;
-      const resolver = new RepositoryKnowledgeContextResolver({
-        findPublishedRules: async () =>
-          fixture.answerMode === 'factual_policy'
-            ? [
-                {
-                  id: 'rule-1',
-                  topic: 'Refund policy',
-                  canonicalAnswer:
-                    'Refund requests must be escalated to operations.'
-                }
-              ]
-            : [],
-        searchPublishedUnits: async () => {
-          searched = true;
-          return fixture.answerMode === 'technical_guidance'
-            ? [
-                {
-                  id: 'unit-1',
-                  sourceRevision: 'rev-1',
-                  contentHash: 'hash-1',
-                  sectionPath: 'Dashboard rubric',
-                  contentType: 'rubric',
-                  text: 'Use clear KPI hierarchy.',
-                  summary: 'Dashboard rubric summary.'
-                }
-              ]
-            : [];
-        }
-      } as never);
+      const resolver = new RepositoryKnowledgeContextResolver(
+        {
+          findPublishedRules: async () =>
+            fixture.answerMode === 'factual_policy'
+              ? [
+                  {
+                    id: 'rule-1',
+                    topic: 'Refund policy',
+                    canonicalAnswer:
+                      'Refund requests must be escalated to operations.'
+                  }
+                ]
+              : [],
+          searchUnitsByVector: async () => {
+            searched = true;
+            return fixture.answerMode === 'technical_guidance'
+              ? [
+                  {
+                    id: 'unit-1',
+                    sourceRevision: 'rev-1',
+                    contentHash: 'hash-1',
+                    sectionPath: 'Dashboard rubric',
+                    contentType: 'rubric',
+                    text: 'Use clear KPI hierarchy.',
+                    summary: 'Dashboard rubric summary.'
+                  }
+                ]
+              : [];
+          }
+        } as never,
+        fakeEmbeddingProvider()
+      );
 
       const result = await resolver.resolve({
         advisorId: 'data-dashboard',
@@ -194,18 +216,21 @@ describe('knowledge context resolver', () => {
   }
 
   test('golden: context text formats evidence XML correctly', async () => {
-    const resolver = new RepositoryKnowledgeContextResolver({
-      findPublishedRules: async () => [
-        {
-          id: 'rule-1',
-          topic: 'Enrollment deadline',
-          canonicalAnswer: 'Enrollment closes on March 15 every year.'
+    const resolver = new RepositoryKnowledgeContextResolver(
+      {
+        findPublishedRules: async () => [
+          {
+            id: 'rule-1',
+            topic: 'Enrollment deadline',
+            canonicalAnswer: 'Enrollment closes on March 15 every year.'
+          }
+        ],
+        searchUnitsByVector: async () => {
+          throw new Error('should not search when rule matches');
         }
-      ],
-      searchPublishedUnits: async () => {
-        throw new Error('should not search when rule matches');
-      }
-    } as never);
+      } as never,
+      fakeEmbeddingProvider()
+    );
 
     const result = await resolver.resolve({
       advisorId: 'data-dashboard',
@@ -220,15 +245,46 @@ describe('knowledge context resolver', () => {
     expect(result.contextText).toContain('Enrollment closes on March 15');
   });
 
+  test('golden: embedding failure returns empty context', async () => {
+    let searched = false;
+    const resolver = new RepositoryKnowledgeContextResolver(
+      {
+        findPublishedRules: async () => [],
+        searchUnitsByVector: async () => {
+          searched = true;
+          return [];
+        }
+      } as never,
+      {
+        embedTexts: async () => {
+          throw new Error('API failure');
+        }
+      }
+    );
+
+    const result = await resolver.resolve({
+      advisorId: 'data-dashboard',
+      userContent: 'What are the KPIs?',
+      answerMode: 'technical_guidance'
+    });
+
+    expect(result.mode).toBe('none');
+    expect(result.evidence).toEqual([]);
+    expect(searched).toBe(false);
+  });
+
   test('golden: empty user content still resolves correctly', async () => {
     let searched = false;
-    const resolver = new RepositoryKnowledgeContextResolver({
-      findPublishedRules: async () => [],
-      searchPublishedUnits: async () => {
-        searched = true;
-        return [];
-      }
-    } as never);
+    const resolver = new RepositoryKnowledgeContextResolver(
+      {
+        findPublishedRules: async () => [],
+        searchUnitsByVector: async () => {
+          searched = true;
+          return [];
+        }
+      } as never,
+      fakeEmbeddingProvider()
+    );
 
     const result = await resolver.resolve({
       advisorId: 'data-dashboard',

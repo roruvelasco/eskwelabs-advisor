@@ -124,11 +124,11 @@ Every backend domain at `packages/server/src/<domain>/` follows the same layout:
 ### Knowledge Context Flow
 
 - The `knowledge` domain is the post-MVP path for source-backed factual grounding without growing the always-on advisor prompt.
-- `KnowledgeIngestionService` ingests registered Google Doc sources into versioned `knowledge_units`; source text remains server-side and admin endpoints return metadata only. After ingestion, units are optionally indexed via `KNOWLEDGE_INDEX_PROVIDER` (currently `NoopKnowledgeIndexProvider`; future implementations can swap in vector/managed search).
-- `KNOWLEDGE_CONTEXT_RESOLVER` selects query-specific evidence during `MessagesService.prepareTurn()`. Mentoring and clarification turns skip retrieval; factual policy turns prefer `knowledge_rules`; technical/course-resource turns use scoped lexical unit search.
+- `KnowledgeIngestionService` ingests registered Google Doc sources into versioned `knowledge_units`; source text remains server-side and admin endpoints return metadata only. After ingestion, units are indexed via `KNOWLEDGE_INDEX_PROVIDER` (`PostgresKnowledgeIndexProvider`) which generates Groq embeddings and stores them in pgvector.
+- `KNOWLEDGE_CONTEXT_RESOLVER` selects query-specific evidence during `MessagesService.prepareTurn()`. Mentoring and clarification turns skip retrieval; factual policy turns prefer `knowledge_rules`; all other modes use semantic vector search (cosine similarity, threshold < 0.3) via `EMBEDDING_PROVIDER`.
 - Selected evidence is injected as a bounded `<selected_knowledge_context>` section, while the advisor prompt and DNA remain behavioral runtime context.
 - Assistant messages record aggregate knowledge metadata, and `message_knowledge_audit` records selected unit/rule IDs, source revisions, hashes, rank, score, and resolver strategy.
-- `EMBEDDING_PROVIDER` (`DeterministicEmbeddingProvider` by default) is wired for future vector embedding of knowledge units when semantic search is enabled.
+- `EMBEDDING_PROVIDER` (`GroqEmbeddingProvider` using `nomic-embed-text-v1.5`, 768d) generates dense vectors for semantic retrieval. Embedding failures fail closed (empty context, no fallback to token-matching).
 
 ### Conversation Title Flow
 
