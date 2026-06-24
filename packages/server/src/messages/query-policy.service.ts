@@ -236,7 +236,7 @@ export class QueryPolicyService {
       }
 
       if (bestScore >= SEMANTIC_THRESHOLD) {
-        return this.result(bestMode, false);
+        return this.result(bestMode, bestMode === 'factual_policy');
       }
     } catch {
       // fall through to mentoring

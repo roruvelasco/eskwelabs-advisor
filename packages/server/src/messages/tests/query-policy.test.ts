@@ -200,6 +200,7 @@ describe('semantic embedding layer', () => {
     });
 
     expect(result.answerMode).toBe('technical_guidance');
+    expect(result.requiresDnaSupport).toBe(false);
     expect(embeddingCalls.length).toBeGreaterThan(0);
   });
 
@@ -209,7 +210,7 @@ describe('semantic embedding layer', () => {
         return texts.map((t) => ({
           text: t,
           vector:
-            t === 'How do I get my certificate'
+            texts.length === 1 || t === 'How do I get my certificate'
               ? new Array(768).fill(1)
               : new Array(768).fill(0),
           hash: ''
@@ -218,10 +219,11 @@ describe('semantic embedding layer', () => {
     });
 
     const result = await service.classify({
-      userContent: 'Can I get my certificate after I finish'
+      userContent: 'How do I know when I am done with everything'
     });
 
     expect(result.answerMode).toBe('factual_policy');
+    expect(result.requiresDnaSupport).toBe(true);
   });
 
   test('catches embedding API failure and falls back to mentoring', async () => {

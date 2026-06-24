@@ -109,6 +109,7 @@ export class GroqEmbeddingProvider implements EmbeddingProvider {
 
     const payload = (await response.json()) as GroqEmbeddingResponse;
 
+    payload.data.sort((a, b) => a.index - b.index);
     for (let j = 0; j < uncached.length; j++) {
       const idx = uncached[j];
       const entry = payload.data[j];
