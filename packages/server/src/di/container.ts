@@ -110,7 +110,6 @@ import { UsersController } from '../users/users.controller';
 import { UsersRepository } from '../users/users.repository';
 import { UsersSerializer } from '../users/users.serializer';
 import { UsersService } from '../users/users.service';
-import { HttpException } from '../common/http/http-exception';
 
 export const SERVER_ENV = new InjectionToken<ServerEnv>('SERVER_ENV');
 export const DNA_DIGEST_SUMMARIZER = new InjectionToken<DnaDigestSummarizer>(
@@ -433,54 +432,19 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
       provide: PROMPT_CONTEXT_LOADER,
       useFactory: (c) => {
         const env = c.get(SERVER_ENV);
-        const mode = env.PROMPT_PROVIDER_MODE;
 
-        // Explicit deterministic override — always fake, regardless of other config.
-        if (mode === 'deterministic') {
+        if (env.PROMPT_PROVIDER_MODE === 'deterministic') {
           return new DeterministicPromptContextService(
             c.get(CompiledSystemPromptBuilder)
           );
         }
 
-        // Snapshot-only mode — serve from PG snapshots without live Doc fetch.
-        if (mode === 'snapshot') {
-          return new PromptContextService(
-            c.get(PromptSnapshotsRepository),
-            c.get(DnaDigestsRepository),
-            c.get(RedisService),
-            c.get(CompiledSystemPromptBuilder),
-            c.get(TelemetryService)
-          );
-        }
-
-        if (
-          (env.GOOGLE_DOCS_SERVICE_ACCOUNT_JSON || env.GOOGLE_REFRESH_TOKEN) &&
-          env.GOOGLE_DOCS_DNA_DOC_ID
-        ) {
-          return new PromptContextService(
-            c.get(PromptSnapshotsRepository),
-            c.get(DnaDigestsRepository),
-            c.get(RedisService),
-            c.get(CompiledSystemPromptBuilder),
-            c.get(TelemetryService),
-            c.get(PromptIngestionService)
-          );
-        }
-
-        if (env.RUNTIME_PROFILE === 'production') {
-          return {
-            async getForAdvisor() {
-              throw new HttpException(
-                503,
-                'Google Docs prompt context is not configured',
-                'prompt_provider_not_configured'
-              );
-            }
-          };
-        }
-
-        return new DeterministicPromptContextService(
-          c.get(CompiledSystemPromptBuilder)
+        return new PromptContextService(
+          c.get(PromptSnapshotsRepository),
+          c.get(DnaDigestsRepository),
+          c.get(RedisService),
+          c.get(CompiledSystemPromptBuilder),
+          c.get(TelemetryService)
         );
       }
     })
