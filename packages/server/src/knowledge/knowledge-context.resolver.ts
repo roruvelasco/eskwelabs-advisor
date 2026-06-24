@@ -14,7 +14,7 @@ export type KnowledgeEvidence = {
   title: string;
   text: string;
   score?: string;
-  strategy: 'structured_rule' | 'semantic' | 'none';
+  strategy: 'structured_rule' | 'semantic' | 'lexical' | 'none';
 };
 
 export type KnowledgeContext = {
@@ -38,7 +38,93 @@ function sha256(value: string) {
   return createHash('sha256').update(value.trim()).digest('hex');
 }
 
-function contextFromEvidence(
+export function contentTypesForMode(
+  answerMode: AnswerMode
+): string[] | undefined {
+  if (answerMode === 'factual_policy') {
+    return ['policy', 'faq', 'ops_rule'];
+  }
+
+  if (answerMode === 'technical_guidance') {
+    return ['course_material', 'mentor_guide', 'rubric', 'advisor_reference'];
+  }
+
+  return undefined;
+}
+
+export function ruleEvidence(
+  rule: KnowledgeRule,
+  index: number
+): KnowledgeEvidence {
+  return {
+    ruleId: rule.id,
+    title: rule.topic,
+    text: rule.canonicalAnswer,
+    score: String(1 - index / 10),
+    strategy: 'structured_rule'
+  };
+}
+
+export function unitEvidence(
+  unit: KnowledgeUnit,
+  index: number,
+  strategy: 'semantic' | 'lexical' = 'semantic'
+): KnowledgeEvidence {
+  return {
+    unitId: unit.id,
+    sourceRevision: unit.sourceRevision,
+    contentHash: unit.contentHash,
+    title: unit.sectionPath || unit.contentType,
+    text: unit.summary ? `${unit.summary}\n\n${unit.text}` : unit.text,
+    score: String(1 - index / 10),
+    strategy
+  };
+}
+
+export function determineMode(
+  evidence: KnowledgeEvidence[]
+): KnowledgeContext['mode'] {
+  if (evidence.length === 0) return 'none';
+  const hasRules = evidence.some((e) => e.strategy === 'structured_rule');
+  const hasUnits = evidence.some(
+    (e) => e.strategy === 'semantic' || e.strategy === 'lexical'
+  );
+  if (hasRules && hasUnits) return 'hybrid';
+  if (hasRules) return 'structured_rule';
+  if (hasUnits) {
+    const firstUnit = evidence.find(
+      (e) => e.strategy === 'semantic' || e.strategy === 'lexical'
+    );
+    return firstUnit?.strategy === 'lexical' ? 'semantic' : 'semantic';
+  }
+  return 'none';
+}
+
+export function truncateEvidence(
+  evidence: KnowledgeEvidence[],
+  maxItems = 6,
+  maxChars = 6000
+): KnowledgeEvidence[] {
+  const result: KnowledgeEvidence[] = [];
+  let totalChars = 0;
+
+  for (const item of evidence) {
+    if (result.length >= maxItems) break;
+    const evidenceOverhead =
+      90 +
+      item.title.length +
+      (item.sourceRevision ? 20 + (item.sourceRevision ?? '').length : 0);
+    const estimated = item.text.length + evidenceOverhead;
+    if (totalChars + estimated <= maxChars) {
+      result.push(item);
+      totalChars += estimated;
+    }
+  }
+
+  return result;
+}
+
+export function contextFromEvidence(
   mode: KnowledgeContext['mode'],
   evidence: KnowledgeEvidence[]
 ): KnowledgeContext {
@@ -92,7 +178,7 @@ export class RepositoryKnowledgeContextResolver implements KnowledgeContextResol
       return contextFromEvidence('none', []);
     }
 
-    const contentTypes = this.contentTypesForMode(input.answerMode);
+    const contentTypes = contentTypesForMode(input.answerMode);
 
     const rulesPromise = this.knowledgeRepository.findPublishedRules({
       query: input.userContent,
@@ -119,77 +205,17 @@ export class RepositoryKnowledgeContextResolver implements KnowledgeContextResol
 
     const [rules, units] = await Promise.all([rulesPromise, semanticPromise]);
 
-    const ruleEvidence = rules.map((rule, index) =>
-      this.ruleEvidence(rule, index)
+    const ruleEvidenceItems = rules.map((rule, index) =>
+      ruleEvidence(rule, index)
     );
-    const unitEvidence = units.map((unit, index) =>
-      this.unitEvidence(unit, index)
+    const unitEvidenceItems = units.map((unit, index) =>
+      unitEvidence(unit, index)
     );
-    const combined = [...ruleEvidence, ...unitEvidence];
+    const combined = [...ruleEvidenceItems, ...unitEvidenceItems];
 
-    const finalEvidence: KnowledgeEvidence[] = [];
-    let totalChars = 0;
-
-    for (const item of combined) {
-      if (finalEvidence.length >= 6) break;
-      const evidenceOverhead =
-        90 +
-        item.title.length +
-        (item.sourceRevision ? 20 + (item.sourceRevision ?? '').length : 0);
-      const estimated = item.text.length + evidenceOverhead;
-      if (totalChars + estimated <= 6000) {
-        finalEvidence.push(item);
-        totalChars += estimated;
-      }
-    }
-
-    const mode = this.determineMode(finalEvidence);
+    const finalEvidence = truncateEvidence(combined);
+    const mode = determineMode(finalEvidence);
 
     return contextFromEvidence(mode, finalEvidence);
-  }
-
-  private determineMode(
-    evidence: KnowledgeEvidence[]
-  ): KnowledgeContext['mode'] {
-    if (evidence.length === 0) return 'none';
-    const hasRules = evidence.some((e) => e.strategy === 'structured_rule');
-    const hasUnits = evidence.some((e) => e.strategy === 'semantic');
-    if (hasRules && hasUnits) return 'hybrid';
-    if (hasRules) return 'structured_rule';
-    return 'semantic';
-  }
-
-  private contentTypesForMode(answerMode: AnswerMode) {
-    if (answerMode === 'factual_policy') {
-      return ['policy', 'faq', 'ops_rule'];
-    }
-
-    if (answerMode === 'technical_guidance') {
-      return ['course_material', 'mentor_guide', 'rubric', 'advisor_reference'];
-    }
-
-    return undefined;
-  }
-
-  private ruleEvidence(rule: KnowledgeRule, index: number): KnowledgeEvidence {
-    return {
-      ruleId: rule.id,
-      title: rule.topic,
-      text: rule.canonicalAnswer,
-      score: String(1 - index / 10),
-      strategy: 'structured_rule'
-    };
-  }
-
-  private unitEvidence(unit: KnowledgeUnit, index: number): KnowledgeEvidence {
-    return {
-      unitId: unit.id,
-      sourceRevision: unit.sourceRevision,
-      contentHash: unit.contentHash,
-      title: unit.sectionPath || unit.contentType,
-      text: unit.summary ? `${unit.summary}\n\n${unit.text}` : unit.text,
-      score: String(1 - index / 10),
-      strategy: 'semantic'
-    };
   }
 }
