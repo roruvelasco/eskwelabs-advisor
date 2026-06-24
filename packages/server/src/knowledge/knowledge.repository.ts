@@ -6,7 +6,6 @@ import {
   eq,
   gt,
   inArray,
-  isNotNull,
   isNull,
   lt,
   or,
@@ -184,6 +183,20 @@ export class KnowledgeRepository extends Repository {
     units: CreateKnowledgeUnitInput[];
   }) {
     return this.drizzle.db.transaction(async (tx) => {
+      const oldUnitIds = await tx
+        .select({ id: knowledgeUnitsTable.id })
+        .from(knowledgeUnitsTable)
+        .where(eq(knowledgeUnitsTable.sourceId, input.sourceId));
+
+      if (oldUnitIds.length > 0) {
+        await tx.delete(knowledgeEmbeddingsTable).where(
+          inArray(
+            knowledgeEmbeddingsTable.unitId,
+            oldUnitIds.map((u) => u.id)
+          )
+        );
+      }
+
       await tx
         .update(knowledgeUnitsTable)
         .set({ status: 'retired', updatedAt: new Date() })
@@ -287,75 +300,129 @@ export class KnowledgeRepository extends Repository {
     limit?: number;
   }): Promise<KnowledgeUnit[]> {
     const limit = input.limit ?? 6;
+    const overFetch = Math.max(limit * 10, 50);
     const now = new Date();
     const vectorParam = JSON.stringify(input.embeddingVector);
 
-    const scopeConditions = input.advisorId
-      ? inArray(knowledgeUnitsTable.advisorScope, ['global', input.advisorId])
-      : eq(knowledgeUnitsTable.advisorScope, 'global');
+    return this.drizzle.db.transaction(async (tx) => {
+      await tx.execute(sql`SET LOCAL hnsw.ef_search = 100`);
+      await tx.execute(sql`SET LOCAL hnsw.iterative_scan = strict_order`);
 
-    const activeDateCondition = and(
-      or(
-        isNull(knowledgeUnitsTable.effectiveFrom),
-        lt(knowledgeUnitsTable.effectiveFrom, now)
-      ),
-      or(
-        isNull(knowledgeUnitsTable.effectiveTo),
-        gt(knowledgeUnitsTable.effectiveTo, now)
-      )
-    );
+      const contentTypeFilter =
+        input.contentTypes && input.contentTypes.length > 0
+          ? sql`AND ke.content_type = ANY(${input.contentTypes})`
+          : sql``;
 
-    const contentTypeCondition =
-      input.contentTypes && input.contentTypes.length > 0
-        ? inArray(knowledgeUnitsTable.contentType, input.contentTypes)
-        : undefined;
+      const globalSubQuery = sql`
+        SELECT * FROM (
+          SELECT ke.unit_id,
+                 ke.embedding <=> (${vectorParam})::vector AS distance
+          FROM knowledge_embeddings ke
+          WHERE ke.embedding IS NOT NULL
+            AND ke.status = 'published'
+            AND ke.advisor_scope = 'global'
+            ${contentTypeFilter}
+          ORDER BY distance
+          LIMIT ${overFetch}
+        ) global_branch
+      `;
 
-    const distanceExpr = sql<number>`${knowledgeEmbeddingsTable.embedding} <=> ${vectorParam}::vector`;
+      const advisorSubQuery = input.advisorId
+        ? sql`
+          SELECT * FROM (
+            SELECT ke.unit_id,
+                   ke.embedding <=> (${vectorParam})::vector AS distance
+            FROM knowledge_embeddings ke
+            WHERE ke.embedding IS NOT NULL
+              AND ke.status = 'published'
+              AND ke.advisor_scope = ${input.advisorId}
+              ${contentTypeFilter}
+            ORDER BY distance
+            LIMIT ${overFetch}
+          ) advisor_branch
+        `
+        : null;
 
-    const rows = await this.drizzle.db
-      .select({
-        id: knowledgeUnitsTable.id,
-        sourceId: knowledgeUnitsTable.sourceId,
-        sourceRevision: knowledgeUnitsTable.sourceRevision,
-        sectionPath: knowledgeUnitsTable.sectionPath,
-        contentType: knowledgeUnitsTable.contentType,
-        advisorScope: knowledgeUnitsTable.advisorScope,
-        audience: knowledgeUnitsTable.audience,
-        status: knowledgeUnitsTable.status,
-        text: knowledgeUnitsTable.text,
-        summary: knowledgeUnitsTable.summary,
-        contentHash: knowledgeUnitsTable.contentHash,
-        effectiveFrom: knowledgeUnitsTable.effectiveFrom,
-        effectiveTo: knowledgeUnitsTable.effectiveTo,
-        metadata: knowledgeUnitsTable.metadata,
-        createdAt: knowledgeUnitsTable.createdAt,
-        updatedAt: knowledgeUnitsTable.updatedAt,
-        distance: distanceExpr
-      })
-      .from(knowledgeUnitsTable)
-      .innerJoin(
-        knowledgeEmbeddingsTable,
-        eq(knowledgeUnitsTable.id, knowledgeEmbeddingsTable.unitId)
-      )
-      .where(
-        and(
-          eq(knowledgeUnitsTable.status, 'published'),
-          scopeConditions,
-          activeDateCondition,
-          contentTypeCondition,
-          isNotNull(knowledgeEmbeddingsTable.embedding)
-        )
-      )
-      .orderBy(distanceExpr)
-      .limit(limit);
+      const unionCte = advisorSubQuery
+        ? sql`${globalSubQuery} UNION ALL ${advisorSubQuery}`
+        : globalSubQuery;
 
-    return rows
-      .filter((row) => row.distance < 0.3)
-      .map((row) => {
-        const { distance, ...unit } = row;
-        void distance;
-        return unit;
-      }) as KnowledgeUnit[];
+      type RawRow = {
+        id: string;
+        source_id: string;
+        source_revision: string;
+        section_path: string;
+        content_type: string;
+        advisor_scope: string;
+        audience: string;
+        status: string;
+        text: string;
+        summary: string | null;
+        content_hash: string;
+        effective_from: string | null;
+        effective_to: string | null;
+        metadata: Record<string, unknown> | null;
+        created_at: string;
+        updated_at: string;
+        distance: number;
+      };
+
+      const rows = await tx.execute<RawRow>(
+        sql`
+          WITH candidates AS MATERIALIZED (
+            ${unionCte}
+          )
+          SELECT ku.id,
+                 ku.source_id,
+                 ku.source_revision,
+                 ku.section_path,
+                 ku.content_type,
+                 ku.advisor_scope,
+                 ku.audience,
+                 ku.status,
+                 ku.text,
+                 ku.summary,
+                 ku.content_hash,
+                 ku.effective_from,
+                 ku.effective_to,
+                 ku.metadata,
+                 ku.created_at,
+                 ku.updated_at,
+                 c.distance
+          FROM candidates c
+          JOIN knowledge_units ku ON ku.id = c.unit_id
+          WHERE c.distance < 0.3
+            AND ku.status = 'published'
+            AND (ku.effective_from IS NULL OR ku.effective_from < ${now.toISOString()}::timestamptz)
+            AND (ku.effective_to IS NULL OR ku.effective_to > ${now.toISOString()}::timestamptz)
+          ORDER BY c.distance
+          LIMIT ${limit}
+        `
+      );
+
+      return rows.map(
+        (row): KnowledgeUnit => ({
+          id: row.id,
+          sourceId: row.source_id,
+          sourceRevision: row.source_revision,
+          sectionPath: row.section_path,
+          contentType: row.content_type,
+          advisorScope: row.advisor_scope,
+          audience: row.audience,
+          status: row.status,
+          text: row.text,
+          summary: row.summary,
+          contentHash: row.content_hash,
+          effectiveFrom: row.effective_from
+            ? new Date(row.effective_from)
+            : null,
+          effectiveTo: row.effective_to ? new Date(row.effective_to) : null,
+          metadata: row.metadata ?? {},
+          createdAt: new Date(row.created_at),
+          updatedAt: new Date(row.updated_at)
+        })
+      );
+    });
   }
 
   async findPublishedRules(input: {

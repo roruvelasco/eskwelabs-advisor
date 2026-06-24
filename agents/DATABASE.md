@@ -194,9 +194,11 @@ Indexes: `knowledge_units_source_revision_idx`, `knowledge_units_scope_status_id
 
 ### `knowledge_embeddings` (`knowledgeEmbeddingsTable` in code, `knowledge_embeddings` in DB)
 
-pgvector-powered embedding storage for semantic retrieval. Uses HNSW index with cosine distance.
+pgvector-powered embedding storage for semantic retrieval. Acts as a query-optimized retrieval projection with denormalized filter metadata (copied from `knowledge_units` on upsert) so the HNSW index can filter same-table candidates before joining unit content.
 
-Key columns: `id`, `unit_id`, `provider`, `model`, `dimensions`, `embedding` (vector(768)), `external_vector_id`, `embedding_hash`, `indexed_at`.
+Key columns: `id`, `unit_id`, `provider`, `model`, `dimensions`, `embedding` (vector(768)), `external_vector_id`, `embedding_hash`, `indexed_at`, `status`, `advisor_scope`, `content_type`, `audience`, `source_revision`, `content_hash`, `effective_from`, `effective_to`.
+
+Indexes: `knowledge_embeddings_unit_provider_uniq` (unique B-tree on `unit_id, provider, model`), `knowledge_embeddings_filter_idx` (B-tree on `provider, model, status, advisor_scope, content_type`), `knowledge_embeddings_published_hnsw_idx` (partial HNSW on `embedding vector_cosine_ops` with `m = 16, ef_construction = 64` where `embedding IS NOT NULL AND status = 'published'`).
 
 ### `knowledge_rules` (`knowledgeRulesTable` in code, `knowledge_rules` in DB)
 

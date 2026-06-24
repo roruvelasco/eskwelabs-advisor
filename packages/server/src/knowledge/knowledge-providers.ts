@@ -182,7 +182,15 @@ export class PostgresKnowledgeIndexProvider implements KnowledgeIndexProvider {
           dimensions: embedding.vector.length,
           embedding: embedding.vector,
           embeddingHash: embedding.hash,
-          indexedAt: new Date()
+          indexedAt: new Date(),
+          status: unit.status,
+          advisorScope: unit.advisorScope,
+          contentType: unit.contentType,
+          audience: unit.audience,
+          sourceRevision: unit.sourceRevision,
+          contentHash: unit.contentHash,
+          effectiveFrom: unit.effectiveFrom,
+          effectiveTo: unit.effectiveTo
         };
       })
       .filter(Boolean) as Array<{
@@ -193,6 +201,14 @@ export class PostgresKnowledgeIndexProvider implements KnowledgeIndexProvider {
       embedding: number[];
       embeddingHash: string;
       indexedAt: Date;
+      status: string;
+      advisorScope: string;
+      contentType: string;
+      audience: string;
+      sourceRevision: string;
+      contentHash: string;
+      effectiveFrom: Date | null;
+      effectiveTo: Date | null;
     }>;
 
     if (rows.length === 0) return;

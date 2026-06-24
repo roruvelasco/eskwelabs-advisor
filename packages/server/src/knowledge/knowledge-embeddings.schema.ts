@@ -5,6 +5,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid
 } from 'drizzle-orm/pg-core';
 
@@ -48,13 +49,26 @@ export const knowledgeEmbeddingsTable = pgTable(
     embeddingHash: text('embedding_hash').notNull(),
     indexedAt: timestamp('indexed_at', { withTimezone: true })
       .notNull()
-      .defaultNow()
+      .defaultNow(),
+    status: text('status').notNull().default('published'),
+    advisorScope: text('advisor_scope').notNull().default('global'),
+    contentType: text('content_type').notNull().default(''),
+    audience: text('audience').notNull().default('advisor'),
+    sourceRevision: text('source_revision').notNull().default(''),
+    contentHash: text('content_hash').notNull().default(''),
+    effectiveFrom: timestamp('effective_from', { withTimezone: true }),
+    effectiveTo: timestamp('effective_to', { withTimezone: true })
   },
   (table) => ({
-    embeddingUnitIdx: index('knowledge_embeddings_unit_idx').on(table.unitId),
-    embeddingProviderIdx: index('knowledge_embeddings_provider_idx').on(
+    embeddingUnitProviderUniq: uniqueIndex(
+      'knowledge_embeddings_unit_provider_uniq'
+    ).on(table.unitId, table.provider, table.model),
+    embeddingFilterIdx: index('knowledge_embeddings_filter_idx').on(
       table.provider,
-      table.model
+      table.model,
+      table.status,
+      table.advisorScope,
+      table.contentType
     )
   })
 );
