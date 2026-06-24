@@ -85,6 +85,48 @@
       "when": 1782115771961,
       "tag": "0011_early_switch",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1782118500000,
+      "tag": "0012_db_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1782120000000,
+      "tag": "0013_many_bloodscream",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1782121000000,
+      "tag": "0014_complete_rls_coverage",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1782200000000,
+      "tag": "0015_add_prompt_hashes_to_messages",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1782250000000,
+      "tag": "0016_add_validation_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1782300643526,
+      "tag": "0017_knowledge_architecture",
+      "breakpoints": true
     }
   ]
 }
