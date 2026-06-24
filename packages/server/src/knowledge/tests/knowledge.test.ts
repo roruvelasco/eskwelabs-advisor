@@ -521,3 +521,382 @@ describe('knowledge service', () => {
     });
   });
 });
+
+describe('bounded knowledge context resolver', () => {
+  test('returns inner result when inner resolves within budget', async () => {
+    const { BoundedKnowledgeContextResolver } =
+      await import('../bounded-knowledge-context.resolver');
+
+    const inner = {
+      resolve: async () => ({
+        mode: 'semantic' as const,
+        evidence: [
+          {
+            unitId: 'u1',
+            title: 'Test',
+            text: 'text',
+            strategy: 'semantic' as const
+          }
+        ],
+        contextText: '<evidence>text</evidence>',
+        contextHash: 'abc'
+      })
+    };
+
+    const repo = {
+      findPublishedRules: async () => [],
+      searchPublishedUnits: async () => []
+    };
+
+    const redis = {
+      get: async () => null,
+      set: async () => {}
+    };
+
+    const runner = { run: () => {} };
+
+    const resolver = new BoundedKnowledgeContextResolver(
+      inner as never,
+      repo as never,
+      redis as never,
+      runner as never,
+      5000
+    );
+
+    const result = await resolver.resolve({
+      advisorId: 'data-dashboard',
+      userContent: 'test query',
+      answerMode: 'technical_guidance'
+    });
+
+    expect(result.mode).toBe('semantic');
+    expect(result.evidence[0].strategy).toBe('semantic');
+  });
+
+  test('falls back to lexical search when inner exceeds budget', async () => {
+    const { BoundedKnowledgeContextResolver } =
+      await import('../bounded-knowledge-context.resolver');
+
+    const inner = {
+      resolve: async () =>
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('late')), 200)
+        )
+    };
+
+    const repo = {
+      findPublishedRules: async () => [
+        {
+          id: 'rule-1',
+          topic: 'Refunds',
+          canonicalAnswer: 'Refunds need approval.'
+        }
+      ],
+      searchPublishedUnits: async () => [
+        {
+          id: 'unit-1',
+          sourceRevision: 'r1',
+          contentHash: 'h1',
+          sectionPath: 'FAQ',
+          contentType: 'faq',
+          text: 'FAQ text.',
+          summary: null
+        }
+      ]
+    };
+
+    const redis = {
+      get: async () => null,
+      set: async () => {}
+    };
+
+    const runner = { run: () => {} };
+
+    const resolver = new BoundedKnowledgeContextResolver(
+      inner as never,
+      repo as never,
+      redis as never,
+      runner as never,
+      50
+    );
+
+    const result = await resolver.resolve({
+      advisorId: 'data-dashboard',
+      userContent: 'refund',
+      answerMode: 'factual_policy'
+    });
+
+    expect(result.mode).toBe('hybrid');
+    expect(result.evidence).toHaveLength(2);
+    expect(result.evidence[0].strategy).toBe('structured_rule');
+    expect(result.evidence[1].strategy).toBe('lexical');
+  });
+
+  test('circuit breaker opens after consecutive failures', async () => {
+    const { BoundedKnowledgeContextResolver } =
+      await import('../bounded-knowledge-context.resolver');
+
+    let innerCalls = 0;
+
+    const inner = {
+      resolve: async () => {
+        innerCalls++;
+        throw new Error('embedding failure');
+      }
+    };
+
+    const repo = {
+      findPublishedRules: async () => [],
+      searchPublishedUnits: async () => []
+    };
+
+    const redis = {
+      get: async () => null,
+      set: async () => {}
+    };
+
+    const runner = { run: () => {} };
+
+    const resolver = new BoundedKnowledgeContextResolver(
+      inner as never,
+      repo as never,
+      redis as never,
+      runner as never,
+      5000
+    );
+
+    for (let i = 0; i < 5; i++) {
+      await resolver.resolve({
+        advisorId: 'data-dashboard',
+        userContent: 'test',
+        answerMode: 'factual_policy'
+      });
+    }
+
+    expect(innerCalls).toBe(3);
+  });
+
+  test('returns cached context on redis hit', async () => {
+    const { BoundedKnowledgeContextResolver } =
+      await import('../bounded-knowledge-context.resolver');
+
+    let innerCalled = false;
+
+    const inner = {
+      resolve: async () => {
+        innerCalled = true;
+        return {
+          mode: 'none' as const,
+          evidence: [],
+          contextText: '',
+          contextHash: ''
+        };
+      }
+    };
+
+    const cached = {
+      mode: 'structured_rule' as const,
+      evidence: [
+        {
+          ruleId: 'r1',
+          title: 'Cached',
+          text: 'cached text',
+          strategy: 'structured_rule' as const
+        }
+      ],
+      contextText: 'cached',
+      contextHash: 'cached-hash'
+    };
+
+    const redis = {
+      get: async () => cached,
+      set: async () => {}
+    };
+
+    const repo = {
+      findPublishedRules: async () => [],
+      searchPublishedUnits: async () => []
+    };
+
+    const runner = { run: () => {} };
+
+    const resolver = new BoundedKnowledgeContextResolver(
+      inner as never,
+      repo as never,
+      redis as never,
+      runner as never,
+      5000
+    );
+
+    const result = await resolver.resolve({
+      advisorId: 'data-dashboard',
+      userContent: 'test',
+      answerMode: 'factual_policy'
+    });
+
+    expect(result.mode).toBe('structured_rule');
+    expect(result.evidence[0].title).toBe('Cached');
+    expect(innerCalled).toBe(false);
+  });
+
+  test('skips retrieval for non-search modes in lexical fallback', async () => {
+    const { BoundedKnowledgeContextResolver } =
+      await import('../bounded-knowledge-context.resolver');
+
+    const inner = {
+      resolve: async () => {
+        throw new Error('fail');
+      }
+    };
+
+    const repo = {
+      findPublishedRules: async () => [],
+      searchPublishedUnits: async () => []
+    };
+
+    const redis = {
+      get: async () => null,
+      set: async () => {}
+    };
+
+    const runner = { run: () => {} };
+
+    const resolver = new BoundedKnowledgeContextResolver(
+      inner as never,
+      repo as never,
+      redis as never,
+      runner as never,
+      10
+    );
+
+    const result = await resolver.resolve({
+      advisorId: 'data-dashboard',
+      userContent: 'Help me think',
+      answerMode: 'mentoring'
+    });
+
+    expect(result.mode).toBe('none');
+    expect(result.evidence).toEqual([]);
+  });
+
+  test('deferred task runner schedules warm-up on fallback', async () => {
+    const { BoundedKnowledgeContextResolver } =
+      await import('../bounded-knowledge-context.resolver');
+
+    const deferredTasks: Array<() => Promise<void>> = [];
+
+    const inner = {
+      resolve: async () => {
+        throw new Error('fail');
+      }
+    };
+
+    const repo = {
+      findPublishedRules: async () => [],
+      searchPublishedUnits: async () => []
+    };
+
+    const redis = {
+      get: async () => null,
+      set: async () => {}
+    };
+
+    const runner = {
+      run: (fn: () => Promise<void>) => {
+        deferredTasks.push(fn);
+      }
+    };
+
+    const resolver = new BoundedKnowledgeContextResolver(
+      inner as never,
+      repo as never,
+      redis as never,
+      runner as never,
+      10
+    );
+
+    await resolver.resolve({
+      advisorId: 'data-dashboard',
+      userContent: 'test',
+      answerMode: 'factual_policy'
+    });
+
+    expect(deferredTasks.length).toBe(1);
+  });
+});
+
+describe('cached embedding provider coalescing', () => {
+  test('coalesces concurrent requests for the same text', async () => {
+    const { CachedEmbeddingProvider } =
+      await import('../redis-embedding-cache.service');
+
+    let innerCalls = 0;
+
+    const inner = {
+      embedTexts: async (texts: string[]) => {
+        innerCalls++;
+        return texts.map((t) => ({
+          text: t,
+          vector: [0.1, 0.2],
+          hash: `h-${t}`
+        }));
+      }
+    };
+
+    const redis = {
+      get: async () => null,
+      set: async () => {}
+    };
+
+    const cache = new CachedEmbeddingProvider(
+      inner as never,
+      redis as never,
+      'groq',
+      'test-model'
+    );
+
+    const results = await Promise.all([
+      cache.getOrWarm('hello'),
+      cache.getOrWarm('hello'),
+      cache.getOrWarm('world')
+    ]);
+
+    expect(results).toHaveLength(3);
+    expect(innerCalls).toBe(2);
+    expect(results[0].text).toBe('hello');
+    expect(results[1].text).toBe('hello');
+    expect(results[2].text).toBe('world');
+  });
+
+  test('cleans up in-flight entries on failure', async () => {
+    const { CachedEmbeddingProvider } =
+      await import('../redis-embedding-cache.service');
+
+    let innerCalls = 0;
+
+    const inner = {
+      embedTexts: async () => {
+        innerCalls++;
+        throw new Error('api down');
+      }
+    };
+
+    const redis = {
+      get: async () => null,
+      set: async () => {}
+    };
+
+    const cache = new CachedEmbeddingProvider(
+      inner as never,
+      redis as never,
+      'groq',
+      'test-model'
+    );
+
+    await expect(cache.getOrWarm('fail-text')).rejects.toThrow('api down');
+    expect(innerCalls).toBe(1);
+
+    await expect(cache.getOrWarm('fail-text')).rejects.toThrow('api down');
+    expect(innerCalls).toBe(2);
+  });
+});

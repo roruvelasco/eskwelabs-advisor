@@ -52,6 +52,7 @@ import {
   StreamChatTurnUseCase
 } from '../messages/use-cases/chat-turn.use-case';
 import { KnowledgeController } from '../knowledge/knowledge.controller';
+import { BoundedKnowledgeContextResolver } from '../knowledge/bounded-knowledge-context.resolver';
 import {
   NoopKnowledgeContextResolver,
   RepositoryKnowledgeContextResolver,
@@ -65,6 +66,7 @@ import {
   type EmbeddingProvider,
   type KnowledgeIndexProvider
 } from '../knowledge/knowledge-providers';
+import { CachedEmbeddingProvider } from '../knowledge/redis-embedding-cache.service';
 import { KnowledgeRepository } from '../knowledge/knowledge.repository';
 import { KnowledgeSerializer } from '../knowledge/knowledge.serializer';
 import { KnowledgeService } from '../knowledge/knowledge.service';
@@ -370,9 +372,26 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
         if (env.RUNTIME_PROFILE === 'test') {
           return new NoopKnowledgeContextResolver();
         }
-        return new RepositoryKnowledgeContextResolver(
+
+        const embeddingProvider = c.get(EMBEDDING_PROVIDER);
+        const cachedProvider = new CachedEmbeddingProvider(
+          embeddingProvider,
+          c.get(RedisService),
+          'groq',
+          'nomic-embed-text-v1.5'
+        );
+
+        const inner = new RepositoryKnowledgeContextResolver(
           c.get(KnowledgeRepository),
-          c.get(EMBEDDING_PROVIDER)
+          cachedProvider
+        );
+
+        return new BoundedKnowledgeContextResolver(
+          inner,
+          c.get(KnowledgeRepository),
+          c.get(RedisService),
+          c.get(DEFERRED_TASK_RUNNER),
+          env.KNOWLEDGE_SEMANTIC_SYNC_BUDGET_MS
         );
       }
     })
@@ -380,7 +399,12 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
       provide: EMBEDDING_PROVIDER,
       useFactory: (c) => {
         const env = c.get(SERVER_ENV);
-        return new GroqEmbeddingProvider(env.GROQ_API_KEY, env.GROQ_BASE_URL);
+        return new GroqEmbeddingProvider(
+          env.GROQ_API_KEY,
+          env.GROQ_BASE_URL,
+          'nomic-embed-text-v1.5',
+          env.EMBEDDING_PROVIDER_TIMEOUT_MS
+        );
       }
     })
     .bind({
