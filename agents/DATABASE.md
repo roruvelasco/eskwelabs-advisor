@@ -190,7 +190,7 @@ Versioned source-backed chunks/sections selected at chat time.
 
 Key columns: `id`, `source_id`, `source_revision`, `section_path`, `content_type`, `advisor_scope`, `audience`, `status`, `text` (server-only), `summary`, `content_hash`, `effective_from`, `effective_to`, `metadata`, timestamps.
 
-Indexes: `knowledge_units_source_revision_idx`, `knowledge_units_scope_status_idx`, `knowledge_units_hash_idx`.
+Indexes: `knowledge_units_source_revision_idx`, `knowledge_units_scope_status_idx`, `knowledge_units_hash_idx`, `knowledge_units_fts_idx` (partial GIN on `to_tsvector('english', coalesce(text, '') || ' ' || coalesce(summary, '') || ' ' || coalesce(section_path, ''))` where `status = 'published'`).
 
 ### `knowledge_embeddings` (`knowledgeEmbeddingsTable` in code, `knowledge_embeddings` in DB)
 
@@ -203,6 +203,8 @@ Key columns: `id`, `unit_id`, `provider`, `model`, `dimensions`, `embedding` (ve
 Structured high-confidence operational facts used before vector retrieval.
 
 Key columns: `id`, `topic`, `applies_to`, `canonical_answer`, `source_unit_id`, `priority`, `status`, `effective_from`, `effective_to`, timestamps.
+
+Indexes: `knowledge_rules_fts_idx` (partial GIN on `to_tsvector('english', coalesce(topic, '') || ' ' || coalesce(canonical_answer, ''))` where `status = 'published'`).
 
 ### `message_knowledge_audit` (`messageKnowledgeAuditTable` in code, `message_knowledge_audit` in DB)
 

@@ -5,7 +5,6 @@ import {
   desc,
   eq,
   gt,
-  ilike,
   inArray,
   isNotNull,
   isNull,
@@ -216,23 +215,10 @@ export class KnowledgeRepository extends Repository {
     limit?: number;
   }): Promise<KnowledgeUnit[]> {
     const limit = input.limit ?? 6;
+    const tsQuery = this.buildTsQuery(input.query);
+    if (!tsQuery) return [];
+
     const now = new Date();
-    const terms = input.query
-      .toLowerCase()
-      .split(/[^a-z0-9-]+/)
-      .map((term) => term.trim())
-      .filter((term) => term.length >= 3)
-      .slice(0, 8);
-
-    if (terms.length === 0) return [];
-
-    const searchConditions = terms.map((term) =>
-      or(
-        ilike(knowledgeUnitsTable.text, `%${term}%`),
-        ilike(knowledgeUnitsTable.summary, `%${term}%`),
-        ilike(knowledgeUnitsTable.sectionPath, `%${term}%`)
-      )
-    );
 
     const scopeConditions = input.advisorId
       ? inArray(knowledgeUnitsTable.advisorScope, ['global', input.advisorId])
@@ -254,6 +240,24 @@ export class KnowledgeRepository extends Repository {
         ? inArray(knowledgeUnitsTable.contentType, input.contentTypes)
         : undefined;
 
+    const ftsCondition = sql`
+      to_tsvector('english',
+        coalesce(${knowledgeUnitsTable.text}, '')
+          || ' ' || coalesce(${knowledgeUnitsTable.summary}, '')
+          || ' ' || coalesce(${knowledgeUnitsTable.sectionPath}, '')
+      )
+      @@ to_tsquery('english', ${tsQuery})
+    `;
+
+    const rankExpr = sql<number>`ts_rank_cd(
+      to_tsvector('english',
+        coalesce(${knowledgeUnitsTable.text}, '')
+          || ' ' || coalesce(${knowledgeUnitsTable.summary}, '')
+          || ' ' || coalesce(${knowledgeUnitsTable.sectionPath}, '')
+      ),
+      to_tsquery('english', ${tsQuery})
+    )`;
+
     const rows = await this.drizzle.db
       .select()
       .from(knowledgeUnitsTable)
@@ -263,10 +267,11 @@ export class KnowledgeRepository extends Repository {
           scopeConditions,
           activeDateCondition,
           contentTypeCondition,
-          or(...searchConditions)
+          ftsCondition
         )
       )
       .orderBy(
+        desc(rankExpr),
         desc(sql<number>`length(${knowledgeUnitsTable.summary})`),
         desc(knowledgeUnitsTable.updatedAt)
       )
@@ -358,13 +363,24 @@ export class KnowledgeRepository extends Repository {
     limit?: number;
   }): Promise<KnowledgeRule[]> {
     const now = new Date();
-    const terms = input.query
-      .toLowerCase()
-      .split(/[^a-z0-9-]+/)
-      .filter((term) => term.length >= 3)
-      .slice(0, 6);
+    const tsQuery = this.buildTsQuery(input.query);
+    if (!tsQuery) return [];
 
-    if (terms.length === 0) return [];
+    const ftsCondition = sql`
+      to_tsvector('english',
+        coalesce(${knowledgeRulesTable.topic}, '')
+          || ' ' || coalesce(${knowledgeRulesTable.canonicalAnswer}, '')
+      )
+      @@ to_tsquery('english', ${tsQuery})
+    `;
+
+    const rankExpr = sql<number>`ts_rank_cd(
+      to_tsvector('english',
+        coalesce(${knowledgeRulesTable.topic}, '')
+          || ' ' || coalesce(${knowledgeRulesTable.canonicalAnswer}, '')
+      ),
+      to_tsquery('english', ${tsQuery})
+    )`;
 
     const rows = await this.drizzle.db
       .select()
@@ -372,14 +388,7 @@ export class KnowledgeRepository extends Repository {
       .where(
         and(
           eq(knowledgeRulesTable.status, 'published'),
-          or(
-            ...terms.map((term) =>
-              or(
-                ilike(knowledgeRulesTable.topic, `%${term}%`),
-                ilike(knowledgeRulesTable.canonicalAnswer, `%${term}%`)
-              )
-            )
-          ),
+          ftsCondition,
           or(
             isNull(knowledgeRulesTable.effectiveFrom),
             lt(knowledgeRulesTable.effectiveFrom, now)
@@ -391,12 +400,25 @@ export class KnowledgeRepository extends Repository {
         )
       )
       .orderBy(
+        desc(rankExpr),
         desc(knowledgeRulesTable.priority),
         desc(knowledgeRulesTable.updatedAt)
       )
       .limit(input.limit ?? 3);
 
     return rows;
+  }
+
+  private buildTsQuery(query: string): string {
+    const terms = query
+      .toLowerCase()
+      .split(/[^a-z0-9-]+/)
+      .map((t) => t.replace(/[^\w-]/g, ''))
+      .filter((t) => t.length >= 3)
+      .slice(0, 8);
+
+    if (terms.length === 0) return '';
+    return terms.map((t) => `${t}:*`).join(' | ');
   }
 
   async createAuditRows(rows: CreateKnowledgeAuditInput[]) {
