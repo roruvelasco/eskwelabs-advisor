@@ -1,5 +1,6 @@
-import type { AnswerMode, QueryPolicyResult } from './query-policy.types';
+import type { EmbeddingProvider } from '../knowledge/knowledge-providers';
 import { HttpException } from '../common/http/http-exception';
+import type { AnswerMode, QueryPolicyResult } from './query-policy.types';
 
 const ESKWELABS_TERMS = [
   'dna',
@@ -108,14 +109,58 @@ const ABUSE_PATTERNS = [
   /tell me your (system prompt|instructions|prompt|rules)/i
 ];
 
+const TECHNICAL_ANCHORS = [
+  "The platform won't let me submit my file",
+  'How do I fix this error in my code',
+  'How do I write this SQL query',
+  'How do I build a dashboard from scratch'
+];
+
+const POLICY_ANCHORS = [
+  'What is the refund policy',
+  'What is the enrollment deadline schedule',
+  'How do I get my certificate',
+  'What are the payment options for the program'
+];
+
+const MENTORING_ANCHORS = [
+  'I feel overwhelmed by the workload',
+  'Should I pursue a career in data analytics',
+  'Give me advice on managing my time'
+];
+
+const SEMANTIC_THRESHOLD = 0.6;
+
 export interface QueryPolicyInput {
   userContent: unknown;
   advisorPromptText?: string;
   dnaDigestText?: string;
 }
 
+type AnchorGroup = {
+  vectors: number[][];
+  mode: AnswerMode;
+};
+
+function cosineSimilarity(a: number[], b: number[]): number {
+  let dot = 0;
+  let magA = 0;
+  let magB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    magA += a[i] * a[i];
+    magB += b[i] * b[i];
+  }
+  const denom = Math.sqrt(magA) * Math.sqrt(magB);
+  return denom === 0 ? 0 : dot / denom;
+}
+
 export class QueryPolicyService {
-  classify(input: QueryPolicyInput): QueryPolicyResult {
+  private anchorGroups: AnchorGroup[] | null = null;
+
+  constructor(private embeddingProvider?: EmbeddingProvider) {}
+
+  async classify(input: QueryPolicyInput): Promise<QueryPolicyResult> {
     if (typeof input.userContent !== 'string') {
       throw new HttpException(
         400,
@@ -167,7 +212,79 @@ export class QueryPolicyService {
       return this.result('technical_guidance', false);
     }
 
+    if (!this.embeddingProvider) {
+      return this.result('mentoring', false);
+    }
+
+    try {
+      const [queryResult] = await this.embeddingProvider.embedTexts([content]);
+      const groups = await this.getAnchorGroups();
+
+      let bestMode: AnswerMode = 'mentoring';
+      let bestScore = 0;
+
+      for (const group of groups) {
+        let maxScore = 0;
+        for (const anchorVector of group.vectors) {
+          const score = cosineSimilarity(queryResult.vector, anchorVector);
+          if (score > maxScore) maxScore = score;
+        }
+        if (maxScore > bestScore) {
+          bestScore = maxScore;
+          bestMode = group.mode;
+        }
+      }
+
+      if (bestScore >= SEMANTIC_THRESHOLD) {
+        return this.result(bestMode, false);
+      }
+    } catch {
+      // fall through to mentoring
+    }
+
     return this.result('mentoring', false);
+  }
+
+  private async getAnchorGroups(): Promise<AnchorGroup[]> {
+    if (this.anchorGroups) return this.anchorGroups;
+
+    if (!this.embeddingProvider) {
+      return [];
+    }
+
+    const allAnchors = [
+      ...TECHNICAL_ANCHORS,
+      ...POLICY_ANCHORS,
+      ...MENTORING_ANCHORS
+    ];
+
+    const embeddings = await this.embeddingProvider.embedTexts(allAnchors);
+
+    this.anchorGroups = [
+      {
+        vectors: embeddings
+          .slice(0, TECHNICAL_ANCHORS.length)
+          .map((e) => e.vector),
+        mode: 'technical_guidance' as AnswerMode
+      },
+      {
+        vectors: embeddings
+          .slice(
+            TECHNICAL_ANCHORS.length,
+            TECHNICAL_ANCHORS.length + POLICY_ANCHORS.length
+          )
+          .map((e) => e.vector),
+        mode: 'factual_policy' as AnswerMode
+      },
+      {
+        vectors: embeddings
+          .slice(-MENTORING_ANCHORS.length)
+          .map((e) => e.vector),
+        mode: 'mentoring' as AnswerMode
+      }
+    ];
+
+    return this.anchorGroups;
   }
 
   private matchesAny(content: string, patterns: RegExp[]): boolean {

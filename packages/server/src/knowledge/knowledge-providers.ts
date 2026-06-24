@@ -36,8 +36,18 @@ type GroqEmbeddingResponse = {
   data: Array<{ embedding: number[]; index: number }>;
 };
 
+const EMBEDDING_CACHE_TTL_MS = 5000;
+const EMBEDDING_CACHE_MAX = 200;
+
+type CachedEmbedding = {
+  vector: number[];
+  hash: string;
+  expiresAt: number;
+};
+
 export class GroqEmbeddingProvider implements EmbeddingProvider {
   private baseUrl: string;
+  private cache = new Map<string, CachedEmbedding>();
 
   constructor(
     private apiKey: string,
@@ -56,6 +66,27 @@ export class GroqEmbeddingProvider implements EmbeddingProvider {
       );
     }
 
+    const now = Date.now();
+    const results: EmbeddingResult[] = new Array(texts.length);
+    const uncached: number[] = [];
+
+    for (let i = 0; i < texts.length; i++) {
+      const key = sha256(texts[i]);
+      const cached = this.cache.get(key);
+      if (cached && cached.expiresAt > now) {
+        results[i] = {
+          text: texts[i],
+          vector: cached.vector,
+          hash: cached.hash
+        };
+      } else {
+        uncached.push(i);
+      }
+    }
+
+    if (uncached.length === 0) return results;
+
+    const apiTexts = uncached.map((i) => texts[i]);
     const response = await fetch(`${this.baseUrl}/embeddings`, {
       method: 'POST',
       headers: {
@@ -64,7 +95,7 @@ export class GroqEmbeddingProvider implements EmbeddingProvider {
       },
       body: JSON.stringify({
         model: this.model,
-        input: texts.map((t) => t.trim())
+        input: apiTexts.map((t) => t.trim())
       })
     });
 
@@ -78,13 +109,29 @@ export class GroqEmbeddingProvider implements EmbeddingProvider {
 
     const payload = (await response.json()) as GroqEmbeddingResponse;
 
-    return payload.data
-      .sort((a, b) => a.index - b.index)
-      .map((item, i) => ({
-        text: texts[i],
-        vector: item.embedding,
-        hash: sha256(texts[i])
-      }));
+    for (let j = 0; j < uncached.length; j++) {
+      const idx = uncached[j];
+      const entry = payload.data[j];
+      if (!entry) continue;
+      const result: EmbeddingResult = {
+        text: texts[idx],
+        vector: entry.embedding,
+        hash: sha256(texts[idx])
+      };
+      results[idx] = result;
+      const key = sha256(texts[idx]);
+      if (this.cache.size >= EMBEDDING_CACHE_MAX && !this.cache.has(key)) {
+        const first = this.cache.keys().next().value as string;
+        this.cache.delete(first);
+      }
+      this.cache.set(key, {
+        vector: entry.embedding,
+        hash: result.hash,
+        expiresAt: now + EMBEDDING_CACHE_TTL_MS
+      });
+    }
+
+    return results;
   }
 }
 

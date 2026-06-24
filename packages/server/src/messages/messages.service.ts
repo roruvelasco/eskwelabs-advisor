@@ -393,7 +393,7 @@ export class MessagesService {
       model: this.requireModelText(runtime.modelConfig?.model)
     };
 
-    const policy = this.queryPolicyService.classify({
+    const policy = await this.queryPolicyService.classify({
       userContent,
       advisorPromptText: promptContext.systemPrompt,
       dnaDigestText: undefined

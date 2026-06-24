@@ -310,7 +310,7 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
     .bind({ provide: UsersSerializer, useFactory: () => new UsersSerializer() })
     .bind({
       provide: QueryPolicyService,
-      useFactory: () => new QueryPolicyService()
+      useFactory: (c) => new QueryPolicyService(c.get(EMBEDDING_PROVIDER))
     })
     .bind({
       provide: ModelRateService,
