@@ -127,6 +127,13 @@
       "when": 1782300643526,
       "tag": "0017_knowledge_architecture",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1782400000000,
+      "tag": "0018_pgvector_search",
+      "breakpoints": true
     }
   ]
 }
