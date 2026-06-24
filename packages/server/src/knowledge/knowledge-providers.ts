@@ -15,7 +15,10 @@ export type EmbeddingResult = {
 };
 
 export interface EmbeddingProvider {
-  embedTexts(texts: string[]): Promise<EmbeddingResult[]>;
+  embedTexts(
+    texts: string[],
+    options?: { signal?: AbortSignal; timeout?: number }
+  ): Promise<EmbeddingResult[]>;
 }
 
 export interface KnowledgeIndexProvider {
@@ -52,12 +55,16 @@ export class GroqEmbeddingProvider implements EmbeddingProvider {
   constructor(
     private apiKey: string,
     baseUrl: string = 'https://api.groq.com/openai/v1',
-    private model: string = 'nomic-embed-text-v1.5'
+    private model: string = 'nomic-embed-text-v1.5',
+    private defaultTimeoutMs: number = 5000
   ) {
     this.baseUrl = baseUrl.replace(/\/$/, '');
   }
 
-  async embedTexts(texts: string[]): Promise<EmbeddingResult[]> {
+  async embedTexts(
+    texts: string[],
+    options?: { signal?: AbortSignal; timeout?: number }
+  ): Promise<EmbeddingResult[]> {
     if (!this.apiKey) {
       throw new HttpException(
         503,
@@ -87,52 +94,67 @@ export class GroqEmbeddingProvider implements EmbeddingProvider {
     if (uncached.length === 0) return results;
 
     const apiTexts = uncached.map((i) => texts[i]);
-    const response = await fetch(`${this.baseUrl}/embeddings`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.apiKey}`
-      },
-      body: JSON.stringify({
-        model: this.model,
-        input: apiTexts.map((t) => t.trim())
-      })
-    });
 
-    if (!response.ok) {
-      throw new HttpException(
-        502,
-        'Groq embedding request failed',
-        'groq_embedding_failed'
-      );
+    const signal = options?.signal;
+    const timeoutMs = options?.timeout ?? this.defaultTimeoutMs;
+    let controller: AbortController | undefined;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    if (!signal) {
+      controller = new AbortController();
+      timeoutId = setTimeout(() => controller!.abort(), timeoutMs);
     }
 
-    const payload = (await response.json()) as GroqEmbeddingResponse;
-
-    payload.data.sort((a, b) => a.index - b.index);
-    for (let j = 0; j < uncached.length; j++) {
-      const idx = uncached[j];
-      const entry = payload.data[j];
-      if (!entry) continue;
-      const result: EmbeddingResult = {
-        text: texts[idx],
-        vector: entry.embedding,
-        hash: sha256(texts[idx])
-      };
-      results[idx] = result;
-      const key = sha256(texts[idx]);
-      if (this.cache.size >= EMBEDDING_CACHE_MAX && !this.cache.has(key)) {
-        const first = this.cache.keys().next().value as string;
-        this.cache.delete(first);
-      }
-      this.cache.set(key, {
-        vector: entry.embedding,
-        hash: result.hash,
-        expiresAt: now + EMBEDDING_CACHE_TTL_MS
+    try {
+      const response = await fetch(`${this.baseUrl}/embeddings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.apiKey}`
+        },
+        body: JSON.stringify({
+          model: this.model,
+          input: apiTexts.map((t) => t.trim())
+        }),
+        signal: signal ?? controller!.signal
       });
-    }
 
-    return results;
+      if (!response.ok) {
+        throw new HttpException(
+          502,
+          'Groq embedding request failed',
+          'groq_embedding_failed'
+        );
+      }
+
+      const payload = (await response.json()) as GroqEmbeddingResponse;
+
+      payload.data.sort((a, b) => a.index - b.index);
+      for (let j = 0; j < uncached.length; j++) {
+        const idx = uncached[j];
+        const entry = payload.data[j];
+        if (!entry) continue;
+        const result: EmbeddingResult = {
+          text: texts[idx],
+          vector: entry.embedding,
+          hash: sha256(texts[idx])
+        };
+        results[idx] = result;
+        const key = sha256(texts[idx]);
+        if (this.cache.size >= EMBEDDING_CACHE_MAX && !this.cache.has(key)) {
+          const first = this.cache.keys().next().value as string;
+          this.cache.delete(first);
+        }
+        this.cache.set(key, {
+          vector: entry.embedding,
+          hash: result.hash,
+          expiresAt: now + EMBEDDING_CACHE_TTL_MS
+        });
+      }
+
+      return results;
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+    }
   }
 }
 

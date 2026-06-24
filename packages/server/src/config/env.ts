@@ -66,7 +66,17 @@ export const serverEnvSchema = z
     ACTOR_FORWARDING_SECRET: z
       .string()
       .min(16)
-      .default('dev-actor-forwarding-secret-change-in-prod')
+      .default('dev-actor-forwarding-secret-change-in-prod'),
+    KNOWLEDGE_SEMANTIC_SYNC_BUDGET_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(350),
+    EMBEDDING_PROVIDER_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(5000)
   })
   .refine(
     (data) => {
