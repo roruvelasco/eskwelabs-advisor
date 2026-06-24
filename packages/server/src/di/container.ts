@@ -82,7 +82,7 @@ import {
   PromptContextRefreshUseCase,
   PromptRollbackUseCase
 } from '../prompt-cache/use-cases/prompt-cache-workflow.use-case';
-import { CompiledSystemPromptBuilder } from '../prompt-cache/compiled-system-prompt.builder';
+import { SystemPromptBuilder } from '../prompt-cache/system-prompt.builder';
 import { DnaDigestsRepository } from '../prompt-cache/dna-digests.repository';
 import {
   DeterministicPromptContextService,
@@ -292,8 +292,8 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
       useFactory: () => new PromptCacheSerializer()
     })
     .bind({
-      provide: CompiledSystemPromptBuilder,
-      useFactory: () => new CompiledSystemPromptBuilder()
+      provide: SystemPromptBuilder,
+      useFactory: () => new SystemPromptBuilder()
     })
     .bind({
       provide: TelemetrySerializer,
@@ -434,16 +434,13 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
         const env = c.get(SERVER_ENV);
 
         if (env.PROMPT_PROVIDER_MODE === 'deterministic') {
-          return new DeterministicPromptContextService(
-            c.get(CompiledSystemPromptBuilder)
-          );
+          return new DeterministicPromptContextService();
         }
 
         return new PromptContextService(
           c.get(PromptSnapshotsRepository),
           c.get(DnaDigestsRepository),
           c.get(RedisService),
-          c.get(CompiledSystemPromptBuilder),
           c.get(TelemetryService)
         );
       }
@@ -530,6 +527,7 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
           c.get(UsageCountersService),
           c.get(TelemetryService),
           c.get(QueryPolicyService),
+          c.get(SystemPromptBuilder),
           c.get(SERVER_ENV),
           c.get(SuccessfulTurnPersistenceService),
           c.get(ConversationTitleWorker),

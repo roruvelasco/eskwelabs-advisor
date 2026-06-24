@@ -1,6 +1,6 @@
 import {
   createContainer,
-  CompiledSystemPromptBuilder,
+  SystemPromptBuilder,
   AdvisorRuntimeVersionRepository,
   AdvisorsRepository,
   PromptSnapshotsRepository,
@@ -15,7 +15,7 @@ async function main() {
   const snapshotsRepo = container.get(PromptSnapshotsRepository);
   const digestsRepo = container.get(DnaDigestsRepository);
   const modelConfigRepo = container.get(ModelConfigRepository);
-  const promptBuilder = container.get(CompiledSystemPromptBuilder);
+  const promptBuilder = container.get(SystemPromptBuilder);
 
   const advisors = await advisorsRepo.list();
   if (advisors.length === 0) {

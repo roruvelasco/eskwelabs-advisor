@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { createHash } from 'node:crypto';
 
-import { CompiledSystemPromptBuilder } from '../compiled-system-prompt.builder';
+import { SystemPromptBuilder } from '../system-prompt.builder';
 import { PromptContextService } from '../prompt-context.service';
 import {
   extractDnaDirectiveTerms,
@@ -69,9 +69,9 @@ function sha256(value: string) {
   return createHash('sha256').update(value.trim()).digest('hex');
 }
 
-describe('compiled system prompt builder', () => {
+describe('system prompt builder', () => {
   test('builds a structured stable system prompt', () => {
-    const compiled = new CompiledSystemPromptBuilder().build({
+    const compiled = new SystemPromptBuilder().build({
       dnaDigestText: ' DNA digest ',
       advisorPromptText: ' Advisor prompt '
     });
@@ -106,7 +106,7 @@ describe('compiled system prompt builder', () => {
   });
 
   test('rejects missing or blank prompt context fields safely', () => {
-    const builder = new CompiledSystemPromptBuilder();
+    const builder = new SystemPromptBuilder();
     const cases = [
       {
         dnaDigestText: undefined,
@@ -153,8 +153,7 @@ describe('prompt context service', () => {
           return dnaDigest();
         }
       } as never,
-      redis as never,
-      new CompiledSystemPromptBuilder()
+      redis as never
     );
 
     const context = await service.getForAdvisor('data-dashboard');
@@ -186,8 +185,7 @@ describe('prompt context service', () => {
     const service = new PromptContextService(
       { findActive: async () => activePrompt } as never,
       { findActive: async () => undefined } as never,
-      redis as never,
-      new CompiledSystemPromptBuilder()
+      redis as never
     );
 
     const context = await service.getForAdvisor('data-dashboard');
@@ -216,8 +214,7 @@ describe('prompt context service', () => {
     const service = new PromptContextService(
       { findActive: async () => undefined } as never,
       { findActive: async () => activeDna } as never,
-      redis as never,
-      new CompiledSystemPromptBuilder()
+      redis as never
     );
 
     const context = await service.getForAdvisor('data-dashboard');
@@ -232,8 +229,7 @@ describe('prompt context service', () => {
     const service = new PromptContextService(
       { findActive: async () => undefined } as never,
       { findActive: async () => undefined } as never,
-      redis as never,
-      new CompiledSystemPromptBuilder()
+      redis as never
     );
 
     await expect(service.getForAdvisor('data-dashboard')).rejects.toMatchObject(

@@ -31,7 +31,7 @@ import {
 import type { KnowledgeRepository } from '../knowledge/knowledge.repository';
 import { QueryPolicyService } from './query-policy.service';
 import type { AnswerMode } from './query-policy.types';
-import { createHash } from 'node:crypto';
+import type { SystemPromptBuilder } from '../prompt-cache/system-prompt.builder';
 
 type StartTurnInput = {
   conversationId?: string;
@@ -49,8 +49,8 @@ type PreparedTurn = {
   runtime: {
     runtimeVersionId: string;
     promptContext: {
-      systemPrompt: string;
-      systemPromptHash: string;
+      advisorPromptText: string;
+      dnaDigestText: string;
       promptSnapshotHash: string;
       promptDocRevision: string;
       dnaDigestVersion: string;
@@ -80,6 +80,7 @@ export class MessagesService {
   private usageCountersService: UsageCountersService;
   private telemetryService: TelemetryService;
   private queryPolicyService: QueryPolicyService;
+  private systemPromptBuilder: SystemPromptBuilder;
   private env: ServerEnv;
 
   constructor(
@@ -93,6 +94,7 @@ export class MessagesService {
     usageCountersService: UsageCountersService,
     telemetryService: TelemetryService,
     queryPolicyService: QueryPolicyService,
+    systemPromptBuilder: SystemPromptBuilder,
     env: ServerEnv,
     private successfulTurnPersistenceService: SuccessfulTurnPersistenceService,
     private conversationTitleWorker: ConversationTitleWorker,
@@ -106,6 +108,7 @@ export class MessagesService {
     this.usageCountersService = usageCountersService;
     this.telemetryService = telemetryService;
     this.queryPolicyService = queryPolicyService;
+    this.systemPromptBuilder = systemPromptBuilder;
     this.env = env;
   }
 
@@ -230,11 +233,11 @@ export class MessagesService {
     >
   ) {
     return {
-      systemPrompt: this.requireRuntimeText(
-        runtime.promptContext?.systemPrompt
+      advisorPromptText: this.requireRuntimeText(
+        runtime.promptContext?.advisorPromptText
       ),
-      systemPromptHash: this.requireRuntimeText(
-        runtime.promptContext?.systemPromptHash
+      dnaDigestText: this.requireRuntimeText(
+        runtime.promptContext?.dnaDigestText
       ),
       promptSnapshotHash: this.requireRuntimeText(
         runtime.promptContext?.promptSnapshotHash
@@ -395,7 +398,7 @@ export class MessagesService {
 
     const policy = await this.queryPolicyService.classify({
       userContent,
-      advisorPromptText: promptContext.systemPrompt,
+      advisorPromptText: promptContext.advisorPromptText,
       dnaDigestText: undefined
     });
 
@@ -405,22 +408,13 @@ export class MessagesService {
       answerMode: policy.answerMode
     });
 
-    const contextSection = knowledgeContext.contextText
-      ? [
-          '<selected_knowledge_context>',
-          'Use this source-backed context for Eskwelabs-specific factual claims. If it does not support the requested fact, say you do not have that information based on the available advisor context.',
-          knowledgeContext.contextText,
-          '</selected_knowledge_context>'
-        ].join('\n')
-      : '';
-
-    const augmentedSystemPrompt = [
-      policy.answerContract,
-      contextSection,
-      promptContext.systemPrompt
-    ]
-      .filter(Boolean)
-      .join('\n\n');
+    const { text: augmentedSystemPrompt, hash: systemPromptHash } =
+      this.systemPromptBuilder.build({
+        dnaDigestText: promptContext.dnaDigestText,
+        advisorPromptText: promptContext.advisorPromptText,
+        answerContract: policy.answerContract,
+        knowledgeContextText: knowledgeContext.contextText || undefined
+      });
 
     const historyChars = history.reduce((sum, m) => sum + m.content.length, 0);
     const estimatedInputTokens = Math.ceil(
@@ -440,10 +434,6 @@ export class MessagesService {
         userId: actor.id,
         ...budget
       });
-
-      const systemPromptHash = createHash('sha256')
-        .update(augmentedSystemPrompt.trim())
-        .digest('hex');
 
       const request: LlmChatRequest = {
         provider: modelConfig.provider,

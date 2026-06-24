@@ -1,7 +1,6 @@
 import type { RedisService } from '../cache/redis.service';
 import { HttpException } from '../common/http/http-exception';
 import type { TelemetryService } from '../telemetry/telemetry.service';
-import { CompiledSystemPromptBuilder } from './compiled-system-prompt.builder';
 import type { DnaDigestsRepository } from './dna-digests.repository';
 import type { DnaDigestRow } from './dna-digests.schema';
 import type { PromptSnapshotsRepository } from './prompt-snapshots.repository';
@@ -11,8 +10,8 @@ const PROMPT_CONTEXT_TTL_SECONDS = 300;
 const DNA_CACHE_KEY = 'prompt-context:dna';
 
 export type PreparedPromptContext = {
-  systemPrompt: string;
-  systemPromptHash: string;
+  advisorPromptText: string;
+  dnaDigestText: string;
   promptSnapshotHash: string;
   promptDocRevision: string;
   dnaDigestVersion: string;
@@ -27,7 +26,6 @@ export class PromptContextService implements PromptContextLoader {
     private promptSnapshotsRepository: PromptSnapshotsRepository,
     private dnaDigestsRepository: DnaDigestsRepository,
     private redisService: RedisService,
-    private compiledSystemPromptBuilder: CompiledSystemPromptBuilder,
     private telemetryService?: TelemetryService
   ) {}
 
@@ -178,14 +176,9 @@ export class PromptContextService implements PromptContextLoader {
       );
     }
 
-    const compiled = this.compiledSystemPromptBuilder.build({
-      advisorPromptText: prompt.contentText,
-      dnaDigestText: dna.digestText
-    });
-
     return {
-      systemPrompt: compiled.text,
-      systemPromptHash: compiled.hash,
+      advisorPromptText: prompt.contentText,
+      dnaDigestText: dna.digestText,
       promptSnapshotHash: prompt.hash,
       promptDocRevision: prompt.revision,
       dnaDigestVersion: dna.hash
@@ -194,19 +187,10 @@ export class PromptContextService implements PromptContextLoader {
 }
 
 export class DeterministicPromptContextService implements PromptContextLoader {
-  constructor(
-    private compiledSystemPromptBuilder: CompiledSystemPromptBuilder
-  ) {}
-
   async getForAdvisor(advisorId: string) {
-    const compiled = this.compiledSystemPromptBuilder.build({
-      dnaDigestText: 'DNA digest for all advisors',
-      advisorPromptText: `System instructions for ${advisorId}`
-    });
-
     return {
-      systemPrompt: compiled.text,
-      systemPromptHash: compiled.hash,
+      advisorPromptText: `System instructions for ${advisorId}`,
+      dnaDigestText: 'DNA digest for all advisors',
       promptSnapshotHash: `prompt:${advisorId}:deterministic`,
       promptDocRevision: 'deterministic-revision',
       dnaDigestVersion: 'deterministic-dna-v1'

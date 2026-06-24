@@ -36,7 +36,7 @@ export { ModelConfigRepository } from './model-config/model-config.repository';
 export { ModelRateService } from './model-config/model-rate.service';
 export { PromptSnapshotsRepository } from './prompt-cache/prompt-snapshots.repository';
 export { DnaDigestsRepository } from './prompt-cache/dna-digests.repository';
-export { CompiledSystemPromptBuilder } from './prompt-cache/compiled-system-prompt.builder';
+export { SystemPromptBuilder } from './prompt-cache/system-prompt.builder';
 export { TelemetryService } from './telemetry/telemetry.service';
 export { DrizzleService } from './db/drizzle.service';
 export * from './config/env';

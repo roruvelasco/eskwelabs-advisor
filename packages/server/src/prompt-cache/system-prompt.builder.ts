@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 
 import { HttpException } from '../common/http/http-exception';
 
-export type CompiledSystemPrompt = {
+export type SystemPromptOutput = {
   text: string;
   hash: string;
 };
@@ -26,10 +26,11 @@ const SHARED_SCOPE_POLICY = [
   '- When the user request is vague, ask for clarification rather than assuming intent.'
 ].join('\n');
 
+const KNOWLEDGE_CONTEXT_INSTRUCTION =
+  'Use this source-backed context for Eskwelabs-specific factual claims. If it does not support the requested fact, say you do not have that information based on the available advisor context.';
+
 function sanitizeXmlContent(text: string): string {
-  return text.replace(/<\/?[\w-]+[^>]*>/g, (match) =>
-    match.replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  );
+  return text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function requirePromptText(value: unknown): string {
@@ -53,20 +54,27 @@ function requirePromptText(value: unknown): string {
   return trimmed;
 }
 
-export class CompiledSystemPromptBuilder {
-  build(
-    input: {
-      dnaDigestText: string;
-      advisorPromptText: string;
-    },
-    answerContract?: string
-  ): CompiledSystemPrompt {
+export type SystemPromptInput = {
+  dnaDigestText: string;
+  advisorPromptText: string;
+  answerContract?: string;
+  knowledgeContextText?: string;
+};
+
+export class SystemPromptBuilder {
+  build(input: SystemPromptInput): SystemPromptOutput {
     const dnaDigestText = sanitizeXmlContent(
       requirePromptText(input.dnaDigestText)
     );
     const advisorPromptText = sanitizeXmlContent(
       requirePromptText(input.advisorPromptText)
     );
+    const answerContract = input.answerContract
+      ? sanitizeXmlContent(input.answerContract)
+      : undefined;
+    const knowledgeContextText = input.knowledgeContextText
+      ? sanitizeXmlContent(input.knowledgeContextText)
+      : undefined;
 
     const sections: string[] = [
       '<scope_policy>',
@@ -80,6 +88,16 @@ export class CompiledSystemPromptBuilder {
         '<answer_contract>',
         answerContract,
         '</answer_contract>'
+      );
+    }
+
+    if (knowledgeContextText) {
+      sections.push(
+        '',
+        '<selected_knowledge_context>',
+        KNOWLEDGE_CONTEXT_INSTRUCTION,
+        knowledgeContextText,
+        '</selected_knowledge_context>'
       );
     }
 

@@ -9,7 +9,7 @@ import type {
   LlmChatChunk,
   LlmChatRequest
 } from '../../adapters/advisor-adapters';
-import { CompiledSystemPromptBuilder } from '../../prompt-cache/compiled-system-prompt.builder';
+import { SystemPromptBuilder } from '../../prompt-cache/system-prompt.builder';
 
 const actor: Actor = {
   id: crypto.randomUUID(),
@@ -132,8 +132,8 @@ function createAdvisorRuntimeService(runtime: {
   advisorName?: string;
   runtimeVersionId?: string;
   promptContext?: {
-    systemPrompt?: string;
-    systemPromptHash?: string;
+    advisorPromptText?: string;
+    dnaDigestText?: string;
     promptSnapshotHash?: string;
     promptDocRevision?: string;
     dnaDigestVersion?: string;
@@ -159,11 +159,10 @@ function createAdvisorRuntimeService(runtime: {
       advisorName: runtime.advisorName ?? runtime.advisorId,
       runtimeVersionId: runtime.runtimeVersionId ?? crypto.randomUUID(),
       promptContext: {
-        systemPrompt:
-          runtime.promptContext?.systemPrompt ??
-          'System instructions <scope_policy>\nshared dna digest',
-        systemPromptHash:
-          runtime.promptContext?.systemPromptHash ?? 'sys-prompt-hash',
+        advisorPromptText:
+          runtime.promptContext?.advisorPromptText ?? 'System instructions',
+        dnaDigestText:
+          runtime.promptContext?.dnaDigestText ?? 'shared dna digest',
         promptSnapshotHash:
           runtime.promptContext?.promptSnapshotHash ?? 'prompt-hash',
         promptDocRevision:
@@ -268,17 +267,9 @@ function createPromptContext(input?: {
   return {
     getForAdvisor: async () => {
       input?.onLoad?.();
-      const advisorPromptText =
-        input?.advisorPromptText ?? 'System instructions';
-      const dnaDigestText = input?.dnaDigestText ?? 'shared dna digest';
-      const compiled = new CompiledSystemPromptBuilder().build({
-        advisorPromptText,
-        dnaDigestText
-      });
-
       return {
-        systemPrompt: compiled.text,
-        systemPromptHash: compiled.hash,
+        advisorPromptText: input?.advisorPromptText ?? 'System instructions',
+        dnaDigestText: input?.dnaDigestText ?? 'shared dna digest',
         promptSnapshotHash: input?.promptSnapshotHash ?? 'prompt-hash',
         promptDocRevision: input?.promptDocRevision ?? 'prompt-revision',
         dnaDigestVersion: input?.dnaDigestVersion ?? 'dna-hash'
@@ -311,7 +302,8 @@ describe('messages service', () => {
         createAdvisorRuntimeService({
           advisorId,
           promptContext: {
-            systemPrompt: `System instructions for ${advisorId}\n<scope_policy>\nshared dna digest`,
+            advisorPromptText: `System instructions for ${advisorId}`,
+            dnaDigestText: 'shared dna digest',
             promptSnapshotHash: `prompt:${advisorId}`,
             dnaDigestVersion: 'dna:digest:shared'
           },
@@ -324,8 +316,8 @@ describe('messages service', () => {
           getForAdvisor: async () => {
             dnaCalls += 1;
             return {
-              systemPrompt: `System instructions for ${advisorId}\n<scope_policy>\nshared dna digest`,
-              systemPromptHash: 'hash',
+              advisorPromptText: `System instructions for ${advisorId}`,
+              dnaDigestText: 'shared dna digest',
               promptSnapshotHash: `prompt:${advisorId}`,
               promptDocRevision: 'revision',
               dnaDigestVersion: 'dna:digest:shared'
@@ -349,6 +341,7 @@ describe('messages service', () => {
         { incrementTurn: async () => undefined } as never,
         { record: async () => undefined } as never,
         new QueryPolicyService(),
+        new SystemPromptBuilder(),
         { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
         createPersistenceService(),
         createTitleWorker(),
@@ -402,7 +395,8 @@ describe('messages service', () => {
       createAdvisorRuntimeService({
         advisorId: 'data-dashboard',
         promptContext: {
-          systemPrompt: 'System instructions\n<scope_policy>\nDNA digest'
+          advisorPromptText: 'System instructions',
+          dnaDigestText: 'DNA digest'
         },
         modelConfig: { provider: 'deterministic', model: 'deterministic-model' }
       }),
@@ -433,6 +427,7 @@ describe('messages service', () => {
         }
       } as never,
       new QueryPolicyService(),
+      new SystemPromptBuilder(),
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
       createPersistenceService(),
       createTitleWorker(),
@@ -486,7 +481,8 @@ describe('messages service', () => {
       createAdvisorRuntimeService({
         advisorId: 'data-dashboard',
         promptContext: {
-          systemPrompt: 'System instructions\n<scope_policy>\nDNA digest'
+          advisorPromptText: 'System instructions',
+          dnaDigestText: 'DNA digest'
         },
         modelConfig: { provider: 'deterministic', model: 'deterministic-model' }
       }),
@@ -516,6 +512,7 @@ describe('messages service', () => {
       { incrementTurn: async () => undefined } as never,
       { record: async () => undefined } as never,
       new QueryPolicyService(),
+      new SystemPromptBuilder(),
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
       createPersistenceService(),
       createTitleWorker(),
@@ -591,6 +588,7 @@ describe('messages service', () => {
         }
       } as never,
       new QueryPolicyService(),
+      new SystemPromptBuilder(),
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
       createPersistenceService(),
       createTitleWorker(),
@@ -619,7 +617,7 @@ describe('messages service', () => {
     });
   });
 
-  test('streaming rejects runtime prompt context missing systemPrompt', async () => {
+  test('streaming rejects runtime prompt context missing advisorPromptText', async () => {
     let providerCalls = 0;
     const service = new MessagesService(
       createMessageRepository() as never,
@@ -641,8 +639,8 @@ describe('messages service', () => {
           advisorName: 'Data Dashboard',
           runtimeVersionId: crypto.randomUUID(),
           promptContext: {
-            systemPrompt: undefined,
-            systemPromptHash: 'hash',
+            advisorPromptText: undefined,
+            dnaDigestText: 'shared dna digest',
             promptSnapshotHash: 'prompt-hash',
             promptDocRevision: 'prompt-revision',
             dnaDigestVersion: 'dna-hash'
@@ -669,6 +667,7 @@ describe('messages service', () => {
       { incrementTurn: async () => undefined } as never,
       { record: async () => undefined } as never,
       new QueryPolicyService(),
+      new SystemPromptBuilder(),
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
       createPersistenceService(),
       createTitleWorker(),
@@ -732,6 +731,7 @@ describe('messages service', () => {
         }
       } as never,
       new QueryPolicyService(),
+      new SystemPromptBuilder(),
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
       createPersistenceService(),
       createTitleWorker(),
@@ -803,6 +803,7 @@ describe('messages service', () => {
       { incrementTurn: async () => undefined } as never,
       { record: async () => undefined } as never,
       new QueryPolicyService(),
+      new SystemPromptBuilder(),
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
       createPersistenceService(),
       createTitleWorker(),
@@ -863,6 +864,7 @@ describe('messages service', () => {
       { incrementTurn: async () => undefined } as never,
       { record: async () => undefined } as never,
       new QueryPolicyService(),
+      new SystemPromptBuilder(),
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
       createPersistenceService(),
       createTitleWorker(),
@@ -953,6 +955,7 @@ describe('messages service', () => {
       { incrementTurn: async () => undefined } as never,
       { record: async () => undefined } as never,
       new QueryPolicyService(),
+      new SystemPromptBuilder(),
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
       createPersistenceService(),
       createTitleWorker(),
@@ -1027,6 +1030,7 @@ describe('messages service', () => {
         }
       } as never,
       new QueryPolicyService(),
+      new SystemPromptBuilder(),
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
       createPersistenceService(),
       createTitleWorker(),
@@ -1105,6 +1109,7 @@ describe('messages service', () => {
       { incrementTurn: async () => undefined } as never,
       { record: async () => undefined } as never,
       new QueryPolicyService(),
+      new SystemPromptBuilder(),
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
       createPersistenceService(),
       createTitleWorker(),
@@ -1180,6 +1185,7 @@ describe('messages service', () => {
         }
       } as never,
       new QueryPolicyService(),
+      new SystemPromptBuilder(),
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
       createPersistenceService(),
       createTitleWorker(),
@@ -1255,6 +1261,7 @@ describe('messages service', () => {
         }
       } as never,
       new QueryPolicyService(),
+      new SystemPromptBuilder(),
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
       createPersistenceService(),
       createTitleWorker(),
@@ -1347,6 +1354,7 @@ describe('messages service', () => {
         }
       } as never,
       new QueryPolicyService(),
+      new SystemPromptBuilder(),
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
       {
         persist: async () => {
@@ -1428,6 +1436,7 @@ describe('messages service', () => {
         }
       } as never,
       new QueryPolicyService(),
+      new SystemPromptBuilder(),
       {
         DEFAULT_MAX_OUTPUT_TOKENS: 2000
       } as never,
@@ -1484,6 +1493,7 @@ describe('messages service', () => {
       { incrementTurn: async () => undefined } as never,
       { record: async () => undefined } as never,
       new QueryPolicyService(),
+      new SystemPromptBuilder(),
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
       createPersistenceService(),
       createTitleWorker(),
