@@ -46,9 +46,7 @@ describe('knowledge context resolver', () => {
             canonicalAnswer: 'Refund requests must be escalated to operations.'
           }
         ],
-        searchUnitsByVector: async () => {
-          throw new Error('should not search when a rule matches');
-        }
+        searchUnitsByVector: async () => []
       } as never,
       fakeEmbeddingProvider()
     );
@@ -145,7 +143,7 @@ describe('knowledge context resolver', () => {
       userContent: 'What is the refund policy?',
       expectedMode: 'structured_rule',
       expectedStrategy: 'structured_rule',
-      shouldSearch: false
+      shouldSearch: true
     },
     {
       label: 'technical: KPI structuring',
@@ -295,6 +293,156 @@ describe('knowledge context resolver', () => {
     expect(result.mode).toBe('none');
     expect(result.evidence).toEqual([]);
     expect(searched).toBe(true);
+  });
+
+  test('returns hybrid mode when both rules and semantic units resolve', async () => {
+    const resolver = new RepositoryKnowledgeContextResolver(
+      {
+        findPublishedRules: async () => [
+          {
+            id: 'rule-1',
+            topic: 'Refund policy',
+            canonicalAnswer: 'Refunds require operations approval.'
+          }
+        ],
+        searchUnitsByVector: async () => [
+          {
+            id: 'unit-1',
+            sourceRevision: 'rev-1',
+            contentHash: 'hash-1',
+            sectionPath: 'Enrollment FAQ',
+            contentType: 'faq',
+            text: 'Enrollment opens quarterly.',
+            summary: 'Enrollment FAQ summary.'
+          }
+        ]
+      } as never,
+      fakeEmbeddingProvider()
+    );
+
+    const result = await resolver.resolve({
+      advisorId: 'data-dashboard',
+      userContent: 'What is the refund policy and how does enrollment work?',
+      answerMode: 'factual_policy'
+    });
+
+    expect(result.mode).toBe('hybrid');
+    expect(result.evidence).toHaveLength(2);
+    expect(result.evidence[0].strategy).toBe('structured_rule');
+    expect(result.evidence[0].ruleId).toBe('rule-1');
+    expect(result.evidence[1].strategy).toBe('semantic');
+    expect(result.evidence[1].unitId).toBe('unit-1');
+    expect(result.contextText).toContain(
+      'IMPORTANT: If a structured rule and a semantic-knowledge unit'
+    );
+    expect(result.contextText).toContain(
+      'the structured rule takes precedence'
+    );
+    expect(result.contextText).toContain('use both sources together');
+    expect(result.contextHash.length).toBeGreaterThan(0);
+  });
+
+  test('skips evidence items that exceed the character budget', async () => {
+    const longUnit = {
+      id: 'unit-large',
+      sourceRevision: 'rev-1',
+      contentHash: 'hash-large',
+      sectionPath: 'Dense policy document section',
+      contentType: 'policy',
+      text: 'X'.repeat(5500),
+      summary: 'A'.repeat(1000)
+    };
+    const smallUnit = {
+      id: 'unit-small',
+      sourceRevision: 'rev-1',
+      contentHash: 'hash-small',
+      sectionPath: 'Short policy appendix',
+      contentType: 'policy',
+      text: 'Short policy note.',
+      summary: 'Brief summary.'
+    };
+
+    const resolver = new RepositoryKnowledgeContextResolver(
+      {
+        findPublishedRules: async () => [
+          {
+            id: 'rule-1',
+            topic: 'Refund policy',
+            canonicalAnswer: 'Refunds require approval.'
+          }
+        ],
+        searchUnitsByVector: async () => [longUnit, smallUnit]
+      } as never,
+      fakeEmbeddingProvider()
+    );
+
+    const result = await resolver.resolve({
+      advisorId: 'data-dashboard',
+      userContent: 'refund',
+      answerMode: 'factual_policy'
+    });
+
+    expect(result.mode).toBe('hybrid');
+    const unitIds = result.evidence.map((e) => e.unitId).filter(Boolean);
+    expect(unitIds).toEqual(['unit-small']);
+    expect(result.evidence[0].ruleId).toBe('rule-1');
+  });
+
+  test('returns structured rules when embedding fails but rules exist', async () => {
+    const resolver = new RepositoryKnowledgeContextResolver(
+      {
+        findPublishedRules: async () => [
+          {
+            id: 'rule-1',
+            topic: 'Refund policy',
+            canonicalAnswer: 'Refunds require operations approval.'
+          }
+        ],
+        searchUnitsByVector: async () => []
+      } as never,
+      {
+        embedTexts: async () => {
+          throw new Error('API failure');
+        }
+      }
+    );
+
+    const result = await resolver.resolve({
+      advisorId: 'data-dashboard',
+      userContent: 'What is the refund policy?',
+      answerMode: 'factual_policy'
+    });
+
+    expect(result.mode).toBe('structured_rule');
+    expect(result.evidence).toHaveLength(1);
+    expect(result.evidence[0].ruleId).toBe('rule-1');
+    expect(result.evidence[0].strategy).toBe('structured_rule');
+  });
+
+  test('degrades to structured rules when semantic search returns no results', async () => {
+    const resolver = new RepositoryKnowledgeContextResolver(
+      {
+        findPublishedRules: async () => [
+          {
+            id: 'rule-1',
+            topic: 'Enrollment deadline',
+            canonicalAnswer: 'Enrollment closes on March 15 every year.'
+          }
+        ],
+        searchUnitsByVector: async () => []
+      } as never,
+      fakeEmbeddingProvider()
+    );
+
+    const result = await resolver.resolve({
+      advisorId: 'data-dashboard',
+      userContent: 'When is the enrollment deadline?',
+      answerMode: 'factual_policy'
+    });
+
+    expect(result.mode).toBe('structured_rule');
+    expect(result.evidence).toHaveLength(1);
+    expect(result.evidence[0].strategy).toBe('structured_rule');
   });
 });
 

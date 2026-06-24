@@ -18,7 +18,7 @@ export type KnowledgeEvidence = {
 };
 
 export type KnowledgeContext = {
-  mode: 'none' | 'structured_rule' | 'semantic';
+  mode: 'none' | 'structured_rule' | 'semantic' | 'hybrid';
   evidence: KnowledgeEvidence[];
   contextText: string;
   contextHash: string;
@@ -42,19 +42,26 @@ function contextFromEvidence(
   mode: KnowledgeContext['mode'],
   evidence: KnowledgeEvidence[]
 ): KnowledgeContext {
-  const contextText = evidence
-    .map((item, index) =>
-      [
-        `<knowledge_evidence index="${index + 1}" strategy="${item.strategy}">`,
-        `Title: ${item.title}`,
-        item.sourceRevision ? `Source revision: ${item.sourceRevision}` : '',
-        item.text,
-        '</knowledge_evidence>'
-      ]
-        .filter(Boolean)
-        .join('\n')
-    )
-    .join('\n\n');
+  const overrideWarning =
+    mode === 'hybrid'
+      ? 'IMPORTANT: If a structured rule and a semantic-knowledge unit contain conflicting information, the structured rule takes precedence. For non-conflicting information, use both sources together.\n\n'
+      : '';
+
+  const contextText =
+    overrideWarning +
+    evidence
+      .map((item, index) =>
+        [
+          `<knowledge_evidence index="${index + 1}" strategy="${item.strategy}">`,
+          `Title: ${item.title}`,
+          item.sourceRevision ? `Source revision: ${item.sourceRevision}` : '',
+          item.text,
+          '</knowledge_evidence>'
+        ]
+          .filter(Boolean)
+          .join('\n')
+      )
+      .join('\n\n');
 
   return {
     mode,
@@ -85,47 +92,71 @@ export class RepositoryKnowledgeContextResolver implements KnowledgeContextResol
       return contextFromEvidence('none', []);
     }
 
-    const rules =
-      input.answerMode === 'factual_policy'
-        ? await this.knowledgeRepository.findPublishedRules({
-            query: input.userContent,
-            limit: 2
-          })
-        : [];
-
-    if (rules.length > 0) {
-      return contextFromEvidence(
-        'structured_rule',
-        rules.map((rule, index) => this.ruleEvidence(rule, index))
-      );
-    }
-
     const contentTypes = this.contentTypesForMode(input.answerMode);
 
-    try {
-      const embeddings = await this.embeddingProvider.embedTexts([
-        input.userContent
-      ]);
-      const embeddingVector = embeddings[0]?.vector;
+    const rulesPromise = this.knowledgeRepository.findPublishedRules({
+      query: input.userContent,
+      limit: 4
+    });
 
-      if (!embeddingVector) {
-        return contextFromEvidence('none', []);
+    const semanticPromise = (async () => {
+      try {
+        const embeddings = await this.embeddingProvider.embedTexts([
+          input.userContent
+        ]);
+        const embeddingVector = embeddings[0]?.vector;
+        if (!embeddingVector) return [];
+        return await this.knowledgeRepository.searchUnitsByVector({
+          embeddingVector,
+          advisorId: input.advisorId,
+          contentTypes,
+          limit: 6
+        });
+      } catch {
+        return [];
       }
+    })();
 
-      const units = await this.knowledgeRepository.searchUnitsByVector({
-        embeddingVector,
-        advisorId: input.advisorId,
-        contentTypes,
-        limit: 6
-      });
+    const [rules, units] = await Promise.all([rulesPromise, semanticPromise]);
 
-      return contextFromEvidence(
-        units.length > 0 ? 'semantic' : 'none',
-        units.map((unit, index) => this.unitEvidence(unit, index))
-      );
-    } catch {
-      return contextFromEvidence('none', []);
+    const ruleEvidence = rules.map((rule, index) =>
+      this.ruleEvidence(rule, index)
+    );
+    const unitEvidence = units.map((unit, index) =>
+      this.unitEvidence(unit, index)
+    );
+    const combined = [...ruleEvidence, ...unitEvidence];
+
+    const finalEvidence: KnowledgeEvidence[] = [];
+    let totalChars = 0;
+
+    for (const item of combined) {
+      if (finalEvidence.length >= 6) break;
+      const evidenceOverhead =
+        90 +
+        item.title.length +
+        (item.sourceRevision ? 20 + (item.sourceRevision ?? '').length : 0);
+      const estimated = item.text.length + evidenceOverhead;
+      if (totalChars + estimated <= 6000) {
+        finalEvidence.push(item);
+        totalChars += estimated;
+      }
     }
+
+    const mode = this.determineMode(finalEvidence);
+
+    return contextFromEvidence(mode, finalEvidence);
+  }
+
+  private determineMode(
+    evidence: KnowledgeEvidence[]
+  ): KnowledgeContext['mode'] {
+    if (evidence.length === 0) return 'none';
+    const hasRules = evidence.some((e) => e.strategy === 'structured_rule');
+    const hasUnits = evidence.some((e) => e.strategy === 'semantic');
+    if (hasRules && hasUnits) return 'hybrid';
+    if (hasRules) return 'structured_rule';
+    return 'semantic';
   }
 
   private contentTypesForMode(answerMode: AnswerMode) {
