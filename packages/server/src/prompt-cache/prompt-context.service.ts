@@ -9,6 +9,7 @@ import type { PromptSnapshotsRepository } from './prompt-snapshots.repository';
 import type { PromptSnapshotRow } from './prompt-snapshots.schema';
 
 const PROMPT_CONTEXT_TTL_SECONDS = 300;
+const DNA_CACHE_KEY = 'prompt-context:dna';
 
 export type PreparedPromptContext = {
   systemPrompt: string;
@@ -36,18 +37,50 @@ export class PromptContextService implements PromptContextLoader {
     return `prompt-context:advisor:${advisorId}`;
   }
 
-  private async getPrompt(advisorId: string) {
-    const cached = await this.redisService.get<PromptSnapshotRow>(
-      this.promptKey(advisorId)
+  private hasText(value: unknown): value is string {
+    return typeof value === 'string' && value.trim().length > 0;
+  }
+
+  private isUsablePrompt(value: unknown): value is PromptSnapshotRow {
+    const row = value as Partial<PromptSnapshotRow> | null;
+    return Boolean(
+      row &&
+      this.hasText(row.contentText) &&
+      this.hasText(row.hash) &&
+      this.hasText(row.revision)
     );
+  }
+
+  private isUsableDna(value: unknown): value is DnaDigestRow {
+    const row = value as Partial<DnaDigestRow> | null;
+    return Boolean(
+      row &&
+      this.hasText(row.digestText) &&
+      this.hasText(row.hash) &&
+      this.hasText(row.revision) &&
+      typeof row.sourceHash === 'string'
+    );
+  }
+
+  private async getPrompt(advisorId: string) {
+    const key = this.promptKey(advisorId);
+    const cached = await this.redisService.get<unknown>(key);
     if (cached) {
-      await this.recordTelemetry('prompt_cache_hit', {
-        cacheKeyType: 'advisor_prompt',
-        advisorId,
-        hash: cached.hash,
-        revision: cached.revision
-      });
-      return cached;
+      if (!this.isUsablePrompt(cached)) {
+        await this.redisService.del(key);
+        await this.recordTelemetry('prompt_cache_invalid', {
+          cacheKeyType: 'advisor_prompt',
+          advisorId
+        });
+      } else {
+        await this.recordTelemetry('prompt_cache_hit', {
+          cacheKeyType: 'advisor_prompt',
+          advisorId,
+          hash: cached.hash,
+          revision: cached.revision
+        });
+        return cached;
+      }
     }
 
     await this.recordTelemetry('prompt_cache_miss', {
@@ -78,11 +111,7 @@ export class PromptContextService implements PromptContextLoader {
 
     const active = await this.promptSnapshotsRepository.findActive(advisorId);
     if (active) {
-      await this.redisService.set(
-        this.promptKey(advisorId),
-        active,
-        PROMPT_CONTEXT_TTL_SECONDS
-      );
+      await this.redisService.set(key, active, PROMPT_CONTEXT_TTL_SECONDS);
       await this.recordTelemetry('prompt_postgres_fallback', {
         cacheKeyType: 'advisor_prompt',
         advisorId,
@@ -96,16 +125,22 @@ export class PromptContextService implements PromptContextLoader {
   }
 
   private async getDna() {
-    const cached =
-      await this.redisService.get<DnaDigestRow>('prompt-context:dna');
+    const cached = await this.redisService.get<unknown>(DNA_CACHE_KEY);
     if (cached) {
-      await this.recordTelemetry('prompt_cache_hit', {
-        cacheKeyType: 'dna_digest',
-        hash: cached.hash,
-        sourceHash: cached.sourceHash,
-        revision: cached.revision
-      });
-      return cached;
+      if (!this.isUsableDna(cached)) {
+        await this.redisService.del(DNA_CACHE_KEY);
+        await this.recordTelemetry('prompt_cache_invalid', {
+          cacheKeyType: 'dna_digest'
+        });
+      } else {
+        await this.recordTelemetry('prompt_cache_hit', {
+          cacheKeyType: 'dna_digest',
+          hash: cached.hash,
+          sourceHash: cached.sourceHash,
+          revision: cached.revision
+        });
+        return cached;
+      }
     }
 
     await this.recordTelemetry('prompt_cache_miss', {
@@ -134,7 +169,7 @@ export class PromptContextService implements PromptContextLoader {
     const active = await this.dnaDigestsRepository.findActive();
     if (active) {
       await this.redisService.set(
-        'prompt-context:dna',
+        DNA_CACHE_KEY,
         active,
         PROMPT_CONTEXT_TTL_SECONDS
       );

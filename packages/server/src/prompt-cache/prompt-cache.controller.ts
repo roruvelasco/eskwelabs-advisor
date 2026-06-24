@@ -35,10 +35,15 @@ export class PromptCacheController extends Controller {
         );
         return c.json(this.promptCacheSerializer.list(result));
       })
+      .get('/admin/prompt-cache/health', async (c) => {
+        const result = await this.promptCacheService.health();
+        return c.json(dataResponse(result));
+      })
       .post('/admin/prompt-cache/refresh', async (c) => {
         const actor = c.get('actor');
         const result = await this.promptContextRefreshUseCase.execute(
-          actor?.id
+          actor?.id,
+          'admin'
         );
         return c.json(dataResponse(result));
       })

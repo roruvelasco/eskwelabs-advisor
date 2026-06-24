@@ -1,10 +1,12 @@
 import type { PromptCacheService } from '../prompt-cache.service';
 
+export type RefreshSource = 'admin' | 'cron';
+
 export class PromptContextRefreshUseCase {
   constructor(private promptCacheService: PromptCacheService) {}
 
-  async execute(actorId?: string) {
-    return this.promptCacheService.refresh(actorId);
+  async execute(actorId?: string, source: RefreshSource = 'admin') {
+    return this.promptCacheService.refresh(actorId, source);
   }
 }
 

@@ -9,6 +9,7 @@ import type { DnaDigestRow } from './dna-digests.schema';
 import type { PromptIngestionService } from './prompt-ingestion.service';
 import type { PromptSnapshotsRepository } from './prompt-snapshots.repository';
 import type { PromptSnapshotRow } from './prompt-snapshots.schema';
+import type { RefreshSource } from './use-cases/prompt-cache-workflow.use-case';
 
 const PROMPT_CONTEXT_TTL_SECONDS = 300;
 
@@ -119,13 +120,18 @@ export class PromptCacheService {
     ]);
   }
 
-  async refresh(actorId?: string) {
+  async refresh(actorId?: string, source: RefreshSource = 'admin') {
     if (!this.promptIngestionService) {
       const result = { status: 'skipped' as const, warmed: null };
-      await this.recordTelemetry('admin_cache_refresh', actorId, 'warning', {
-        status: result.status,
-        code: 'prompt_ingestion_not_configured'
-      });
+      await this.recordTelemetry(
+        `${source}_cache_refresh`,
+        actorId,
+        'warning' as const,
+        {
+          status: result.status,
+          code: 'prompt_ingestion_not_configured'
+        }
+      );
       return result;
     }
 
@@ -141,9 +147,9 @@ export class PromptCacheService {
     };
 
     await this.recordTelemetry(
-      hasFailure ? 'admin_cache_refresh_failed' : 'admin_cache_refresh',
+      hasFailure ? `${source}_cache_refresh_failed` : `${source}_cache_refresh`,
       actorId,
-      hasFailure ? 'error' : 'info',
+      hasFailure ? ('error' as const) : ('info' as const),
       {
         status: result.status,
         advisorPromptCount: warmed.advisorPrompts.length,
@@ -211,5 +217,46 @@ export class PromptCacheService {
       digestHash: digest.hash
     });
     return digest;
+  }
+
+  async health() {
+    const advisorSnapshots = this.promptSnapshotsRepository
+      ? await Promise.all(
+          (await this.promptSnapshotsRepository.listAllActive()).map(
+            async (snapshot) => ({
+              advisorId: snapshot.advisorId,
+              activeSnapshot: {
+                id: snapshot.id,
+                hash: snapshot.hash,
+                revision: snapshot.revision,
+                validationStatus: snapshot.validationStatus,
+                validationReason: snapshot.validationReason,
+                createdAt: snapshot.createdAt.toISOString()
+              }
+            })
+          )
+        )
+      : [];
+
+    const dnaActive = this.dnaDigestsRepository
+      ? await this.dnaDigestsRepository.findActive()
+      : undefined;
+
+    return {
+      advisors: advisorSnapshots,
+      dna: dnaActive
+        ? {
+            active: {
+              id: dnaActive.id,
+              hash: dnaActive.hash,
+              sourceHash: dnaActive.sourceHash,
+              revision: dnaActive.revision,
+              validationStatus: dnaActive.validationStatus,
+              validationReason: dnaActive.validationReason,
+              createdAt: dnaActive.createdAt.toISOString()
+            }
+          }
+        : null
+    };
   }
 }
