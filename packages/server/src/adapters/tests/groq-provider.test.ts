@@ -8,6 +8,7 @@ import {
   RoutingLlmProvider,
   GeminiLlmProvider,
   DeterministicLlmProvider,
+  DeterministicDnaDigestSummarizer,
   GoogleDocsGeminiDnaDigestGenerator
 } from '../advisor-adapters';
 import {
@@ -1042,6 +1043,7 @@ describe('GeminiLlmProvider', () => {
     test('sends Gemini API key in a header instead of the URL', async () => {
       let capturedUrl = '';
       let capturedHeaders: Record<string, string> = {};
+      let capturedBody = '';
       const original = globalThis.fetch;
 
       globalThis.fetch = (async (
@@ -1050,6 +1052,7 @@ describe('GeminiLlmProvider', () => {
       ) => {
         capturedUrl = url.toString();
         capturedHeaders = init?.headers as Record<string, string>;
+        capturedBody = (init?.body as string) ?? '';
         return {
           ok: true,
           status: 200,
@@ -1073,6 +1076,11 @@ describe('GeminiLlmProvider', () => {
         );
         expect(capturedUrl).not.toContain('key=');
         expect(capturedHeaders['x-goog-api-key']).toBe('test-gemini-key');
+
+        const body = JSON.parse(capturedBody);
+        const prompt = body.contents[0].parts[0].text;
+        expect(prompt).toContain('behavior/tone directives');
+        expect(prompt).toContain('speak like a caveman');
       } finally {
         globalThis.fetch = original;
       }
@@ -1161,6 +1169,13 @@ describe('GroqDnaDigestSummarizer', () => {
       expect(body.messages).toHaveLength(2);
       expect(body.messages[0].role).toBe('system');
       expect(body.messages[1].role).toBe('user');
+      expect(body.messages[0].content).toContain('eskwelabs');
+      expect(body.messages[0].content).toContain('data');
+      expect(body.messages[0].content).toContain('mentor');
+      expect(body.messages[0].content).toContain('fellow');
+      expect(body.messages[0].content).toContain('communication');
+      expect(body.messages[0].content).toContain('behavior/tone directives');
+      expect(body.messages[0].content).toContain('speak like a caveman');
       expect(body.messages[1].content).toContain('DNA text');
     } finally {
       restore();
@@ -1255,6 +1270,18 @@ describe('GroqDnaDigestSummarizer', () => {
     } finally {
       restore();
     }
+  });
+});
+
+describe('DeterministicDnaDigestSummarizer', () => {
+  test('returns a digest with required validation categories', async () => {
+    const digest = await new DeterministicDnaDigestSummarizer().summarize();
+
+    expect(digest).toContain('eskwelabs');
+    expect(digest).toContain('data');
+    expect(digest).toContain('mentor');
+    expect(digest).toContain('fellow');
+    expect(digest).toContain('communication');
   });
 });
 

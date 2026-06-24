@@ -15,4 +15,16 @@ describe('USD fixed precision helpers', () => {
     expect(usdGreaterThan(sum, '0.3')).toBe(false);
     expect(usdGreaterThan(sum, '0.299999')).toBe(true);
   });
+
+  test('rejects malformed USD inputs safely', () => {
+    expect(() => usdToMicros(undefined as never)).toThrow(
+      expect.objectContaining({ code: 'invalid_usd_amount' })
+    );
+    expect(() => usdToMicros('')).toThrow(
+      expect.objectContaining({ code: 'invalid_usd_amount' })
+    );
+    expect(() => usdToMicros('not-a-number')).toThrow(
+      expect.objectContaining({ code: 'invalid_usd_amount' })
+    );
+  });
 });

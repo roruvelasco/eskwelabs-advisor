@@ -20,6 +20,46 @@ type AdvisoryLockTransaction = {
 
 const DEFAULT_ID = 'default';
 
+type RawUsageBudgetCounter = Partial<UsageBudgetCounter> &
+  Record<string, unknown>;
+
+function normalizeBudgetCounter(
+  row: RawUsageBudgetCounter | undefined,
+  periodKind: 'daily' | 'monthly',
+  periodKey: string
+): UsageBudgetCounter {
+  if (!row) {
+    return {
+      periodKind,
+      periodKey,
+      estimatedSpendUsd: '0',
+      updatedAt: new Date()
+    };
+  }
+
+  const snakePeriodKind = row.period_kind;
+  const snakePeriodKey = row.period_key;
+  const snakeEstimatedSpendUsd = row.estimated_spend_usd;
+  const snakeUpdatedAt = row.updated_at;
+
+  return {
+    periodKind:
+      row.periodKind ??
+      (typeof snakePeriodKind === 'string' ? snakePeriodKind : periodKind),
+    periodKey:
+      row.periodKey ??
+      (typeof snakePeriodKey === 'string' ? snakePeriodKey : periodKey),
+    estimatedSpendUsd:
+      row.estimatedSpendUsd ??
+      (typeof snakeEstimatedSpendUsd === 'string'
+        ? snakeEstimatedSpendUsd
+        : '0'),
+    updatedAt:
+      row.updatedAt ??
+      (snakeUpdatedAt instanceof Date ? snakeUpdatedAt : new Date())
+  };
+}
+
 export class UsageLimitsRepository extends Repository {
   async getOrThrow(): Promise<UsageLimits> {
     const rows = await this.drizzle.db
@@ -202,21 +242,14 @@ export class UsageLimitsRepository extends Repository {
 
   private async getGlobalBudgetTx(
     tx: AdvisoryLockTransaction,
-    periodKind: string,
+    periodKind: 'daily' | 'monthly',
     periodKey: string
   ): Promise<UsageBudgetCounter> {
     const rows = (await tx.execute(
       sql`select * from ${usageBudgetCountersTable} where ${usageBudgetCountersTable.periodKind} = ${periodKind} and ${usageBudgetCountersTable.periodKey} = ${periodKey} limit 1`
-    )) as unknown as UsageBudgetCounter[];
+    )) as unknown as RawUsageBudgetCounter[];
 
-    return (
-      rows[0] ?? {
-        periodKind,
-        periodKey,
-        estimatedSpendUsd: '0',
-        updatedAt: new Date()
-      }
-    );
+    return normalizeBudgetCounter(rows[0], periodKind, periodKey);
   }
 
   private async upsertGlobalBudgetTx(

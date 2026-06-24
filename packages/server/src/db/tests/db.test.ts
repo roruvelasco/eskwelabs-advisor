@@ -68,4 +68,89 @@ describe('db schema', () => {
 
     expect(closeCalls).toBe(1);
   });
+
+  test('RLS is enabled for all app tables including post-0012 additions', async () => {
+    const rlsMigration = await Bun.file(
+      new URL(
+        '../../../drizzle/0014_complete_rls_coverage.sql',
+        import.meta.url
+      )
+    ).text();
+
+    expect(rlsMigration).toContain(
+      'ALTER TABLE "telemetry_events" ENABLE ROW LEVEL SECURITY'
+    );
+    expect(rlsMigration).toContain(
+      'ALTER TABLE "usage_limits" ENABLE ROW LEVEL SECURITY'
+    );
+    expect(rlsMigration).toContain(
+      'ALTER TABLE "usage_budget_counters" ENABLE ROW LEVEL SECURITY'
+    );
+  });
+
+  test('defines direct-access policies for admin and owner reads', async () => {
+    const hardening = await Bun.file(
+      new URL('../../../drizzle/0012_db_hardening.sql', import.meta.url)
+    ).text();
+    const rlsMigration = await Bun.file(
+      new URL(
+        '../../../drizzle/0014_complete_rls_coverage.sql',
+        import.meta.url
+      )
+    ).text();
+
+    expect(hardening).toContain('eif_read_own_users');
+    expect(hardening).toContain('eif_read_own_conversations');
+    expect(hardening).toContain('eif_read_own_messages');
+
+    expect(rlsMigration).toContain('admin_full_users');
+    expect(rlsMigration).toContain('admin_full_conversations');
+    expect(rlsMigration).toContain('admin_full_messages');
+    expect(rlsMigration).toContain('public_read_active_advisors');
+    expect(rlsMigration).toContain('admin_full_advisors');
+
+    const adminSelectTables = [
+      'model_config',
+      'usage_counters',
+      'usage_limits',
+      'telemetry_events'
+    ];
+
+    for (const tbl of adminSelectTables) {
+      expect(rlsMigration).toContain(`admin_select_${tbl}`);
+      expect(rlsMigration).toContain(`admin_full_${tbl}`);
+    }
+  });
+
+  test('excludes prompt-content and service-only tables from direct read policies', async () => {
+    const rlsMigration = await Bun.file(
+      new URL(
+        '../../../drizzle/0014_complete_rls_coverage.sql',
+        import.meta.url
+      )
+    ).text();
+
+    const serviceOnlyTables = [
+      'prompt_snapshots',
+      'dna_digests',
+      'prompt_cache',
+      'advisor_runtime_versions',
+      'conversation_title_jobs',
+      'usage_budget_counters'
+    ];
+
+    for (const tbl of serviceOnlyTables) {
+      expect(rlsMigration).not.toContain(`admin_select_${tbl}`);
+      expect(rlsMigration).not.toContain(`admin_full_${tbl}`);
+    }
+  });
+
+  test('initial seed does not contain advisor-3', async () => {
+    const seed = await Bun.file(
+      new URL('../../../drizzle/0000_mvp_foundation.sql', import.meta.url)
+    ).text();
+
+    expect(seed).not.toContain("('advisor-3'");
+    expect(seed).toContain("('data-modeling'");
+  });
 });

@@ -265,7 +265,7 @@ export class GoogleDocsGeminiDnaDigestGenerator implements DnaDigestSummarizer {
               role: 'user',
               parts: [
                 {
-                  text: `Summarize this Eskwelabs DNA reference into a compact system digest for AI advisors. Preserve identity, voice, lexicon, formatting guardrails, and advisory posture. Do not add facts not present in the source.\n\n${text}`
+                  text: `Summarize this Eskwelabs DNA reference into a compact system digest for AI advisors. Preserve identity, voice, lexicon, formatting guardrails, and advisory posture. Do not add facts not present in the source. Include a behavior/tone directives section. Preserve explicit tone, voice, style, persona, speak, respond, answer, must, always, and never instructions verbatim enough that temporary tests remain visible, including unusual tests like "speak like a caveman". The digest must explicitly include these category labels exactly: eskwelabs, data, mentor, fellow, communication.\n\n${text}`
                 }
               ]
             }
@@ -335,7 +335,7 @@ export class GroqDnaDigestSummarizer implements DnaDigestSummarizer {
             {
               role: 'system',
               content:
-                'You are a precise document summarizer. You produce concise, faithful digests that preserve identity, voice, lexicon, formatting guardrails, and advisory posture. Never add facts, interpretations, or commentary not present in the source.'
+                'You are a precise document summarizer. You produce concise, faithful digests that preserve identity, voice, lexicon, formatting guardrails, and advisory posture. Never add facts, interpretations, or commentary not present in the source. Include a behavior/tone directives section. Preserve explicit tone, voice, style, persona, speak, respond, answer, must, always, and never instructions verbatim enough that temporary tests remain visible, including unusual tests like "speak like a caveman". Include these category labels exactly in the digest: eskwelabs, data, mentor, fellow, communication.'
             },
             {
               role: 'user',
@@ -943,7 +943,7 @@ export class GroqLlmProvider implements LlmProvider {
 
 export class DeterministicDnaDigestSummarizer implements DnaDigestSummarizer {
   async summarize() {
-    return 'DNA digest for all advisors';
+    return 'eskwelabs data mentor fellow communication DNA digest for all advisors';
   }
 }
 

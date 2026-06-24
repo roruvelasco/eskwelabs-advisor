@@ -1,7 +1,29 @@
+import { HttpException } from '../common/http/http-exception';
+
 const USD_SCALE = 1_000_000n;
 
+function invalidUsdAmount(): never {
+  throw new HttpException(500, 'Invalid USD amount', 'invalid_usd_amount');
+}
+
 export function usdToMicros(value: number | string) {
+  if (typeof value !== 'number' && typeof value !== 'string') {
+    invalidUsdAmount();
+  }
+
   const raw = typeof value === 'number' ? value.toFixed(6) : value.trim();
+  if (!raw) {
+    invalidUsdAmount();
+  }
+  if (
+    !/^[+-]?\d*(\.\d*)?$/.test(raw) ||
+    raw === '.' ||
+    raw === '+.' ||
+    raw === '-.'
+  ) {
+    invalidUsdAmount();
+  }
+
   const sign = raw.startsWith('-') ? -1n : 1n;
   const unsigned = raw.replace(/^[+-]/, '');
   const [whole = '0', fraction = ''] = unsigned.split('.');
