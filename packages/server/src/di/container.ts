@@ -46,16 +46,35 @@ import { MessageController } from '../messages/messages.controller';
 import { MessagesRepository } from '../messages/messages.repository';
 import { MessagesSerializer } from '../messages/messages.serializer';
 import { MessagesService } from '../messages/messages.service';
+import { QueryPolicyService } from '../messages/query-policy.service';
 import {
   ChatTurnUseCase,
   StreamChatTurnUseCase
 } from '../messages/use-cases/chat-turn.use-case';
+import { KnowledgeController } from '../knowledge/knowledge.controller';
+import {
+  NoopKnowledgeContextResolver,
+  RepositoryKnowledgeContextResolver,
+  type KnowledgeContextResolver
+} from '../knowledge/knowledge-context.resolver';
+import { KnowledgeIngestionService } from '../knowledge/knowledge-ingestion.service';
+import { KnowledgeJobsController } from '../knowledge/knowledge-jobs.controller';
+import {
+  DeterministicEmbeddingProvider,
+  NoopKnowledgeIndexProvider,
+  type EmbeddingProvider,
+  type KnowledgeIndexProvider
+} from '../knowledge/knowledge-providers';
+import { KnowledgeRepository } from '../knowledge/knowledge.repository';
+import { KnowledgeSerializer } from '../knowledge/knowledge.serializer';
+import { KnowledgeService } from '../knowledge/knowledge.service';
 import { ModelConfigController } from '../model-config/model-config.controller';
 import { ModelConfigRepository } from '../model-config/model-config.repository';
 import { ModelRateService } from '../model-config/model-rate.service';
 import { ModelConfigSerializer } from '../model-config/model-config.serializer';
 import { ModelConfigService } from '../model-config/model-config.service';
 import { PromptCacheController } from '../prompt-cache/prompt-cache.controller';
+import { PromptCacheJobsController } from '../prompt-cache/prompt-cache-jobs.controller';
 import { PromptCacheRepository } from '../prompt-cache/prompt-cache.repository';
 import { PromptCacheSerializer } from '../prompt-cache/prompt-cache.serializer';
 import { PromptCacheService } from '../prompt-cache/prompt-cache.service';
@@ -107,6 +126,13 @@ export const PROMPT_CONTEXT_LOADER = new InjectionToken<PromptContextLoader>(
 export const DEFERRED_TASK_RUNNER = new InjectionToken<DeferredTaskRunner>(
   'DEFERRED_TASK_RUNNER'
 );
+export const KNOWLEDGE_CONTEXT_RESOLVER =
+  new InjectionToken<KnowledgeContextResolver>('KNOWLEDGE_CONTEXT_RESOLVER');
+export const EMBEDDING_PROVIDER = new InjectionToken<EmbeddingProvider>(
+  'EMBEDDING_PROVIDER'
+);
+export const KNOWLEDGE_INDEX_PROVIDER =
+  new InjectionToken<KnowledgeIndexProvider>('KNOWLEDGE_INDEX_PROVIDER');
 
 export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
   const container = new Container();
@@ -206,6 +232,10 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
       useFactory: (c) => new MessagesRepository(c.get(DrizzleService))
     })
     .bind({
+      provide: KnowledgeRepository,
+      useFactory: (c) => new KnowledgeRepository(c.get(DrizzleService))
+    })
+    .bind({
       provide: ModelConfigRepository,
       useFactory: (c) => new ModelConfigRepository(c.get(DrizzleService))
     })
@@ -251,6 +281,10 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
       useFactory: () => new MessagesSerializer()
     })
     .bind({
+      provide: KnowledgeSerializer,
+      useFactory: () => new KnowledgeSerializer()
+    })
+    .bind({
       provide: ModelConfigSerializer,
       useFactory: () => new ModelConfigSerializer()
     })
@@ -275,6 +309,10 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
       useFactory: () => new UsageLimitsSerializer()
     })
     .bind({ provide: UsersSerializer, useFactory: () => new UsersSerializer() })
+    .bind({
+      provide: QueryPolicyService,
+      useFactory: () => new QueryPolicyService()
+    })
     .bind({
       provide: ModelRateService,
       useFactory: () => new ModelRateService()
@@ -306,6 +344,45 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
     .bind({
       provide: ModelConfigService,
       useFactory: (c) => new ModelConfigService(c.get(ModelConfigRepository))
+    })
+    .bind({
+      provide: KnowledgeIngestionService,
+      useFactory: (c) =>
+        new KnowledgeIngestionService(
+          c.get(KnowledgeRepository),
+          new GoogleDocsClient(c.get(SERVER_ENV)),
+          c.get(TelemetryService),
+          c.get(KNOWLEDGE_INDEX_PROVIDER)
+        )
+    })
+    .bind({
+      provide: KnowledgeService,
+      useFactory: (c) =>
+        new KnowledgeService(
+          c.get(KnowledgeRepository),
+          c.get(KnowledgeIngestionService),
+          c.get(TelemetryService)
+        )
+    })
+    .bind({
+      provide: KNOWLEDGE_CONTEXT_RESOLVER,
+      useFactory: (c) => {
+        const env = c.get(SERVER_ENV);
+        if (env.RUNTIME_PROFILE === 'test') {
+          return new NoopKnowledgeContextResolver();
+        }
+        return new RepositoryKnowledgeContextResolver(
+          c.get(KnowledgeRepository)
+        );
+      }
+    })
+    .bind({
+      provide: EMBEDDING_PROVIDER,
+      useFactory: () => new DeterministicEmbeddingProvider()
+    })
+    .bind({
+      provide: KNOWLEDGE_INDEX_PROVIDER,
+      useFactory: () => new NoopKnowledgeIndexProvider()
     })
     .bind({
       provide: UsageCountersService,
@@ -479,10 +556,13 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
           c.get(CostCapEnforcer),
           c.get(UsageCountersService),
           c.get(TelemetryService),
+          c.get(QueryPolicyService),
           c.get(SERVER_ENV),
           c.get(SuccessfulTurnPersistenceService),
           c.get(ConversationTitleWorker),
-          c.get(DEFERRED_TASK_RUNNER)
+          c.get(DEFERRED_TASK_RUNNER),
+          c.get(KNOWLEDGE_CONTEXT_RESOLVER),
+          c.get(KnowledgeRepository)
         )
     })
     .bind({
@@ -565,6 +645,27 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
         )
     })
     .bind({
+      provide: PromptCacheJobsController,
+      useFactory: (c) =>
+        new PromptCacheJobsController(
+          c.get(PromptContextRefreshUseCase),
+          c.get(SERVER_ENV)
+        )
+    })
+    .bind({
+      provide: KnowledgeController,
+      useFactory: (c) =>
+        new KnowledgeController(
+          c.get(KnowledgeService),
+          c.get(KnowledgeSerializer)
+        )
+    })
+    .bind({
+      provide: KnowledgeJobsController,
+      useFactory: (c) =>
+        new KnowledgeJobsController(c.get(KnowledgeService), c.get(SERVER_ENV))
+    })
+    .bind({
       provide: UsageCounterController,
       useFactory: (c) =>
         new UsageCounterController(
@@ -611,7 +712,10 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
           c.get(UsageLimitsController),
           c.get(TelemetryController),
           c.get(AdminController),
-          c.get(ConversationTitleJobsController)
+          c.get(PromptCacheJobsController),
+          c.get(ConversationTitleJobsController),
+          c.get(KnowledgeController),
+          c.get(KnowledgeJobsController)
         )
     })
     .bind({

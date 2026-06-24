@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { HttpException } from '../../common/http/http-exception';
 import { MessagesService } from '../messages.service';
+import { QueryPolicyService } from '../query-policy.service';
 import type { MessageCreateInput, MessageRow } from '../messages.repository';
 import type { Actor } from '../../common/utils/hono';
 import type {
@@ -347,6 +348,7 @@ describe('messages service', () => {
         createCostCapEnforcer(),
         { incrementTurn: async () => undefined } as never,
         { record: async () => undefined } as never,
+        new QueryPolicyService(),
         { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
         createPersistenceService(),
         createTitleWorker(),
@@ -430,6 +432,7 @@ describe('messages service', () => {
           telemetry.push({ eventName, payload });
         }
       } as never,
+      new QueryPolicyService(),
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
       createPersistenceService(),
       createTitleWorker(),
@@ -512,6 +515,7 @@ describe('messages service', () => {
       createCostCapEnforcer(),
       { incrementTurn: async () => undefined } as never,
       { record: async () => undefined } as never,
+      new QueryPolicyService(),
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
       createPersistenceService(),
       createTitleWorker(),
@@ -534,6 +538,351 @@ describe('messages service', () => {
       events.find((event) => event.type === 'final')?.data.assistantMessage
         .promptTokens
     ).toBe(100);
+  });
+
+  test('streaming prompt-context failures stay structured before provider calls', async () => {
+    let providerCalls = 0;
+    const createdMessages: MessageRow[] = [];
+    const telemetry: Array<{ eventName: string; payload: unknown }> = [];
+    const service = new MessagesService(
+      createMessageRepository({ createdMessages }) as never,
+      {
+        assertOwns: async () => ({
+          id: 'conversation-id',
+          userId: actor.id,
+          advisorId: 'data-dashboard',
+          title: 'Untitled',
+          status: 'active',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        })
+      } as never,
+      createModelRateService(),
+      {
+        resolveRunnableVersion: async () => {
+          throw new HttpException(
+            503,
+            'Prompt context is incomplete',
+            'prompt_context_incomplete'
+          );
+        }
+      } as never,
+      createPromptContext(),
+      {
+        complete: async () => {
+          providerCalls += 1;
+          throw new Error('provider should not be called');
+        },
+        async *stream() {
+          providerCalls += 1;
+          yield { type: 'delta' as const, content: '' };
+        }
+      },
+      createCostCapEnforcer(),
+      { incrementTurn: async () => undefined } as never,
+      {
+        record: async (
+          eventName: string,
+          _actorId: string,
+          _severity: string,
+          payload: unknown
+        ) => {
+          telemetry.push({ eventName, payload });
+        }
+      } as never,
+      new QueryPolicyService(),
+      { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
+      createPersistenceService(),
+      createTitleWorker(),
+      createDeferredRunner()
+    );
+
+    const events: StreamEvent[] = [];
+    await expect(async () => {
+      for await (const event of service.streamChatTurn(actor, {
+        conversationId: crypto.randomUUID(),
+        content: 'Stream this'
+      })) {
+        events.push(event);
+      }
+    }).toThrow('Prompt context is incomplete');
+
+    expect(events).toEqual([]);
+    expect(providerCalls).toBe(0);
+    expect(createdMessages).toHaveLength(0);
+    expect(telemetry).toContainEqual({
+      eventName: 'request_blocked',
+      payload: expect.objectContaining({
+        code: 'prompt_context_incomplete',
+        reason: 'prompt_context_incomplete'
+      })
+    });
+  });
+
+  test('streaming rejects runtime prompt context missing systemPrompt', async () => {
+    let providerCalls = 0;
+    const service = new MessagesService(
+      createMessageRepository() as never,
+      {
+        assertOwns: async () => ({
+          id: 'conversation-id',
+          userId: actor.id,
+          advisorId: 'data-dashboard',
+          title: 'Untitled',
+          status: 'active',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        })
+      } as never,
+      createModelRateService(),
+      {
+        resolveRunnableVersion: async () => ({
+          advisorId: 'data-dashboard',
+          advisorName: 'Data Dashboard',
+          runtimeVersionId: crypto.randomUUID(),
+          promptContext: {
+            systemPrompt: undefined,
+            systemPromptHash: 'hash',
+            promptSnapshotHash: 'prompt-hash',
+            promptDocRevision: 'prompt-revision',
+            dnaDigestVersion: 'dna-hash'
+          },
+          modelConfig: {
+            provider: 'deterministic',
+            model: 'deterministic-model',
+            isEnabled: true
+          }
+        })
+      } as never,
+      createPromptContext(),
+      {
+        complete: async () => {
+          providerCalls += 1;
+          throw new Error('provider should not be called');
+        },
+        async *stream() {
+          providerCalls += 1;
+          yield { type: 'delta' as const, content: '' };
+        }
+      },
+      createCostCapEnforcer(),
+      { incrementTurn: async () => undefined } as never,
+      { record: async () => undefined } as never,
+      new QueryPolicyService(),
+      { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
+      createPersistenceService(),
+      createTitleWorker(),
+      createDeferredRunner()
+    );
+
+    await expect(async () => {
+      for await (const _event of service.streamChatTurn(actor, {
+        conversationId: crypto.randomUUID(),
+        content: 'hello'
+      })) {
+        void _event;
+      }
+    }).toThrow('Prompt context is incomplete');
+
+    expect(providerCalls).toBe(0);
+  });
+
+  test('streaming rejects malformed user content before provider calls', async () => {
+    let providerCalls = 0;
+    const telemetry: Array<{ eventName: string; payload: unknown }> = [];
+    const service = new MessagesService(
+      createMessageRepository() as never,
+      {
+        assertOwns: async () => ({
+          id: 'conversation-id',
+          userId: actor.id,
+          advisorId: 'data-dashboard',
+          title: 'Untitled',
+          status: 'active',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        })
+      } as never,
+      createModelRateService(),
+      createAdvisorRuntimeService({
+        advisorId: 'data-dashboard',
+        modelConfig: { provider: 'deterministic', model: 'deterministic-model' }
+      }),
+      createPromptContext(),
+      {
+        complete: async () => {
+          providerCalls += 1;
+          throw new Error('provider should not be called');
+        },
+        async *stream() {
+          providerCalls += 1;
+          yield { type: 'delta' as const, content: '' };
+        }
+      },
+      createCostCapEnforcer(),
+      { incrementTurn: async () => undefined } as never,
+      {
+        record: async (
+          eventName: string,
+          _actorId: string,
+          _severity: string,
+          payload: unknown
+        ) => {
+          telemetry.push({ eventName, payload });
+        }
+      } as never,
+      new QueryPolicyService(),
+      { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
+      createPersistenceService(),
+      createTitleWorker(),
+      createDeferredRunner()
+    );
+
+    await expect(async () => {
+      for await (const _event of service.streamChatTurn(actor, {
+        conversationId: crypto.randomUUID(),
+        content: undefined
+      } as never)) {
+        void _event;
+      }
+    }).toThrow('Invalid chat message content');
+
+    expect(providerCalls).toBe(0);
+    expect(telemetry).toContainEqual({
+      eventName: 'request_blocked',
+      payload: expect.objectContaining({
+        code: 'chat_turn_invalid_input'
+      })
+    });
+  });
+
+  test('streaming rejects malformed conversation history before provider calls', async () => {
+    let providerCalls = 0;
+    const history = [
+      {
+        id: crypto.randomUUID(),
+        conversationId: 'conversation-id',
+        userId: actor.id,
+        role: 'user' as const,
+        content: undefined,
+        status: 'ok' as const,
+        seq: 1,
+        createdAt: new Date().toISOString()
+      } as unknown as MessageRow
+    ];
+    const service = new MessagesService(
+      createMessageRepository({ history }) as never,
+      {
+        assertOwns: async () => ({
+          id: 'conversation-id',
+          userId: actor.id,
+          advisorId: 'data-dashboard',
+          title: 'Untitled',
+          status: 'active',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        })
+      } as never,
+      createModelRateService(),
+      createAdvisorRuntimeService({
+        advisorId: 'data-dashboard',
+        modelConfig: { provider: 'deterministic', model: 'deterministic-model' }
+      }),
+      createPromptContext(),
+      {
+        complete: async () => {
+          providerCalls += 1;
+          throw new Error('provider should not be called');
+        },
+        async *stream() {
+          providerCalls += 1;
+          yield { type: 'delta' as const, content: '' };
+        }
+      },
+      createCostCapEnforcer(),
+      { incrementTurn: async () => undefined } as never,
+      { record: async () => undefined } as never,
+      new QueryPolicyService(),
+      { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
+      createPersistenceService(),
+      createTitleWorker(),
+      createDeferredRunner()
+    );
+
+    await expect(async () => {
+      for await (const _event of service.streamChatTurn(actor, {
+        conversationId: crypto.randomUUID(),
+        content: 'hello'
+      })) {
+        void _event;
+      }
+    }).toThrow('Conversation history is invalid');
+
+    expect(providerCalls).toBe(0);
+  });
+
+  test('streaming rejects invalid provider usage metadata', async () => {
+    const createdMessages: MessageRow[] = [];
+    const service = new MessagesService(
+      createMessageRepository({ createdMessages }) as never,
+      {
+        assertOwns: async () => ({
+          id: 'conversation-id',
+          userId: actor.id,
+          advisorId: 'data-dashboard',
+          title: 'Untitled',
+          status: 'active',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        })
+      } as never,
+      createModelRateService(),
+      createAdvisorRuntimeService({
+        advisorId: 'data-dashboard',
+        modelConfig: { provider: 'deterministic', model: 'deterministic-model' }
+      }),
+      createPromptContext(),
+      {
+        complete: async () => {
+          throw new Error('complete should not be called');
+        },
+        async *stream() {
+          yield { type: 'delta' as const, content: 'partial ' };
+          yield {
+            type: 'done' as const,
+            usage: {
+              promptTokens: 10,
+              completionTokens: 2,
+              totalTokens: 12,
+              estimatedCostUsd: undefined
+            } as never
+          };
+        }
+      },
+      createCostCapEnforcer(),
+      { incrementTurn: async () => undefined } as never,
+      { record: async () => undefined } as never,
+      new QueryPolicyService(),
+      { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
+      createPersistenceService(),
+      createTitleWorker(),
+      createDeferredRunner()
+    );
+
+    await expect(async () => {
+      for await (const _event of service.streamChatTurn(actor, {
+        conversationId: crypto.randomUUID(),
+        content: 'hello'
+      })) {
+        void _event;
+      }
+    }).toThrow('LLM stream returned invalid usage metadata');
+
+    expect(createdMessages.at(-1)).toMatchObject({
+      role: 'assistant',
+      status: 'error',
+      blockReason: 'provider_usage_invalid'
+    });
   });
 
   test('includes bounded successful conversation history before the newest user message', async () => {
@@ -603,6 +952,7 @@ describe('messages service', () => {
       createCostCapEnforcer(),
       { incrementTurn: async () => undefined } as never,
       { record: async () => undefined } as never,
+      new QueryPolicyService(),
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
       createPersistenceService(),
       createTitleWorker(),
@@ -676,6 +1026,7 @@ describe('messages service', () => {
           telemetry.push({ eventName, payload });
         }
       } as never,
+      new QueryPolicyService(),
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
       createPersistenceService(),
       createTitleWorker(),
@@ -753,6 +1104,7 @@ describe('messages service', () => {
       }),
       { incrementTurn: async () => undefined } as never,
       { record: async () => undefined } as never,
+      new QueryPolicyService(),
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
       createPersistenceService(),
       createTitleWorker(),
@@ -827,6 +1179,7 @@ describe('messages service', () => {
           telemetry.push({ eventName, payload });
         }
       } as never,
+      new QueryPolicyService(),
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
       createPersistenceService(),
       createTitleWorker(),
@@ -901,6 +1254,7 @@ describe('messages service', () => {
           telemetry.push({ eventName, payload });
         }
       } as never,
+      new QueryPolicyService(),
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
       createPersistenceService(),
       createTitleWorker(),
@@ -992,6 +1346,7 @@ describe('messages service', () => {
           telemetry.push({ eventName, payload });
         }
       } as never,
+      new QueryPolicyService(),
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
       {
         persist: async () => {
@@ -1072,6 +1427,7 @@ describe('messages service', () => {
           telemetry.push({ eventName, payload });
         }
       } as never,
+      new QueryPolicyService(),
       {
         DEFAULT_MAX_OUTPUT_TOKENS: 2000
       } as never,
@@ -1127,6 +1483,7 @@ describe('messages service', () => {
       createCostCapEnforcer(),
       { incrementTurn: async () => undefined } as never,
       { record: async () => undefined } as never,
+      new QueryPolicyService(),
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
       createPersistenceService(),
       createTitleWorker(),
