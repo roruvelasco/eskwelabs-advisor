@@ -3,6 +3,8 @@ import { queryOptions } from '@tanstack/react-query';
 import {
   getAdminUsage,
   getUsageLimits,
+  getKnowledgeHealth,
+  listKnowledgeSources,
   listPromptCache,
   listUsageCounters,
   listModelConfig,
@@ -100,3 +102,32 @@ export function usersQuery({
     queryFn: () => listUsers({ role, search, limit, cursor })
   });
 }
+
+export function knowledgeSourcesQuery({
+  limit,
+  cursor,
+  status,
+  advisorScope
+}: {
+  limit?: number;
+  cursor?: string;
+  status?: string;
+  advisorScope?: string;
+} = {}) {
+  return queryOptions({
+    queryKey: [
+      'admin',
+      'knowledge-sources',
+      limit,
+      cursor,
+      status,
+      advisorScope
+    ],
+    queryFn: () => listKnowledgeSources({ limit, cursor, status, advisorScope })
+  });
+}
+
+export const knowledgeHealthQuery = queryOptions({
+  queryKey: ['admin', 'knowledge-health'],
+  queryFn: getKnowledgeHealth
+});
