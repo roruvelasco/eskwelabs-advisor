@@ -152,16 +152,36 @@ Response (list, paginated): `{ data: Message[], meta: { nextCursor: string | nul
 **Controller**: `PromptCacheController` (`packages/server/src/prompt-cache/`)
 **Auth**: `requireActor(['admin'])`
 
-| Method | Path                                                                         | Description                                             |
-| ------ | ---------------------------------------------------------------------------- | ------------------------------------------------------- |
-| `GET`  | `/api/admin/prompt-cache`                                                    | List prompt cache metadata (paginated: `?limit&cursor`) |
-| `POST` | `/api/admin/prompt-cache/refresh`                                            | Ingest prompt/DNA snapshots and warm Redis cache        |
-| `GET`  | `/api/admin/prompt-cache/advisors/:advisorId/snapshots`                      | List advisor prompt snapshot metadata                   |
-| `POST` | `/api/admin/prompt-cache/advisors/:advisorId/snapshots/:snapshotId/activate` | Roll back an advisor to a prior prompt snapshot         |
-| `GET`  | `/api/admin/prompt-cache/dna-digests`                                        | List DNA digest metadata                                |
-| `POST` | `/api/admin/prompt-cache/dna-digests/:digestId/activate`                     | Roll back to a prior DNA digest                         |
+| Method | Path                                                                         | Description                                               |
+| ------ | ---------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `GET`  | `/api/admin/prompt-cache`                                                    | List prompt cache metadata (paginated: `?limit&cursor`)   |
+| `GET`  | `/api/admin/prompt-cache/health`                                             | Active prompt/DNA versions, validation status per advisor |
+| `POST` | `/api/admin/prompt-cache/refresh`                                            | Ingest prompt/DNA snapshots and warm Redis cache          |
+| `GET`  | `/api/admin/prompt-cache/advisors/:advisorId/snapshots`                      | List advisor prompt snapshot metadata                     |
+| `POST` | `/api/admin/prompt-cache/advisors/:advisorId/snapshots/:snapshotId/activate` | Roll back an advisor to a prior prompt snapshot           |
+| `GET`  | `/api/admin/prompt-cache/dna-digests`                                        | List DNA digest metadata                                  |
+| `POST` | `/api/admin/prompt-cache/dna-digests/:digestId/activate`                     | Roll back to a prior DNA digest                           |
 
-Prompt cache admin endpoints return metadata only. They never return advisor prompt text or DNA digest text. Refresh does not invalidate Redis first; it writes and warms new context and lets old keys expire naturally.
+Prompt cache admin endpoints return metadata only. They never return advisor prompt text or DNA digest text. Refresh returns `{ data: { status, warmed } }`, where `warmed` may include per-advisor/DNA status, revision/hash metadata, and safe failure `code`/`reason` values. Refresh does not invalidate Redis first; it writes and warms new context and lets old keys expire naturally.
+
+---
+
+## Knowledge (Admin)
+
+**Controller**: `KnowledgeController` (`packages/server/src/knowledge/`)
+**Auth**: `requireActor(['admin'])`
+
+| Method | Path                                             | Description                                                           |
+| ------ | ------------------------------------------------ | --------------------------------------------------------------------- |
+| `GET`  | `/api/admin/knowledge/sources`                   | List source metadata (paginated: `?limit&cursor&status&advisorScope`) |
+| `POST` | `/api/admin/knowledge/sources`                   | Register a source `{ sourceType, externalId, title, ... }`            |
+| `POST` | `/api/admin/knowledge/sources/:sourceId/refresh` | Ingest one source into versioned knowledge units                      |
+| `POST` | `/api/admin/knowledge/refresh`                   | Refresh all currently published sources                               |
+| `GET`  | `/api/admin/knowledge/sources/:sourceId/units`   | List source-backed unit metadata                                      |
+| `GET`  | `/api/admin/knowledge/health`                    | Return knowledge source health summary                                |
+| `GET`  | `/api/admin/knowledge/search`                    | Metadata-only lexical search preview (`?query&advisorId&limit`)       |
+
+Knowledge admin endpoints do not return raw unit text by default. Chat-time evidence selection is server-only and audited in `message_knowledge_audit`.
 
 ---
 
@@ -199,6 +219,28 @@ Prompt cache admin endpoints return metadata only. They never return advisor pro
 Response: `{ recovered: { requeued, failed }, claimed, completed, retried, failed, notClaimed }`
 
 Errors: `401` when the bearer token is missing or invalid, `500` when `CRON_SECRET` is not configured, `400` for an invalid `limit`.
+
+## Prompt Cache Jobs (Internal)
+
+**Controller**: `PromptCacheJobsController` (`packages/server/src/prompt-cache/`)
+**Auth**: `Authorization: Bearer <CRON_SECRET>`
+
+| Method | Path                                      | Description                  |
+| ------ | ----------------------------------------- | ---------------------------- |
+| `GET`  | `/api/internal/jobs/prompt-cache/refresh` | Trigger prompt cache refresh |
+
+Response: `{ status: 'refreshed' | 'partial' | 'skipped', warmed: ... }`
+
+Errors: `401` when the bearer token is missing or invalid, `500` when `CRON_SECRET` is not configured.
+
+## Knowledge Refresh Job
+
+**Controller**: `KnowledgeJobsController` (`packages/server/src/knowledge/`)
+**Auth**: `Authorization: Bearer <CRON_SECRET>`
+
+| Method | Path                                   | Description                             |
+| ------ | -------------------------------------- | --------------------------------------- |
+| `GET`  | `/api/internal/jobs/knowledge/refresh` | Refresh all published knowledge sources |
 
 ---
 

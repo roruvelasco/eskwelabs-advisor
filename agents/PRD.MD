@@ -117,7 +117,7 @@ Eskwelabs runs EIF (intern) mentoring on third-party Custom GPTs and Google Gems
 
 - **Eskwelabs DNA (shared KB):** one Google Doc (~30 pages) — the single structured reference for Eskwelabs identity: core identity (mission, values, organizational framework), communication voice & institutional email posture, product-line definitions & learning architecture, diagnostic-first LXD principles, and lexicon/formatting guardrails. Summarized into a compact DNA digest that is prepended to every advisor's system prompt. DNA Doc: `{{dna_doc_url}}`
 - **Prompt source (per advisor):** one Google Doc per advisor (3 total). The Doc body is the advisor-specific system prompt.
-- **No vector RAG at MVP.** Advisors rely on DNA digest + advisor prompt + conversation context.
+- **No vector RAG at MVP.** Advisors rely on DNA digest + advisor prompt + conversation context. Post-MVP architecture now includes a source-backed `knowledge` domain for factual context selection, structured rules, and provider-neutral future retrieval.
 - **Advisor registry:** server-side config mapping advisorId → { name, docId, model }; not exposed to EIFs beyond display name.
   - Data Dashboard Advisor Doc: `https://docs.google.com/document/d/1mZX8QwMhHDYG_jjH2CMCCr5oqChjrlJo1muVdmhxki0/edit?usp=sharing`
   - SSOT Memo Advisor Doc: `https://docs.google.com/document/d/1FX1A1399qjTNLT397HVqSpFHvBVpnKFSpJClTrap2JA/edit?usp=sharing`
