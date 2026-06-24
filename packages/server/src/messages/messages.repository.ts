@@ -26,6 +26,11 @@ export interface MessageRow {
   blockReason?: string;
   promptDocRevision?: string;
   dnaDigestVersion?: string;
+  promptSnapshotHash?: string;
+  systemPromptHash?: string;
+  knowledgeContextHash?: string;
+  knowledgeResolutionMode?: string;
+  knowledgeUnitCount?: number;
   clientTurnId?: string;
   seq: number;
   createdAt: string;
@@ -54,6 +59,11 @@ function toRow(message: Message): MessageRow {
     blockReason: nullable(message.blockReason),
     promptDocRevision: nullable(message.promptDocRevision),
     dnaDigestVersion: nullable(message.dnaDigestVersion),
+    promptSnapshotHash: nullable(message.promptSnapshotHash),
+    systemPromptHash: nullable(message.systemPromptHash),
+    knowledgeContextHash: nullable(message.knowledgeContextHash),
+    knowledgeResolutionMode: nullable(message.knowledgeResolutionMode),
+    knowledgeUnitCount: nullable(message.knowledgeUnitCount),
     clientTurnId: nullable(message.clientTurnId),
     seq: message.seq,
     createdAt: message.createdAt.toISOString()

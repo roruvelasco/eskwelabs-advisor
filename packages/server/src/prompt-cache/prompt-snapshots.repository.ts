@@ -13,6 +13,8 @@ type CreatePromptSnapshotInput = {
   revision: string;
   contentText: string;
   hash: string;
+  validationStatus?: string | null;
+  validationReason?: string | null;
 };
 
 type AdvisoryLockTransaction = {
@@ -51,6 +53,14 @@ export class PromptSnapshotsRepository extends Repository {
       .select()
       .from(promptSnapshotsTable)
       .where(eq(promptSnapshotsTable.advisorId, advisorId))
+      .orderBy(desc(promptSnapshotsTable.createdAt));
+  }
+
+  async listAllActive(): Promise<PromptSnapshotRow[]> {
+    return this.drizzle.db
+      .select()
+      .from(promptSnapshotsTable)
+      .where(eq(promptSnapshotsTable.isActive, true))
       .orderBy(desc(promptSnapshotsTable.createdAt));
   }
 

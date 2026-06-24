@@ -23,7 +23,7 @@ INSERT INTO "advisors" ("id", "name", "description", "prompt_doc_id")
 VALUES
 	('data-dashboard', 'Data Dashboard Advisor', 'Dashboard analysis support', NULL),
 	('ssot-memo', 'SSOT Memo Advisor', 'Single source of truth memo support', NULL),
-	('advisor-3', 'Advisor 3', 'Configurable advisor slot', NULL)
+	('data-modeling', 'Data Modeling Advisor', 'Data modeling and schema design mentoring', NULL)
 ON CONFLICT ("id") DO NOTHING;
 --> statement-breakpoint
 CREATE TABLE "conversations" (
@@ -68,7 +68,7 @@ INSERT INTO "model_config" ("advisor_id", "provider", "model", "is_enabled", "up
 VALUES
 	('data-dashboard', 'gemini', 'gemini-2.5-flash-lite', true, NULL),
 	('ssot-memo', 'gemini', 'gemini-2.5-flash-lite', true, NULL),
-	('advisor-3', 'gemini', 'gemini-2.5-flash-lite', true, NULL)
+	('data-modeling', 'gemini', 'gemini-2.5-flash-lite', true, NULL)
 ON CONFLICT ("advisor_id") DO NOTHING;
 --> statement-breakpoint
 CREATE TABLE "prompt_cache" (

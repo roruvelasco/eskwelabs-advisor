@@ -18,6 +18,8 @@ export const promptSnapshotsTable = pgTable(
     contentText: text('content_text').notNull(),
     hash: text('hash').notNull(),
     isActive: boolean('is_active').notNull().default(true),
+    validationStatus: text('validation_status'),
+    validationReason: text('validation_reason'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),

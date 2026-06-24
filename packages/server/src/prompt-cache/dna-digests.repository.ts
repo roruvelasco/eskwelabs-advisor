@@ -10,6 +10,8 @@ type CreateDnaDigestInput = {
   sourceHash: string;
   digestText: string;
   hash: string;
+  validationStatus?: string | null;
+  validationReason?: string | null;
 };
 
 type AdvisoryLockTransaction = {

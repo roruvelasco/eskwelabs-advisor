@@ -38,6 +38,11 @@ export const messagesTable = pgTable(
     blockReason: text('block_reason'),
     promptDocRevision: text('prompt_doc_revision'),
     dnaDigestVersion: text('dna_digest_version'),
+    promptSnapshotHash: text('prompt_snapshot_hash'),
+    systemPromptHash: text('system_prompt_hash'),
+    knowledgeContextHash: text('knowledge_context_hash'),
+    knowledgeResolutionMode: text('knowledge_resolution_mode'),
+    knowledgeUnitCount: integer('knowledge_unit_count'),
     seq: bigint('seq', { mode: 'number' })
       .notNull()
       .default(sql`nextval('messages_seq_seq')`),
