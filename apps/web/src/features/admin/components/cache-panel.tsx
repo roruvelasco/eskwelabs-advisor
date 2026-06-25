@@ -315,13 +315,13 @@ function PromptHealthPanel() {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       {health.data.advisors.map((advisor) => (
         <div key={advisor.advisorId}>
           <h4 className="text-muted-foreground mb-2 font-mono text-xs font-semibold uppercase tracking-wider">
             {advisor.advisorId}
           </h4>
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div>
               <span className="text-muted-foreground text-xs">Hash</span>
               <p className="font-mono text-xs">
@@ -373,7 +373,7 @@ function PromptHealthPanel() {
           <h4 className="text-muted-foreground mb-2 font-mono text-xs font-semibold uppercase tracking-wider">
             DNA Digest
           </h4>
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div>
               <span className="text-muted-foreground text-xs">Hash</span>
               <p className="font-mono text-xs">
@@ -600,7 +600,7 @@ export function CachePanel() {
       <RefreshDialog />
       <CardContent className="flex flex-1 flex-col p-0">
         <Tabs defaultValue="health" className="flex flex-1 flex-col">
-          <TabsList className="mx-6 mt-4 w-fit">
+          <TabsList className="mx-4 mt-4 w-fit sm:mx-6">
             <TabsTrigger value="health">Health</TabsTrigger>
             <TabsTrigger value="cache">Cache</TabsTrigger>
           </TabsList>
