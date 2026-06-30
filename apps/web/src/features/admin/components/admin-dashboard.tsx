@@ -522,14 +522,6 @@ export function AdminDashboard() {
             )}
 
             <div className="mt-4 sm:mt-6">
-              {section === 'usage' && (
-                <div className="mb-3 flex items-center justify-between sm:mb-4">
-                  <h3 className="font-serif text-base font-semibold text-[#2d6a4f] sm:text-lg">
-                    {sectionLabel}
-                  </h3>
-                </div>
-              )}
-
               <AdminPanel section={section} />
             </div>
           </main>
