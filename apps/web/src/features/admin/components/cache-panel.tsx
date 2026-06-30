@@ -2,12 +2,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  ChevronsUpDown,
-  RefreshCwIcon,
-  HistoryIcon,
-  ArrowLeftRightIcon
-} from 'lucide-react';
+import { RefreshCwIcon, HistoryIcon, ArrowLeftRightIcon } from 'lucide-react';
 
 import {
   Badge,
@@ -22,12 +17,6 @@ import {
   DialogTitle,
   DialogTrigger,
   Skeleton,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
   Tabs,
   TabsContent,
   TabsList,
@@ -45,6 +34,8 @@ import {
   type PromptRefreshResult
 } from '@/lib/domains/admin/api';
 import { promptCacheQuery } from '@/lib/domains/admin/queries';
+import { AdminDataTable } from './admin-data-table';
+import type { ColumnDef } from '@tanstack/react-table';
 
 interface CacheEntry {
   key: string;
@@ -98,23 +89,6 @@ function formatDate(iso: string | null) {
 function shortHash(value: string | null) {
   if (!value) return '—';
   return value.length > 12 ? `${value.slice(0, 12)}...` : value;
-}
-
-function SortHead({
-  children,
-  className
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <TableHead className={className}>
-      <span className="flex items-center gap-1.5 text-xs uppercase tracking-widest">
-        {children}
-        <ChevronsUpDown className="text-muted-foreground/40 size-3 shrink-0" />
-      </span>
-    </TableHead>
-  );
 }
 
 function refreshFailureMessage(result: PromptRefreshResult | undefined) {
@@ -225,56 +199,76 @@ function CacheEntryTable() {
   }
 
   return (
-    <div className="overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <SortHead className="pl-6">Key</SortHead>
-            <SortHead>Value Hash</SortHead>
-            <SortHead>Doc Revision</SortHead>
-            <SortHead>DNA Digest</SortHead>
-            <SortHead>Last Good</SortHead>
-            <SortHead>Expires</SortHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {entries.map((entry) => (
-            <TableRow key={entry.key}>
-              <TableCell className="py-4 pl-6 font-mono text-xs">
-                {entry.key}
-              </TableCell>
-              <TableCell className="py-4 font-mono text-xs">
-                {shortHash(entry.valueHash)}
-              </TableCell>
-              <TableCell className="py-4">
-                {entry.docRevision ? (
-                  <Badge variant="outline" className="font-mono text-xs">
-                    {shortHash(entry.docRevision)}
-                  </Badge>
-                ) : (
-                  <span className="text-muted-foreground">—</span>
-                )}
-              </TableCell>
-              <TableCell className="py-4">
-                {entry.dnaDigestVersion ? (
-                  <Badge variant="outline" className="font-mono text-xs">
-                    {shortHash(entry.dnaDigestVersion)}
-                  </Badge>
-                ) : (
-                  <span className="text-muted-foreground">—</span>
-                )}
-              </TableCell>
-              <TableCell className="text-muted-foreground py-4 text-xs">
-                {formatDate(entry.lastGoodAt)}
-              </TableCell>
-              <TableCell className="text-muted-foreground py-4 pr-6 text-xs">
-                {formatDate(entry.expiresAt)}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+    <AdminDataTable
+      columns={
+        [
+          {
+            accessorKey: 'key',
+            header: 'Key',
+            cell: ({ row }) => (
+              <span className="font-mono text-xs">{row.original.key}</span>
+            )
+          },
+          {
+            accessorKey: 'valueHash',
+            header: 'Value Hash',
+            cell: ({ row }) => (
+              <span className="font-mono text-xs">
+                {shortHash(row.original.valueHash)}
+              </span>
+            )
+          },
+          {
+            accessorKey: 'docRevision',
+            header: 'Doc Revision',
+            cell: ({ row }) =>
+              row.original.docRevision ? (
+                <Badge variant="outline" className="font-mono text-xs">
+                  {shortHash(row.original.docRevision)}
+                </Badge>
+              ) : (
+                <span className="text-muted-foreground">—</span>
+              )
+          },
+          {
+            accessorKey: 'dnaDigestVersion',
+            header: 'DNA Digest',
+            cell: ({ row }) =>
+              row.original.dnaDigestVersion ? (
+                <Badge variant="outline" className="font-mono text-xs">
+                  {shortHash(row.original.dnaDigestVersion)}
+                </Badge>
+              ) : (
+                <span className="text-muted-foreground">—</span>
+              )
+          },
+          {
+            accessorKey: 'lastGoodAt',
+            header: 'Last Good',
+            cell: ({ row }) => (
+              <span className="text-muted-foreground text-xs">
+                {formatDate(row.original.lastGoodAt)}
+              </span>
+            )
+          },
+          {
+            accessorKey: 'expiresAt',
+            header: 'Expires',
+            cell: ({ row }) => (
+              <span className="text-muted-foreground text-xs">
+                {formatDate(row.original.expiresAt)}
+              </span>
+            )
+          }
+        ] as ColumnDef<CacheEntry>[]
+      }
+      data={entries}
+      isLoading={isLoading}
+      emptyMessage="No cache entries found."
+      enableSorting={true}
+      enablePagination={true}
+      pageSize={20}
+    />
   );
 }
 
