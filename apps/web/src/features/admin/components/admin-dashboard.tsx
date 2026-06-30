@@ -490,11 +490,13 @@ export function AdminDashboard() {
         {/* ── Main area ───────────────────────────────────────────────── */}
         <div className="flex min-w-0 flex-1 flex-col pt-14 md:pt-0">
           <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-            <div className="mb-4 flex items-baseline justify-between sm:mb-6">
+            <div className="mb-4 sm:mb-6">
               <h2 className="font-serif text-lg font-bold text-[#222019] sm:text-xl">
                 {heading}
+                <span className="ml-2 font-sans text-xs font-normal text-[#8a8578] sm:text-sm">
+                  — {description}
+                </span>
               </h2>
-              <p className="text-xs text-[#8a8578] sm:text-sm">{description}</p>
             </div>
 
             {section !== 'limits' && <OverviewCards section={section} />}
