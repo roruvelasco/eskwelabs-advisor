@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   BarChart3Icon,
+  BotIcon,
   ChevronRight,
   DatabaseIcon,
   LayoutDashboardIcon,
@@ -29,6 +30,7 @@ import {
 import { cn } from '@/lib/utils';
 import {
   adminUsageQuery,
+  adminAdvisorsQuery,
   modelConfigQuery,
   usageLimitsQuery,
   knowledgeHealthQuery
@@ -41,9 +43,14 @@ import { TelemetryPanel } from './telemetry-panel';
 import { UsagePanel } from './usage-panel';
 import { CreateUserButton, UsersPanel } from './users-panel';
 import { AdminKpiCard } from './admin-kpi-card';
+import {
+  AdvisorManagementPanel,
+  CreateAdvisorButton
+} from './advisor-management-panel';
 
 type AdminSection =
   | 'usage'
+  | 'advisors'
   | 'model-config'
   | 'limits'
   | 'telemetry'
@@ -86,12 +93,20 @@ interface ModelConfigRow {
   updatedAt: string;
 }
 
+interface AdminAdvisorRow {
+  id: string;
+  isActive: boolean;
+  status: string;
+  availability?: { status: 'available' | 'unavailable'; reasons?: string[] };
+}
+
 const sections: Array<{
   id: AdminSection;
   label: string;
   icon: ComponentType<{ className?: string }>;
 }> = [
   { id: 'usage', label: 'Dashboard', icon: BarChart3Icon },
+  { id: 'advisors', label: 'Advisors', icon: BotIcon },
   { id: 'model-config', label: 'Models', icon: DatabaseIcon },
   { id: 'knowledge', label: 'Knowledge', icon: LibraryIcon },
   { id: 'limits', label: 'Limits', icon: SettingsIcon },
@@ -124,6 +139,13 @@ function useKpiCards(section: AdminSection) {
   const modelConfigs =
     (modelConfigData as { data: ModelConfigRow[] } | undefined)?.data ?? [];
 
+  const { data: advisorsData, isLoading: advisorsLoading } = useQuery({
+    ...adminAdvisorsQuery({ limit: 100 }),
+    enabled: section === 'advisors'
+  });
+  const advisors =
+    (advisorsData as { data: AdminAdvisorRow[] } | undefined)?.data ?? [];
+
   const cardsBySection: Record<
     AdminSection,
     {
@@ -155,6 +177,28 @@ function useKpiCards(section: AdminSection) {
         {
           label: 'Providers',
           value: new Set(modelConfigs.map((m) => m.provider)).size
+        }
+      ]
+    },
+    advisors: {
+      isLoading: advisorsLoading,
+      cards: [
+        { label: 'Total Advisors', value: advisors.length },
+        {
+          label: 'Active',
+          value: advisors.filter((advisor) => advisor.isActive).length
+        },
+        {
+          label: 'Ready',
+          value: advisors.filter(
+            (advisor) => advisor.availability?.status === 'available'
+          ).length
+        },
+        {
+          label: 'Disabled',
+          value: advisors.filter(
+            (advisor) => !advisor.isActive || advisor.status === 'disabled'
+          ).length
         }
       ]
     },
@@ -227,6 +271,7 @@ function OverviewCards({ section }: { section: AdminSection }) {
 }
 
 function AdminPanel({ section }: { section: AdminSection }) {
+  if (section === 'advisors') return <AdvisorManagementPanel />;
   if (section === 'model-config') return <ModelConfigPanel />;
   if (section === 'knowledge') return <KnowledgePanel />;
   if (section === 'limits') return <LimitsPanel />;
@@ -469,6 +514,7 @@ export function AdminDashboard() {
               </h2>
               {section === 'limits' && <LimitsEditButton />}
               {section === 'users' && <CreateUserButton />}
+              {section === 'advisors' && <CreateAdvisorButton />}
             </div>
 
             {section !== 'limits' && section !== 'users' && (
