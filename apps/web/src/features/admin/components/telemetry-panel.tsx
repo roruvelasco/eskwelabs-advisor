@@ -157,7 +157,7 @@ export function TelemetryPanel() {
           emptyMessage="No events recorded yet."
           enableSorting={true}
           enablePagination={true}
-          pageSize={20}
+          pageSize={5}
         />
       </CardContent>
     </Card>

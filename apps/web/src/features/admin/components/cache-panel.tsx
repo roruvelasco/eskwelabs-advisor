@@ -267,7 +267,7 @@ function CacheEntryTable() {
       emptyMessage="No cache entries found."
       enableSorting={true}
       enablePagination={true}
-      pageSize={20}
+      pageSize={5}
     />
   );
 }
