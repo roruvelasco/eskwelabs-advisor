@@ -37,7 +37,7 @@ import {
 } from '@eskwelabs-advisor/ui';
 
 import {
-  telemetryQuery,
+  advisorBreakdownQuery,
   usageCountersQuery,
   usageLimitsQuery,
   usageSummaryQuery,
@@ -62,11 +62,11 @@ interface UserRow {
   email: string;
 }
 
-interface TelemetryEvent {
-  id: string;
-  eventName: string;
-  severity: 'info' | 'warning' | 'error';
-  createdAt: string;
+interface AdvisorBreakdownItem {
+  advisorId: string;
+  messages: number;
+  tokens: number;
+  estimatedSpendUsd: string;
 }
 
 type UsageResponse = {
@@ -89,13 +89,6 @@ function addDays(dayPh: string, days: number) {
 
 function formatUsd(value: string | number, digits = 4) {
   return `$${Number(value).toFixed(digits)}`;
-}
-
-function formatEventName(value: string) {
-  return value
-    .split('_')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
 }
 
 function BudgetHealth({
@@ -137,45 +130,63 @@ function BudgetHealth({
   );
 }
 
-function TopUsersSpendChart({
-  topUsers
+const ADVISOR_LABELS: Record<string, string> = {
+  'data-dashboard': 'Data Dashboard',
+  'ssot-memo': 'SSOT Memo',
+  'data-modeling': 'Data Modeling'
+};
+
+function AdvisorBreakdownChart({
+  data,
+  isLoading
 }: {
-  topUsers: Array<{
-    userId: string;
-    userEmail?: string;
-    estimatedSpendUsd: string;
-  }>;
+  data: AdvisorBreakdownItem[];
+  isLoading: boolean;
 }) {
   const chartData = useMemo(() => {
     const colors = [
       'var(--chart-1)',
       'var(--chart-2)',
       'var(--chart-3)',
-      'var(--chart-4)',
-      'var(--chart-5)'
+      'var(--chart-4)'
     ];
-    return topUsers.map((user, i) => ({
-      user: user.userEmail ?? `${user.userId.slice(0, 8)}...`,
-      value: Number(user.estimatedSpendUsd),
+    return data.map((item, i) => ({
+      advisor: ADVISOR_LABELS[item.advisorId] ?? item.advisorId,
+      value: Number(item.estimatedSpendUsd),
       fill: colors[i % colors.length]
     }));
-  }, [topUsers]);
+  }, [data]);
 
   const chartConfig = useMemo(
     () =>
       Object.fromEntries(
-        chartData.map((d, i) => [`user-${i}`, { label: d.user, color: d.fill }])
+        chartData.map((d, i) => [
+          `advisor-${i}`,
+          { label: d.advisor, color: d.fill }
+        ])
       ),
     [chartData]
   );
 
-  if (chartData.length === 0) return null;
+  if (isLoading) {
+    return <Skeleton className="h-[320px] w-full" />;
+  }
+
+  if (chartData.length === 0) {
+    return (
+      <p className="text-muted-foreground text-sm">
+        No messages recorded for this range.
+      </p>
+    );
+  }
+
+  const totalSpend = chartData.reduce((sum, item) => sum + item.value, 0);
 
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex flex-col items-center gap-4">
       <ChartContainer
         config={chartConfig}
-        className="aspect-square max-h-[240px] w-full"
+        className="aspect-square h-[220px] w-[220px]"
       >
         <PieChart>
           <ShadcnChartTooltip
@@ -185,8 +196,9 @@ function TopUsersSpendChart({
           <Pie
             data={chartData}
             dataKey="value"
-            nameKey="user"
-            innerRadius={60}
+            nameKey="advisor"
+            innerRadius={70}
+            outerRadius={105}
             strokeWidth={2}
           >
             {chartData.map((entry, index) => (
@@ -195,15 +207,23 @@ function TopUsersSpendChart({
           </Pie>
         </PieChart>
       </ChartContainer>
-      <div className="mt-4 flex flex-col gap-2 text-sm">
+      <div className="flex items-baseline gap-2">
+        <p className="font-serif text-2xl font-bold text-[#2d6a4f]">
+          {formatUsd(totalSpend, 2)}
+        </p>
+        <p className="text-muted-foreground text-xs">total</p>
+      </div>
+      <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm">
         {chartData.map((item) => (
-          <div key={item.user} className="flex items-center gap-2">
+          <div key={item.advisor} className="flex items-center gap-2">
             <div
-              className="h-2 w-2 shrink-0 rounded-sm"
+              className="h-2.5 w-2.5 shrink-0 rounded-sm"
               style={{ backgroundColor: item.fill }}
             />
-            <span className="text-muted-foreground truncate">{item.user}</span>
-            <span className="ml-auto font-medium tabular-nums">
+            <span className="text-muted-foreground max-w-[120px] truncate">
+              {item.advisor}
+            </span>
+            <span className="font-semibold tabular-nums">
               {formatUsd(item.value, 2)}
             </span>
           </div>
@@ -251,8 +271,8 @@ export function UsagePanel() {
   const { data: usersData, isLoading: usersLoading } = useQuery(usersQuery());
   const { data: limitsData, isLoading: limitsLoading } =
     useQuery(usageLimitsQuery);
-  const { data: telemetryData, isLoading: telemetryLoading } = useQuery(
-    telemetryQuery({ limit: 6 })
+  const { data: advisorData, isLoading: advisorLoading } = useQuery(
+    advisorBreakdownQuery({ fromDayPh, toDayPh })
   );
 
   useEffect(() => {
@@ -271,8 +291,8 @@ export function UsagePanel() {
   const nextCursor = (countersData as UsageResponse | undefined)?.meta
     ?.nextCursor;
   const users = (usersData as { data: UserRow[] } | undefined)?.data ?? [];
-  const telemetry =
-    (telemetryData as { data: TelemetryEvent[] } | undefined)?.data ?? [];
+  const advisorBreakdown =
+    (advisorData as { data: AdvisorBreakdownItem[] } | undefined)?.data ?? [];
   const emailById = new Map(users.map((user) => [user.id, user.email]));
   const isTableLoading =
     (countersLoading && counters.length === 0) || usersLoading;
@@ -386,100 +406,118 @@ export function UsagePanel() {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
-        <Card>
+        <Card className="flex flex-col">
           <CardHeader>
             <CardTitle className="text-base">Usage Trend</CardTitle>
             <CardDescription>
               Messages, tokens, and spend by PH calendar day.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex flex-1 flex-col pb-6">
             {summaryLoading ? (
-              <Skeleton className="h-[320px] w-full" />
+              <Skeleton className="w-full flex-1" />
             ) : chartData.length === 0 ? (
-              <div className="flex h-[320px] items-center justify-center">
+              <div className="flex flex-1 items-center justify-center">
                 <p className="text-muted-foreground text-sm">
                   No usage recorded for this range.
                 </p>
               </div>
             ) : (
-              <div className="h-[320px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData} margin={{ left: 0, right: 12 }}>
-                    <defs>
-                      <linearGradient
-                        id="spendGradient"
-                        x1="0"
-                        y1="0"
-                        x2="0"
-                        y2="1"
-                      >
-                        <stop
-                          offset="5%"
-                          stopColor="var(--chart-2)"
-                          stopOpacity={0.35}
-                        />
-                        <stop
-                          offset="95%"
-                          stopColor="var(--chart-2)"
-                          stopOpacity={0.02}
-                        />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid stroke="var(--border)" vertical={false} />
-                    <XAxis
-                      dataKey="day"
-                      tickLine={false}
-                      axisLine={false}
-                      tickMargin={10}
-                      minTickGap={20}
-                    />
-                    <YAxis
-                      yAxisId="spend"
-                      tickLine={false}
-                      axisLine={false}
-                      tickFormatter={(value) => `$${Number(value).toFixed(2)}`}
-                      width={48}
-                    />
-                    <YAxis yAxisId="activity" hide />
-                    <ChartTooltip
-                      cursor={{ stroke: 'var(--border)' }}
-                      formatter={(value, name) => {
-                        if (name === 'spend') {
-                          return [formatUsd(Number(value)), 'Spend'];
+              <div className="flex flex-1 flex-col">
+                <div className="flex-1">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={chartData} margin={{ left: 0, right: 12 }}>
+                      <defs>
+                        <linearGradient
+                          id="spendGradient"
+                          x1="0"
+                          y1="0"
+                          x2="0"
+                          y2="1"
+                        >
+                          <stop
+                            offset="5%"
+                            stopColor="var(--chart-2)"
+                            stopOpacity={0.35}
+                          />
+                          <stop
+                            offset="95%"
+                            stopColor="var(--chart-2)"
+                            stopOpacity={0.02}
+                          />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid stroke="var(--border)" vertical={false} />
+                      <XAxis
+                        dataKey="day"
+                        tickLine={false}
+                        axisLine={false}
+                        tickMargin={10}
+                        minTickGap={20}
+                      />
+                      <YAxis
+                        yAxisId="spend"
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={(value) =>
+                          `$${Number(value).toFixed(2)}`
                         }
-                        if (name === 'tokens') {
-                          return [Number(value).toLocaleString(), 'Tokens'];
-                        }
-                        return [Number(value).toLocaleString(), 'Messages'];
-                      }}
-                    />
-                    <Area
-                      yAxisId="spend"
-                      type="monotone"
-                      dataKey="spend"
-                      stroke="var(--chart-2)"
-                      strokeWidth={2}
-                      fill="url(#spendGradient)"
-                    />
-                    <Area
-                      yAxisId="activity"
-                      type="monotone"
-                      dataKey="tokens"
-                      stroke="var(--chart-1)"
-                      strokeWidth={1.5}
-                      fill="transparent"
-                    />
-                    <Area
-                      yAxisId="activity"
-                      type="monotone"
-                      dataKey="messages"
-                      stroke="var(--chart-3)"
-                      strokeWidth={1.5}
-                      fill="transparent"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
+                        width={48}
+                      />
+                      <YAxis yAxisId="activity" hide />
+                      <ChartTooltip
+                        cursor={{ stroke: 'var(--border)' }}
+                        formatter={(value, name) => {
+                          if (name === 'spend') {
+                            return [formatUsd(Number(value)), 'Spend'];
+                          }
+                          if (name === 'tokens') {
+                            return [Number(value).toLocaleString(), 'Tokens'];
+                          }
+                          return [Number(value).toLocaleString(), 'Messages'];
+                        }}
+                      />
+                      <Area
+                        yAxisId="spend"
+                        type="monotone"
+                        dataKey="spend"
+                        stroke="var(--chart-2)"
+                        strokeWidth={2}
+                        fill="url(#spendGradient)"
+                      />
+                      <Area
+                        yAxisId="activity"
+                        type="monotone"
+                        dataKey="tokens"
+                        stroke="var(--chart-1)"
+                        strokeWidth={1.5}
+                        fill="transparent"
+                      />
+                      <Area
+                        yAxisId="activity"
+                        type="monotone"
+                        dataKey="messages"
+                        stroke="var(--chart-3)"
+                        strokeWidth={1.5}
+                        fill="transparent"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="mt-3 flex justify-center gap-6 text-sm">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2.5 w-2.5 rounded-sm bg-[var(--chart-2)]" />
+                    <span className="text-muted-foreground">Spend</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-2.5 w-2.5 rounded-sm bg-[var(--chart-1)]" />
+                    <span className="text-muted-foreground">Tokens</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-2.5 w-2.5 rounded-sm bg-[var(--chart-3)]" />
+                    <span className="text-muted-foreground">Messages</span>
+                  </div>
+                </div>
               </div>
             )}
           </CardContent>
@@ -522,46 +560,16 @@ export function UsagePanel() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Recent Events</CardTitle>
-              <CardDescription>Latest system activity.</CardDescription>
+              <CardTitle className="text-base">Advisor Breakdown</CardTitle>
+              <CardDescription>
+                Spend distribution across advisors in this range.
+              </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-              {telemetryLoading ? (
-                Array.from({ length: 4 }).map((_, index) => (
-                  <Skeleton key={index} className="h-9 w-full" />
-                ))
-              ) : telemetry.length === 0 ? (
-                <p className="text-muted-foreground text-sm">
-                  No events recorded yet.
-                </p>
-              ) : (
-                telemetry.map((event) => (
-                  <div
-                    key={event.id}
-                    className="flex items-center justify-between gap-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">
-                        {formatEventName(event.eventName)}
-                      </p>
-                      <p className="text-muted-foreground text-xs">
-                        {new Date(event.createdAt).toLocaleString()}
-                      </p>
-                    </div>
-                    <Badge
-                      variant={
-                        event.severity === 'error'
-                          ? 'destructive'
-                          : event.severity === 'warning'
-                            ? 'secondary'
-                            : 'outline'
-                      }
-                    >
-                      {event.severity}
-                    </Badge>
-                  </div>
-                ))
-              )}
+            <CardContent>
+              <AdvisorBreakdownChart
+                data={advisorBreakdown}
+                isLoading={advisorLoading}
+              />
             </CardContent>
           </Card>
         </div>
@@ -574,8 +582,7 @@ export function UsagePanel() {
             Highest estimated spend in this range.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-6 lg:grid-cols-[1fr_2fr]">
-          <TopUsersSpendChart topUsers={summary?.topUsers ?? []} />
+        <CardContent>
           <AdminDataTable
             columns={
               [
