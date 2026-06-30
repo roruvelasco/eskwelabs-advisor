@@ -86,6 +86,14 @@ describe('db schema', () => {
     expect(rlsMigration).toContain(
       'ALTER TABLE "usage_budget_counters" ENABLE ROW LEVEL SECURITY'
     );
+
+    const auditMigration = await Bun.file(
+      new URL('../../../drizzle/0022_chubby_tyger_tiger.sql', import.meta.url)
+    ).text();
+
+    expect(auditMigration).toContain(
+      'ALTER TABLE "usage_limit_audit_events" ENABLE ROW LEVEL SECURITY'
+    );
   });
 
   test('defines direct-access policies for admin and owner reads', async () => {
@@ -120,6 +128,13 @@ describe('db schema', () => {
       expect(rlsMigration).toContain(`admin_select_${tbl}`);
       expect(rlsMigration).toContain(`admin_full_${tbl}`);
     }
+
+    const auditMigration = await Bun.file(
+      new URL('../../../drizzle/0022_chubby_tyger_tiger.sql', import.meta.url)
+    ).text();
+
+    expect(auditMigration).toContain('admin_select_usage_limit_audit_events');
+    expect(auditMigration).toContain('admin_full_usage_limit_audit_events');
   });
 
   test('excludes prompt-content and service-only tables from direct read policies', async () => {

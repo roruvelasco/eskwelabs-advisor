@@ -155,6 +155,13 @@
       "when": 1782824074718,
       "tag": "0021_old_invaders",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1782833953029,
+      "tag": "0022_chubby_tyger_tiger",
+      "breakpoints": true
     }
   ]
 }
