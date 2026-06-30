@@ -1,6 +1,7 @@
 import { paginatedResponse } from '../common/pagination';
 import { usageCounterDto } from './dto/usage-counters.dto';
 import type {
+  AdvisorBreakdownRow,
   UsageCounterRow,
   UsageSummaryDay,
   UsageSummaryTopUser
@@ -41,6 +42,17 @@ export class UsageCountersSerializer {
           userEmail: row.userEmail ?? undefined
         }))
       }
+    };
+  }
+
+  advisorBreakdown(result: AdvisorBreakdownRow[]) {
+    return {
+      data: result.map((row) => ({
+        advisorId: row.advisorId,
+        messages: row.messages,
+        tokens: row.tokens,
+        estimatedSpendUsd: row.estimatedSpendUsd
+      }))
     };
   }
 }

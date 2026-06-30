@@ -1,6 +1,7 @@
 import { UsageCountersRepository } from './usage-counters.repository';
 import type { PaginatedResult } from '../common/pagination';
 import type {
+  AdvisorBreakdownRow,
   UsageCounterRow,
   UsageSummaryDay,
   UsageSummaryTopUser,
@@ -146,6 +147,19 @@ export class UsageCountersService {
       days,
       topUsers
     };
+  }
+
+  async advisorBreakdown({
+    fromDayPh,
+    toDayPh
+  }: {
+    fromDayPh: string;
+    toDayPh: string;
+  }): Promise<AdvisorBreakdownRow[]> {
+    return this.usageCountersRepository.advisorBreakdown({
+      fromDayPh,
+      toDayPh
+    });
   }
 
   async currentForUser(userId: string) {

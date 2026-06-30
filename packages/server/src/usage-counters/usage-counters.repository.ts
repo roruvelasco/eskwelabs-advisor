@@ -19,6 +19,8 @@ import { getPhilippinesDay } from '../common/utils/day-ph';
 import { usageCountersTable, type UsageCounter } from './usage-counters.schema';
 import { usdAmount, usdGreaterThan, usdToMicros } from './money';
 import { usersTable } from '../users/users.schema';
+import { messagesTable } from '../messages/messages.schema';
+import { conversationsTable } from '../conversations/conversations.schema';
 
 export type UsageCounterRow = Pick<
   UsageCounter,
@@ -49,6 +51,13 @@ export type UsageSummaryTotals = {
   tokens: number;
   estimatedSpendUsd: string;
   activeUsers: number;
+};
+
+export type AdvisorBreakdownRow = {
+  advisorId: string;
+  messages: number;
+  tokens: number;
+  estimatedSpendUsd: string;
 };
 
 type UsageLimitCheck = {
@@ -260,6 +269,54 @@ export class UsageCountersRepository extends Repository {
       estimatedSpendUsd: row?.estimatedSpendUsd ?? '0',
       activeUsers: Number(row?.activeUsers ?? 0)
     };
+  }
+
+  async advisorBreakdown({
+    fromDayPh,
+    toDayPh
+  }: {
+    fromDayPh: string;
+    toDayPh: string;
+  }): Promise<AdvisorBreakdownRow[]> {
+    const fromDate = new Date(`${fromDayPh}T00:00:00+08:00`);
+    const toDate = new Date(`${toDayPh}T23:59:59+08:00`);
+
+    const rows = await this.drizzle.db
+      .select({
+        advisorId: conversationsTable.advisorId,
+        messages: count(messagesTable.id),
+        tokens:
+          sql<number>`coalesce(sum(${messagesTable.promptTokens} + ${messagesTable.completionTokens}), 0)`.as(
+            'tokens'
+          ),
+        estimatedSpendUsd:
+          sql<string>`coalesce(sum(${messagesTable.estimatedCostUsd}), 0)::text`
+      })
+      .from(messagesTable)
+      .innerJoin(
+        conversationsTable,
+        eq(messagesTable.conversationId, conversationsTable.id)
+      )
+      .where(
+        and(
+          gte(messagesTable.createdAt, fromDate),
+          lte(messagesTable.createdAt, toDate),
+          eq(messagesTable.status, 'ok')
+        )
+      )
+      .groupBy(conversationsTable.advisorId)
+      .orderBy(
+        desc(
+          sql`sum(${messagesTable.estimatedCostUsd})`
+        )
+      );
+
+    return rows.map((row) => ({
+      advisorId: row.advisorId,
+      messages: Number(row.messages),
+      tokens: Number(row.tokens),
+      estimatedSpendUsd: row.estimatedSpendUsd ? String(row.estimatedSpendUsd) : '0'
+    }));
   }
 
   async findForUserDay(userId: string, dayPh = getPhilippinesDay()) {

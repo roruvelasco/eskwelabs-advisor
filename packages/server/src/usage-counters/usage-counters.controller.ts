@@ -29,6 +29,24 @@ export class UsageCounterController extends Controller {
         const result = await this.usageCountersService.summary(query);
         return c.json(this.usageCountersSerializer.summary(result));
       })
+      .get('/admin/usage-counters/advisor-breakdown', async (c) => {
+        const query = usageSummaryQueryDto.parse({
+          fromDayPh: c.req.query('fromDayPh'),
+          toDayPh: c.req.query('toDayPh')
+        });
+        const resolvedToDayPh =
+          query.toDayPh ?? new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+        const fromDate = new Date(resolvedToDayPh);
+        fromDate.setUTCDate(fromDate.getUTCDate() - 29);
+        const resolvedFromDayPh =
+          query.fromDayPh ??
+          fromDate.toISOString().slice(0, 10);
+        const result = await this.usageCountersService.advisorBreakdown({
+          fromDayPh: resolvedFromDayPh,
+          toDayPh: resolvedToDayPh
+        });
+        return c.json(this.usageCountersSerializer.advisorBreakdown(result));
+      })
       .get('/admin/usage-counters', async (c) => {
         const userId = c.req.query('userId');
         const dayPh = c.req.query('dayPh');
