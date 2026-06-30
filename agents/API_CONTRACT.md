@@ -239,6 +239,32 @@ Summary response:
 
 ---
 
+## Usage Limits (Admin)
+
+**Controller**: `UsageLimitsController` (`packages/server/src/usage-limits/`)
+**Auth**: `requireActor(['admin'])`
+
+| Method | Path                             | Description                                                                 |
+| ------ | -------------------------------- | --------------------------------------------------------------------------- |
+| `GET`  | `/api/admin/usage-limits`        | Get current global usage limits and current daily/monthly budget status     |
+| `GET`  | `/api/admin/usage-limits/review` | Get policy calibration, enforcement pressure, and limit-change audit events |
+| `PUT`  | `/api/admin/usage-limits`        | Update global usage limits and record a durable audit event                 |
+
+Update body:
+
+```json
+{
+  "maxMessagesPerUserPerDay": 25,
+  "maxTokensPerUserPerDay": 100000,
+  "dailyBudgetUsd": "10",
+  "monthlyBudgetUsd": "300",
+  "rateLimitWindowSeconds": 60,
+  "rateLimitMaxRequests": 100
+}
+```
+
+---
+
 ## Telemetry (Admin)
 
 **Controller**: `TelemetryController` (`packages/server/src/telemetry/`)

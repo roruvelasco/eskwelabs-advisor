@@ -299,6 +299,54 @@ interface UsageLimitsResponse {
   };
 }
 
+export interface UsageLimitConfigSnapshot {
+  maxMessagesPerUserPerDay: number;
+  maxTokensPerUserPerDay: number;
+  dailyBudgetUsd: string;
+  monthlyBudgetUsd: string;
+  rateLimitWindowSeconds: number;
+  rateLimitMaxRequests: number;
+}
+
+export interface UsageLimitsReviewResponse {
+  data: {
+    config: UsageLimitsResponse['data']['config'];
+    status: NonNullable<UsageLimitsResponse['data']['status']>;
+    policy: {
+      range: {
+        fromDayPh: string;
+        toDayPh: string;
+        timeZone: 'Asia/Manila';
+      };
+      metrics: {
+        peakMessagesPerUserPerDay: number;
+        peakTokensPerUserPerDay: number;
+        totalMessages: number;
+        totalTokens: number;
+        activeUsers: number;
+      };
+    };
+    enforcement: {
+      since: string;
+      counts: {
+        rate: number;
+        cap: number;
+        budget: number;
+        other: number;
+        total: number;
+      };
+    };
+    auditEvents: Array<{
+      id: string;
+      changedBy: string | null;
+      changedByEmail?: string;
+      previousConfig: UsageLimitConfigSnapshot | null;
+      nextConfig: UsageLimitConfigSnapshot;
+      createdAt: string;
+    }>;
+  };
+}
+
 type UpdateUsageLimitsInput = {
   maxMessagesPerUserPerDay: number;
   maxTokensPerUserPerDay: number;
@@ -312,6 +360,12 @@ export function getUsageLimits(): Promise<UsageLimitsResponse> {
   return apiClient.admin['usage-limits']
     .$get()
     .then(parseApiResponse) as Promise<UsageLimitsResponse>;
+}
+
+export function getUsageLimitsReview(): Promise<UsageLimitsReviewResponse> {
+  return apiClient.admin['usage-limits'].review
+    .$get()
+    .then(parseApiResponse) as Promise<UsageLimitsReviewResponse>;
 }
 
 export function updateUsageLimits(

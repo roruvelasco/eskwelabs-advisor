@@ -109,7 +109,7 @@ Cross-cutting: `auth/` (auth-request.ts, auth.service.ts), `cache/` (redis.servi
 
 ### Database Tables
 
-`advisors`, `users`, `conversations`, `messages`, `model_config`, `prompt_cache`, `prompt_snapshots`, `dna_digests`, `dna_source_config`, `knowledge_sources`, `knowledge_units`, `knowledge_embeddings`, `knowledge_rules`, `message_knowledge_audit`, `usage_counters`, `usage_limits`, `usage_budget_counters`, `telemetry_events`, `advisor_runtime_versions`, `conversation_title_jobs` — see [DATABASE.md](agents/DATABASE.md). RLS is enabled on all tables (see DATABASE.md §Row-Level Security).
+`advisors`, `users`, `conversations`, `messages`, `model_config`, `prompt_cache`, `prompt_snapshots`, `dna_digests`, `dna_source_config`, `knowledge_sources`, `knowledge_units`, `knowledge_embeddings`, `knowledge_rules`, `message_knowledge_audit`, `usage_counters`, `usage_limits`, `usage_budget_counters`, `usage_limit_audit_events`, `telemetry_events`, `advisor_runtime_versions`, `conversation_title_jobs` — see [DATABASE.md](agents/DATABASE.md). RLS is enabled on all tables (see DATABASE.md §Row-Level Security).
 
 ## Design System
 

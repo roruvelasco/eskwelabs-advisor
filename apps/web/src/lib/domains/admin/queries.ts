@@ -4,6 +4,7 @@ import {
   getAdminUsage,
   getDnaSource,
   getUsageLimits,
+  getUsageLimitsReview,
   getUsageSummary,
   getKnowledgeHealth,
   listAdvisorPromptSources,
@@ -23,6 +24,11 @@ export const adminUsageQuery = queryOptions({
 export const usageLimitsQuery = queryOptions({
   queryKey: ['admin', 'usage-limits'],
   queryFn: getUsageLimits
+});
+
+export const usageLimitsReviewQuery = queryOptions({
+  queryKey: ['admin', 'usage-limits-review'],
+  queryFn: getUsageLimitsReview
 });
 
 export function usageCountersQuery({

@@ -243,6 +243,18 @@ PK: composite `(user_id, day_ph)`
 Indexes: `usage_counters_day_ph_user_idx` on `(day_ph DESC, user_id)`.
 Type: `UsageCounter`
 
+### `usage_limit_audit_events` (`usageLimitAuditEventsTable` in code, `usage_limit_audit_events` in DB)
+
+| Column            | Type                | Constraints                         |
+| ----------------- | ------------------- | ----------------------------------- |
+| `id`              | `uuid`              | PK, default `gen_random_uuid()`     |
+| `changed_by`      | `text`              | Admin actor id                      |
+| `previous_config` | `jsonb`             | Previous global limits config       |
+| `next_config`     | `jsonb`             | NOT NULL, next global limits config |
+| `created_at`      | `timestamp with tz` | NOT NULL, default `now()`           |
+
+Type: `UsageLimitAuditEvent`
+
 ### `telemetry_events` (`telemetryEventsTable` in code, `telemetry_events` in DB)
 
 | Column       | Type                | Constraints                |
@@ -344,13 +356,14 @@ Migration `0014_complete_rls_coverage` defines the base policy posture. Migratio
 
 ### Public / admin tables
 
-| Table              | Public policy                                              | Admin policy                                                    |
-| ------------------ | ---------------------------------------------------------- | --------------------------------------------------------------- |
-| `advisors`         | `public_read_active_advisors` (SELECT, `is_active = true`) | `admin_full_advisors`                                           |
-| `model_config`     | —                                                          | `admin_select_model_config` + `admin_full_model_config`         |
-| `usage_counters`   | —                                                          | `admin_select_usage_counters` + `admin_full_usage_counters`     |
-| `usage_limits`     | —                                                          | `admin_select_usage_limits` + `admin_full_usage_limits`         |
-| `telemetry_events` | —                                                          | `admin_select_telemetry_events` + `admin_full_telemetry_events` |
+| Table                      | Public policy                                              | Admin policy                                                                    |
+| -------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `advisors`                 | `public_read_active_advisors` (SELECT, `is_active = true`) | `admin_full_advisors`                                                           |
+| `model_config`             | —                                                          | `admin_select_model_config` + `admin_full_model_config`                         |
+| `usage_counters`           | —                                                          | `admin_select_usage_counters` + `admin_full_usage_counters`                     |
+| `usage_limits`             | —                                                          | `admin_select_usage_limits` + `admin_full_usage_limits`                         |
+| `usage_limit_audit_events` | —                                                          | `admin_select_usage_limit_audit_events` + `admin_full_usage_limit_audit_events` |
+| `telemetry_events`         | —                                                          | `admin_select_telemetry_events` + `admin_full_telemetry_events`                 |
 
 ### Service-only tables (no direct Supabase client policies)
 
@@ -365,7 +378,7 @@ These tables are intentionally left with no SELECT/INSERT/UPDATE/DELETE policies
 - Conversations can be physically deleted by their owner. Conversation-owned children (`messages`, `conversation_title_jobs`) cascade so the conversation delete is atomic and leaves no thread-local rows behind.
 - Advisor/runtime/prompt/DNA records are retained for auditability; runtime-version FKs block deletion while referenced by active advisors or historical conversations.
 
-`prompt_cache`, and `telemetry_events` are standalone tables (not directly FK-referenced). Prompt/DNA text fields and raw knowledge unit text are server-only and must not be serialized to clients.
+`prompt_cache`, `usage_limit_audit_events`, and `telemetry_events` are standalone tables (not directly FK-referenced). Prompt/DNA text fields and raw knowledge unit text are server-only and must not be serialized to clients.
 
 ## Current Status
 
