@@ -7,6 +7,7 @@ export * from '../model-config/model-config.schema';
 export * from '../prompt-cache/prompt-cache.schema';
 export * from '../prompt-cache/prompt-snapshots.schema';
 export * from '../prompt-cache/dna-digests.schema';
+export * from '../prompt-cache/dna-source-config.schema';
 export * from '../knowledge/knowledge-sources.schema';
 export * from '../knowledge/knowledge-units.schema';
 export * from '../knowledge/knowledge-embeddings.schema';

@@ -10,6 +10,10 @@ export type DbTransaction = Parameters<
   Parameters<DrizzleDb['transaction']>[0]
 >[0];
 
+declare global {
+  var __drizzle_client: postgres.Sql | undefined;
+}
+
 export class DrizzleService {
   private client: postgres.Sql;
   private closed = false;
@@ -27,16 +31,25 @@ export class DrizzleService {
       url.includes('0.0.0.0') ||
       env?.RUNTIME_PROFILE === 'demo';
 
-    this.client = postgres(url, {
-      prepare: false,
-      ...(isLocal ? {} : { ssl: 'require' })
-    });
+    if (globalThis.__drizzle_client) {
+      this.client = globalThis.__drizzle_client;
+    } else {
+      this.client = postgres(url, {
+        prepare: false,
+        max: 10,
+        idle_timeout: 30,
+        ...(isLocal ? {} : { ssl: 'require' })
+      });
+      globalThis.__drizzle_client = this.client;
+  }
+
     this.db = drizzle(this.client, { schema, casing: 'snake_case' });
   }
 
   async close() {
     if (this.closed) return;
     this.closed = true;
+    if (this.client === globalThis.__drizzle_client) return;
     await this.client.end();
   }
 }
