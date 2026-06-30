@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronsUpDown, Download } from 'lucide-react';
+import { Download } from 'lucide-react';
 import {
   Area,
   AreaChart,
@@ -27,13 +27,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  Skeleton,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
+  Skeleton
 } from '@eskwelabs-advisor/ui';
 
 import {
@@ -43,6 +37,8 @@ import {
   usageSummaryQuery,
   usersQuery
 } from '@/lib/domains/admin/queries';
+import { AdminDataTable } from './admin-data-table';
+import type { ColumnDef } from '@tanstack/react-table';
 
 import { AdminKpiCard } from './admin-kpi-card';
 
@@ -94,23 +90,6 @@ function formatEventName(value: string) {
     .split('_')
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
-}
-
-function SortHead({
-  children,
-  className
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <TableHead className={className ?? ''}>
-      <span className="flex items-center gap-1.5 text-xs uppercase tracking-widest">
-        {children}
-        <ChevronsUpDown className="text-muted-foreground/40 size-3 shrink-0" />
-      </span>
-    </TableHead>
-  );
 }
 
 function BudgetHealth({
@@ -514,50 +493,61 @@ export function UsagePanel() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {summaryLoading ? (
-            <div className="space-y-3">
-              {Array.from({ length: 3 }).map((_, index) => (
-                <Skeleton key={index} className="h-10 w-full" />
-              ))}
-            </div>
-          ) : !summary || summary.topUsers.length === 0 ? (
-            <p className="text-muted-foreground py-6 text-center text-sm">
-              No users recorded for this range.
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <SortHead>User</SortHead>
-                    <SortHead>Messages</SortHead>
-                    <SortHead>Tokens</SortHead>
-                    <SortHead>Est. Spend</SortHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {summary.topUsers.map((row) => (
-                    <TableRow key={row.userId}>
-                      <TableCell className="font-medium">
-                        {row.userEmail ??
-                          emailById.get(row.userId) ??
-                          `${row.userId.slice(0, 8)}...`}
-                      </TableCell>
-                      <TableCell className="tabular-nums">
-                        {row.messages.toLocaleString()}
-                      </TableCell>
-                      <TableCell className="tabular-nums">
-                        {row.tokens.toLocaleString()}
-                      </TableCell>
-                      <TableCell className="tabular-nums">
-                        {formatUsd(row.estimatedSpendUsd)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+          <AdminDataTable
+            columns={
+              [
+                {
+                  id: 'user',
+                  header: 'User',
+                  cell: ({ row }) => (
+                    <span className="font-medium">
+                      {row.original.userEmail ??
+                        emailById.get(row.original.userId) ??
+                        `${row.original.userId.slice(0, 8)}...`}
+                    </span>
+                  )
+                },
+                {
+                  accessorKey: 'messages',
+                  header: 'Messages',
+                  cell: ({ row }) => (
+                    <span className="tabular-nums">
+                      {row.original.messages.toLocaleString()}
+                    </span>
+                  )
+                },
+                {
+                  accessorKey: 'tokens',
+                  header: 'Tokens',
+                  cell: ({ row }) => (
+                    <span className="tabular-nums">
+                      {row.original.tokens.toLocaleString()}
+                    </span>
+                  )
+                },
+                {
+                  accessorKey: 'estimatedSpendUsd',
+                  header: 'Est. Spend',
+                  cell: ({ row }) => (
+                    <span className="tabular-nums">
+                      {formatUsd(row.original.estimatedSpendUsd)}
+                    </span>
+                  )
+                }
+              ] as ColumnDef<{
+                userId: string;
+                userEmail?: string | null;
+                messages: number;
+                tokens: number;
+                estimatedSpendUsd: string;
+              }>[]
+            }
+            data={summary?.topUsers ?? []}
+            isLoading={summaryLoading}
+            emptyMessage="No users recorded for this range."
+            enableSorting={true}
+            enablePagination={false}
+          />
         </CardContent>
       </Card>
 
@@ -567,67 +557,75 @@ export function UsagePanel() {
           <CardDescription>Daily per-user usage counters.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-1 flex-col p-0">
-          {isTableLoading ? (
-            <div className="space-y-3 px-6 py-8">
-              {Array.from({ length: 3 }).map((_, index) => (
-                <Skeleton key={index} className="h-10 w-full" />
-              ))}
-            </div>
-          ) : counters.length === 0 ? (
-            <div className="flex flex-1 items-center justify-center py-12">
-              <p className="text-muted-foreground text-sm">
-                No usage recorded for this range.
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <SortHead className="pl-6">User</SortHead>
-                    <SortHead>Day</SortHead>
-                    <SortHead>Messages</SortHead>
-                    <SortHead>Tokens</SortHead>
-                    <SortHead>Est. Spend</SortHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {counters.map((row) => (
-                    <TableRow key={`${row.userId}-${row.dayPh}`}>
-                      <TableCell className="py-4 pl-6 font-medium">
-                        {row.userEmail ??
-                          emailById.get(row.userId) ??
-                          `${row.userId.slice(0, 8)}...`}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground py-4 text-sm">
-                        {row.dayPh}
-                      </TableCell>
-                      <TableCell className="py-4 tabular-nums">
-                        {row.messagesToday.toLocaleString()}
-                      </TableCell>
-                      <TableCell className="py-4 tabular-nums">
-                        {row.tokensToday.toLocaleString()}
-                      </TableCell>
-                      <TableCell className="py-4 pr-6 tabular-nums">
-                        {formatUsd(row.estimatedSpendTodayUsd)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              {nextCursor && (
-                <div className="border-border border-t p-4">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full"
-                    disabled={countersFetching}
-                    onClick={() => setCursor(nextCursor)}
-                  >
-                    {countersFetching ? 'Loading...' : 'Load more'}
-                  </Button>
-                </div>
-              )}
+          <AdminDataTable
+            columns={
+              [
+                {
+                  id: 'user',
+                  header: 'User',
+                  cell: ({ row }) => (
+                    <span className="font-medium">
+                      {row.original.userEmail ??
+                        emailById.get(row.original.userId) ??
+                        `${row.original.userId.slice(0, 8)}...`}
+                    </span>
+                  )
+                },
+                {
+                  accessorKey: 'dayPh',
+                  header: 'Day',
+                  cell: ({ row }) => (
+                    <span className="text-muted-foreground text-sm">
+                      {row.original.dayPh}
+                    </span>
+                  )
+                },
+                {
+                  accessorKey: 'messagesToday',
+                  header: 'Messages',
+                  cell: ({ row }) => (
+                    <span className="tabular-nums">
+                      {row.original.messagesToday.toLocaleString()}
+                    </span>
+                  )
+                },
+                {
+                  accessorKey: 'tokensToday',
+                  header: 'Tokens',
+                  cell: ({ row }) => (
+                    <span className="tabular-nums">
+                      {row.original.tokensToday.toLocaleString()}
+                    </span>
+                  )
+                },
+                {
+                  accessorKey: 'estimatedSpendTodayUsd',
+                  header: 'Est. Spend',
+                  cell: ({ row }) => (
+                    <span className="tabular-nums">
+                      {formatUsd(row.original.estimatedSpendTodayUsd)}
+                    </span>
+                  )
+                }
+              ] as ColumnDef<UsageCounterRow>[]
+            }
+            data={counters}
+            isLoading={isTableLoading}
+            emptyMessage="No usage recorded for this range."
+            enableSorting={true}
+            enablePagination={false}
+          />
+          {nextCursor && (
+            <div className="border-border border-t p-4">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                disabled={countersFetching}
+                onClick={() => setCursor(nextCursor)}
+              >
+                {countersFetching ? 'Loading...' : 'Load more'}
+              </Button>
             </div>
           )}
         </CardContent>
