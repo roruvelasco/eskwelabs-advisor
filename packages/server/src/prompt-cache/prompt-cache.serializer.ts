@@ -58,4 +58,20 @@ export class PromptCacheSerializer {
       }))
     };
   }
+
+  dnaSource(row: {
+    docId: string | null;
+    source: 'database' | 'active_digest' | 'env_fallback';
+    updatedBy: string | null;
+    updatedAt: Date | null;
+  }) {
+    return {
+      data: {
+        docId: row.docId,
+        source: row.source,
+        updatedBy: row.updatedBy,
+        updatedAt: row.updatedAt
+      }
+    };
+  }
 }

@@ -6,10 +6,12 @@ import { HttpException } from '../common/http/http-exception';
 import type { TelemetryService } from '../telemetry/telemetry.service';
 import type { DnaDigestsRepository } from './dna-digests.repository';
 import type { DnaDigestRow } from './dna-digests.schema';
+import type { DnaSourceConfigRepository } from './dna-source-config.repository';
 import type { PromptIngestionService } from './prompt-ingestion.service';
 import type { PromptSnapshotsRepository } from './prompt-snapshots.repository';
 import type { PromptSnapshotRow } from './prompt-snapshots.schema';
 import type { RefreshSource } from './use-cases/prompt-cache-workflow.use-case';
+import type { ServerEnv } from '../config/env';
 
 const PROMPT_CONTEXT_TTL_SECONDS = 300;
 
@@ -20,7 +22,9 @@ export class PromptCacheService {
     private promptIngestionService?: PromptIngestionService,
     private promptSnapshotsRepository?: PromptSnapshotsRepository,
     private dnaDigestsRepository?: DnaDigestsRepository,
-    private telemetryService?: TelemetryService
+    private telemetryService?: TelemetryService,
+    private dnaSourceConfigRepository?: DnaSourceConfigRepository,
+    private env?: ServerEnv
   ) {}
 
   async list(
@@ -217,6 +221,49 @@ export class PromptCacheService {
       digestHash: digest.hash
     });
     return digest;
+  }
+
+  async getDnaSource() {
+    const configured = await this.dnaSourceConfigRepository?.find();
+    const active = await this.dnaDigestsRepository?.findActive();
+    return {
+      docId:
+        configured?.docId ??
+        active?.docId ??
+        this.env?.GOOGLE_DOCS_DNA_DOC_ID ??
+        null,
+      source: configured
+        ? ('database' as const)
+        : active
+          ? ('active_digest' as const)
+          : ('env_fallback' as const),
+      updatedBy: configured?.updatedBy ?? null,
+      updatedAt: configured?.updatedAt ?? active?.createdAt ?? null
+    };
+  }
+
+  async updateDnaSource(docId: string, actorId?: string) {
+    if (!this.dnaSourceConfigRepository) {
+      throw new HttpException(
+        503,
+        'DNA source config is not configured',
+        'dna_source_config_not_configured'
+      );
+    }
+
+    const row = await this.dnaSourceConfigRepository.upsert({
+      docId,
+      updatedBy: actorId
+    });
+    await this.recordTelemetry('dna_source_updated', actorId, 'info', {
+      docId
+    });
+    return {
+      docId: row.docId,
+      source: 'database' as const,
+      updatedBy: row.updatedBy,
+      updatedAt: row.updatedAt
+    };
   }
 
   async health() {

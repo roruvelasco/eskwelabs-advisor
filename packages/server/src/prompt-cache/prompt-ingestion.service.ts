@@ -11,6 +11,7 @@ import type { ServerEnv } from '../config/env';
 import type { TelemetryService } from '../telemetry/telemetry.service';
 import type { DnaDigestsRepository } from './dna-digests.repository';
 import type { DnaDigestRow } from './dna-digests.schema';
+import type { DnaSourceConfigRepository } from './dna-source-config.repository';
 import type { PromptSnapshotsRepository } from './prompt-snapshots.repository';
 import type { PromptSnapshotRow } from './prompt-snapshots.schema';
 
@@ -226,7 +227,8 @@ export class PromptIngestionService {
     private dnaDigestsRepository: DnaDigestsRepository,
     private redisService: RedisService,
     private env: ServerEnv,
-    private telemetryService?: TelemetryService
+    private telemetryService?: TelemetryService,
+    private dnaSourceConfigRepository?: DnaSourceConfigRepository
   ) {}
 
   private async cachePrompt(snapshot: PromptSnapshotRow) {
@@ -379,7 +381,10 @@ export class PromptIngestionService {
   }
 
   async ingestDnaDigest() {
-    if (!this.env.GOOGLE_DOCS_DNA_DOC_ID) {
+    const configured = await this.dnaSourceConfigRepository?.find();
+    const docId = configured?.docId ?? this.env.GOOGLE_DOCS_DNA_DOC_ID;
+
+    if (!docId) {
       throw new HttpException(
         503,
         'DNA document is not configured',
@@ -387,14 +392,14 @@ export class PromptIngestionService {
       );
     }
 
-    const document = await this.fetchDocument(this.env.GOOGLE_DOCS_DNA_DOC_ID, {
+    const document = await this.fetchDocument(docId, {
       documentType: 'dna_digest'
     });
 
     const sourceValidation = validateDnaSource(document.text);
     if (!sourceValidation.valid) {
       await this.recordTelemetry('dna_validation_failed', 'warning', {
-        docId: this.env.GOOGLE_DOCS_DNA_DOC_ID,
+        docId,
         revision: document.revision,
         validationStatus: sourceValidation.status,
         validationReason: sourceValidation.reason
@@ -408,7 +413,7 @@ export class PromptIngestionService {
 
     if (document.text.trim().length > DNA_SOURCE_WARN_CHARS) {
       await this.recordTelemetry('dna_source_size_warning', 'warning', {
-        docId: this.env.GOOGLE_DOCS_DNA_DOC_ID,
+        docId,
         revision: document.revision,
         sourceChars: document.text.trim().length,
         warnThreshold: DNA_SOURCE_WARN_CHARS
@@ -421,14 +426,14 @@ export class PromptIngestionService {
 
     if (
       active &&
-      active.docId === this.env.GOOGLE_DOCS_DNA_DOC_ID &&
+      active.docId === docId &&
       active.revision === document.revision &&
       active.sourceHash === sourceHash &&
       validateDnaDigest(active.digestText, requiredDirectiveTerms).valid
     ) {
       await this.cacheDna(active);
       await this.recordTelemetry('dna_digest_skipped_unchanged', 'info', {
-        docId: this.env.GOOGLE_DOCS_DNA_DOC_ID,
+        docId,
         revision: document.revision,
         sourceHash,
         digestHash: active.hash
@@ -444,7 +449,7 @@ export class PromptIngestionService {
     );
     if (!digestValidation.valid) {
       await this.recordTelemetry('dna_digest_validation_failed', 'warning', {
-        docId: this.env.GOOGLE_DOCS_DNA_DOC_ID,
+        docId,
         revision: document.revision,
         sourceHash,
         validationStatus: digestValidation.status,
@@ -459,7 +464,7 @@ export class PromptIngestionService {
 
     const hash = sha256(digestText);
     const digest = await this.dnaDigestsRepository.createActive({
-      docId: this.env.GOOGLE_DOCS_DNA_DOC_ID,
+      docId,
       revision: document.revision,
       sourceHash,
       digestText,
@@ -470,7 +475,7 @@ export class PromptIngestionService {
 
     await this.cacheDna(digest);
     await this.recordTelemetry('dna_digest_regenerated', 'info', {
-      docId: this.env.GOOGLE_DOCS_DNA_DOC_ID,
+      docId,
       revision: digest.revision,
       sourceHash: digest.sourceHash,
       digestHash: digest.hash

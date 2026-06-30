@@ -257,4 +257,66 @@ describe('prompt cache service', () => {
     expect(lastEvent).toBe('cron_cache_refresh');
     expect(lastSeverity).toBe('warning');
   });
+
+  test('dna source falls back to active digest metadata before database config exists', async () => {
+    const service = new PromptCacheService(
+      {} as never,
+      {} as never,
+      undefined,
+      undefined,
+      {
+        findActive: async () => ({
+          docId: 'active-dna-doc',
+          createdAt: new Date('2026-01-01T00:00:00.000Z')
+        })
+      } as never,
+      undefined,
+      {
+        find: async () => undefined
+      } as never,
+      { GOOGLE_DOCS_DNA_DOC_ID: 'env-dna-doc' } as never
+    );
+
+    await expect(service.getDnaSource()).resolves.toMatchObject({
+      docId: 'active-dna-doc',
+      source: 'active_digest'
+    });
+  });
+
+  test('dna source update persists database config and records telemetry', async () => {
+    let savedDocId = '';
+    let telemetryEvent = '';
+    const service = new PromptCacheService(
+      {} as never,
+      {} as never,
+      undefined,
+      undefined,
+      undefined,
+      {
+        record: async (eventName: string) => {
+          telemetryEvent = eventName;
+        }
+      } as never,
+      {
+        upsert: async (input: { docId: string; updatedBy?: string }) => {
+          savedDocId = input.docId;
+          return {
+            docId: input.docId,
+            updatedBy: input.updatedBy,
+            updatedAt: new Date('2026-01-01T00:00:00.000Z')
+          };
+        }
+      } as never
+    );
+
+    await expect(
+      service.updateDnaSource('new-dna-doc', 'admin-1')
+    ).resolves.toMatchObject({
+      docId: 'new-dna-doc',
+      source: 'database',
+      updatedBy: 'admin-1'
+    });
+    expect(savedDocId).toBe('new-dna-doc');
+    expect(telemetryEvent).toBe('dna_source_updated');
+  });
 });

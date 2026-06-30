@@ -4,6 +4,8 @@ import { dataResponse, paginationParamsDto } from '../common/pagination';
 import { PromptCacheSerializer } from './prompt-cache.serializer';
 import { PromptCacheService } from './prompt-cache.service';
 import { requireActor } from '../common/middleware/auth.middleware';
+import { parseJsonBody } from '../common/middleware/validation.middleware';
+import { updateDnaSourceDto } from './dto/prompt-cache.dto';
 import {
   PromptContextRefreshUseCase,
   PromptRollbackUseCase
@@ -38,6 +40,19 @@ export class PromptCacheController extends Controller {
       .get('/admin/prompt-cache/health', async (c) => {
         const result = await this.promptCacheService.health();
         return c.json(dataResponse(result));
+      })
+      .get('/admin/prompt-cache/dna-source', async (c) => {
+        const result = await this.promptCacheService.getDnaSource();
+        return c.json(this.promptCacheSerializer.dnaSource(result));
+      })
+      .put('/admin/prompt-cache/dna-source', async (c) => {
+        const actor = c.get('actor');
+        const input = await parseJsonBody(c, updateDnaSourceDto);
+        const result = await this.promptCacheService.updateDnaSource(
+          input.docId,
+          actor?.id
+        );
+        return c.json(this.promptCacheSerializer.dnaSource(result));
       })
       .post('/admin/prompt-cache/refresh', async (c) => {
         const actor = c.get('actor');

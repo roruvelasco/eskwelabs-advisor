@@ -44,7 +44,7 @@ export class DrizzleService {
     }
 
     this.db = drizzle(this.client, { schema, casing: 'snake_case' });
-  }
+    }
 
   async close() {
     if (this.closed) return;

@@ -493,6 +493,58 @@ describe('prompt ingestion service', () => {
     expect(redis.values.get('prompt-context:dna')).toBe(activeDna);
   });
 
+  test('uses database DNA source config before env fallback', async () => {
+    const redis = createRedis();
+    const text = 'Database configured DNA source text';
+    const activeDna = dnaDigest({
+      docId: 'db-dna-doc',
+      revision: 'dna-revision',
+      sourceHash: sha256(text),
+      digestText:
+        'eskwelabs data mentor fellow communication digest with enough detail to pass validation'
+    });
+    let fetchedDocId = '';
+
+    const service = new PromptIngestionService(
+      {
+        list: async () => [],
+        getActive: async () => {
+          throw new Error('unexpected advisor lookup');
+        }
+      } as never,
+      {
+        fetchDocument: async (docId: string) => {
+          fetchedDocId = docId;
+          return { text, revision: 'dna-revision' };
+        }
+      } as never,
+      {
+        summarize: async () => {
+          throw new Error('digest should not be regenerated');
+        }
+      },
+      { findActive: async () => undefined } as never,
+      {
+        findActive: async () => activeDna,
+        createActive: async () => {
+          throw new Error('digest should not be recreated');
+        }
+      } as never,
+      redis as never,
+      { GOOGLE_DOCS_DNA_DOC_ID: 'env-dna-doc' } as never,
+      undefined,
+      {
+        find: async () => ({ docId: 'db-dna-doc' })
+      } as never
+    );
+
+    await expect(service.ingestDnaDigest()).resolves.toMatchObject({
+      digest: activeDna,
+      status: 'unchanged'
+    });
+    expect(fetchedDocId).toBe('db-dna-doc');
+  });
+
   test('regenerates unchanged DNA source when active digest misses source directive terms', async () => {
     const redis = createRedis();
     const text =
