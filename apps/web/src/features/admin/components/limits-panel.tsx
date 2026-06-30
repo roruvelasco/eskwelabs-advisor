@@ -345,17 +345,12 @@ function PolicyCalibration({ review }: { review: LimitReview }) {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <CardTitle className="text-base">Policy Calibration</CardTitle>
-            <CardDescription>
-              Recent pressure from {policy.range.fromDayPh} to{' '}
-              {policy.range.toDayPh}, PH time.
-            </CardDescription>
-          </div>
-          <Badge variant="outline">
-            {policy.metrics.activeUsers.toLocaleString()} active users
-          </Badge>
+        <div className="flex items-baseline gap-2">
+          <CardTitle className="text-base">Policy Calibration</CardTitle>
+          <CardDescription>
+            Recent pressure from {policy.range.fromDayPh} to{' '}
+            {policy.range.toDayPh}, PH time.
+          </CardDescription>
         </div>
       </CardHeader>
       <CardContent className="p-0">
@@ -423,25 +418,44 @@ function EnforcementPressure({ review }: { review: LimitReview }) {
   ];
 
   return (
-    <div className="space-y-3">
-      <div>
-        <h3 className="text-base font-semibold">Enforcement Pressure</h3>
-        <p className="text-muted-foreground text-sm">
-          Blocks recorded since {formatDate(review.enforcement.since)}.
-        </p>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {cards.map((card) => (
-          <AdminKpiCard
-            key={card.label}
-            label={card.label}
-            value={card.value.toLocaleString()}
-            description={card.detail}
-            isLoading={false}
-          />
-        ))}
-      </div>
-    </div>
+    <Card>
+      <CardHeader>
+        <div className="flex items-baseline gap-2">
+          <CardTitle className="text-base">Enforcement Pressure</CardTitle>
+          <CardDescription>
+            Blocks recorded since {formatDate(review.enforcement.since)}.
+          </CardDescription>
+        </div>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="pl-6">Block Type</TableHead>
+                <TableHead>Count</TableHead>
+                <TableHead>Reason</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {cards.map((card) => (
+                <TableRow key={card.label}>
+                  <TableCell className="py-4 pl-6 font-medium">
+                    {card.label}
+                  </TableCell>
+                  <TableCell className="py-4 font-semibold tabular-nums">
+                    {card.value.toLocaleString()}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground py-4 text-sm">
+                    {card.detail}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
