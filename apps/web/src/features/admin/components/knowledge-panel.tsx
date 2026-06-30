@@ -22,10 +22,6 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  TableBody,
-  TableCell,
-  TableHeader,
-  TableRow,
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -34,6 +30,9 @@ import {
 } from '@eskwelabs-advisor/ui';
 
 import { cn } from '@/lib/utils';
+
+import { AdminDataTable } from './admin-data-table';
+import type { ColumnDef } from '@tanstack/react-table';
 
 import {
   createKnowledgeSource,
@@ -51,13 +50,7 @@ import {
   telemetryQuery,
   knowledgeHealthQuery
 } from '@/lib/domains/admin/queries';
-import {
-  AdminEmptyState,
-  AdminLoadingRows,
-  AdminTable,
-  AdminTableHead,
-  AdminTableShell
-} from './admin-table';
+import { AdminEmptyState } from './admin-table';
 
 type SourceKind = 'advisor_prompt' | 'dna' | 'knowledge_reference';
 
@@ -609,95 +602,101 @@ function SelectionsTable() {
   }
 
   return (
-    <>
-      <AdminTableShell>
-        <AdminTable>
-          <TableHeader>
-            <TableRow>
-              <AdminTableHead className="pl-6">Source</AdminTableHead>
-              <AdminTableHead>Type</AdminTableHead>
-              <AdminTableHead>Doc ID</AdminTableHead>
-              <AdminTableHead>Status</AdminTableHead>
-              <AdminTableHead>Updated</AdminTableHead>
-              <AdminTableHead className="pr-6 text-right">
-                {'\u00A0'}
-              </AdminTableHead>
-            </TableRow>
-          </TableHeader>
-          {isLoading ? (
-            <AdminLoadingRows columns={5} />
-          ) : rows.length === 0 ? (
-            <TableBody />
-          ) : (
-            <TableBody>
-              {rows.map((row) => (
-                <TableRow key={`${row.kind}-${row.id}`}>
-                  <TableCell className="py-2.5 pl-6 font-medium">
-                    {row.label}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground py-2.5 text-xs">
-                    {kindAndScopeLabel(row.kind, row.scope)}
-                  </TableCell>
-                  <TableCell className="py-2.5 font-mono text-xs">
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span className="cursor-help">
-                            {shortValue(row.docId)}
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          {row.docId ?? 'No Doc ID configured'}
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </TableCell>
-                  <TableCell className="py-2.5">
-                    <Badge variant={statusVariant(row.status)}>
-                      {row.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground py-2.5 text-xs">
-                    {formatDate(row.refreshedAt)}
-                  </TableCell>
-                  <TableCell className="py-2.5 pr-6">
-                    <div className="flex justify-end gap-1">
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              aria-label="Refresh document source"
-                              disabled={refreshMutation.isPending}
-                              onClick={() => refreshMutation.mutate(row)}
-                            >
-                              <RefreshCwIcon className="size-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>Refresh</TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <EditSourceDialog row={row} />
-                          </TooltipTrigger>
-                          <TooltipContent>Edit</TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          )}
-        </AdminTable>
-        {!isLoading && rows.length === 0 ? (
-          <AdminEmptyState message="No document sources configured." />
-        ) : null}
-      </AdminTableShell>
-    </>
+    <AdminDataTable
+      columns={
+        [
+          {
+            accessorKey: 'label',
+            header: 'Source',
+            cell: ({ row }) => (
+              <span className="font-medium">{row.original.label}</span>
+            )
+          },
+          {
+            id: 'type',
+            header: 'Type',
+            cell: ({ row }) => (
+              <span className="text-muted-foreground text-xs">
+                {kindAndScopeLabel(row.original.kind, row.original.scope)}
+              </span>
+            )
+          },
+          {
+            accessorKey: 'docId',
+            header: 'Doc ID',
+            cell: ({ row }) => (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="cursor-help font-mono text-xs">
+                      {shortValue(row.original.docId)}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {row.original.docId ?? 'No Doc ID configured'}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )
+          },
+          {
+            accessorKey: 'status',
+            header: 'Status',
+            cell: ({ row }) => (
+              <Badge variant={statusVariant(row.original.status)}>
+                {row.original.status}
+              </Badge>
+            )
+          },
+          {
+            accessorKey: 'refreshedAt',
+            header: 'Updated',
+            cell: ({ row }) => (
+              <span className="text-muted-foreground text-xs">
+                {formatDate(row.original.refreshedAt)}
+              </span>
+            )
+          },
+          {
+            id: 'actions',
+            header: '',
+            cell: ({ row }) => (
+              <div className="flex justify-end gap-1">
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Refresh document source"
+                        disabled={refreshMutation.isPending}
+                        onClick={() => refreshMutation.mutate(row.original)}
+                      >
+                        <RefreshCwIcon className="size-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Refresh</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <EditSourceDialog row={row.original} />
+                    </TooltipTrigger>
+                    <TooltipContent>Edit</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+            )
+          }
+        ] as ColumnDef<SelectionRow>[]
+      }
+      data={rows}
+      isLoading={isLoading}
+      emptyMessage="No document sources configured."
+      enableSorting={false}
+      enablePagination={false}
+    />
   );
 }
 
@@ -721,64 +720,75 @@ function LogsTable() {
   }
 
   return (
-    <AdminTableShell>
-      <AdminTable>
-        <TableHeader>
-          <TableRow>
-            <AdminTableHead className="pl-6">Time</AdminTableHead>
-            <AdminTableHead>Event</AdminTableHead>
-            <AdminTableHead>Status</AdminTableHead>
-            <AdminTableHead>Source</AdminTableHead>
-            <AdminTableHead className="pr-6">Detail</AdminTableHead>
-          </TableRow>
-        </TableHeader>
-        {isLoading ? (
-          <AdminLoadingRows columns={6} />
-        ) : events.length === 0 ? (
-          <TableBody />
-        ) : (
-          <TableBody>
-            {events.map((event) => {
+    <AdminDataTable
+      columns={
+        [
+          {
+            accessorKey: 'createdAt',
+            header: 'Time',
+            cell: ({ row }) => (
+              <span className="text-muted-foreground text-xs">
+                {formatDate(row.original.createdAt)}
+              </span>
+            )
+          },
+          {
+            accessorKey: 'eventName',
+            header: 'Event',
+            cell: ({ row }) => (
+              <span className="font-mono text-xs font-medium">
+                {row.original.eventName}
+              </span>
+            )
+          },
+          {
+            id: 'status',
+            header: 'Status',
+            cell: ({ row }) => {
               const status =
-                payloadString(event.payload, 'status') ?? event.severity;
+                payloadString(row.original.payload, 'status') ??
+                row.original.severity;
+              return <Badge variant={statusVariant(status)}>{status}</Badge>;
+            }
+          },
+          {
+            id: 'source',
+            header: 'Source',
+            cell: ({ row }) => {
               const source =
-                payloadString(event.payload, 'advisorId') ??
-                payloadString(event.payload, 'sourceId') ??
-                payloadString(event.payload, 'documentType') ??
+                payloadString(row.original.payload, 'advisorId') ??
+                payloadString(row.original.payload, 'sourceId') ??
+                payloadString(row.original.payload, 'documentType') ??
                 '-';
-              const detail =
-                payloadString(event.payload, 'code') ??
-                payloadString(event.payload, 'validationStatus') ??
-                payloadString(event.payload, 'validationReason') ??
-                '-';
-
               return (
-                <TableRow key={event.id}>
-                  <TableCell className="text-muted-foreground py-2.5 pl-6 text-xs">
-                    {formatDate(event.createdAt)}
-                  </TableCell>
-                  <TableCell className="py-2.5 font-mono text-xs font-medium">
-                    {event.eventName}
-                  </TableCell>
-                  <TableCell className="py-2.5">
-                    <Badge variant={statusVariant(status)}>{status}</Badge>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground py-2.5 font-mono text-xs">
-                    {source}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground py-2.5 pr-6 text-xs">
-                    {detail}
-                  </TableCell>
-                </TableRow>
+                <span className="text-muted-foreground font-mono text-xs">
+                  {source}
+                </span>
               );
-            })}
-          </TableBody>
-        )}
-      </AdminTable>
-      {!isLoading && events.length === 0 ? (
-        <AdminEmptyState message="No document refresh history yet." />
-      ) : null}
-    </AdminTableShell>
+            }
+          },
+          {
+            id: 'detail',
+            header: 'Detail',
+            cell: ({ row }) => {
+              const detail =
+                payloadString(row.original.payload, 'code') ??
+                payloadString(row.original.payload, 'validationStatus') ??
+                payloadString(row.original.payload, 'validationReason') ??
+                '-';
+              return (
+                <span className="text-muted-foreground text-xs">{detail}</span>
+              );
+            }
+          }
+        ] as ColumnDef<TelemetryEventRow>[]
+      }
+      data={events}
+      isLoading={isLoading}
+      emptyMessage="No document refresh history yet."
+      enableSorting={true}
+      enablePagination={false}
+    />
   );
 }
 
