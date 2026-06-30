@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { PencilIcon } from 'lucide-react';
 import { Pie, PieChart, Cell } from 'recharts';
 
 import {
@@ -25,6 +26,10 @@ import {
   SelectTrigger,
   SelectValue,
   Switch,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
   toast
 } from '@eskwelabs-advisor/ui';
 
@@ -106,8 +111,12 @@ function EditModelDialog({ row }: { row: ModelConfigRow }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" className="text-muted-foreground">
-          Edit
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Edit model configuration"
+        >
+          <PencilIcon className="size-4" />
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
@@ -319,7 +328,14 @@ export function ModelConfigPanel() {
                     header: '',
                     cell: ({ row }) => (
                       <div className="text-right">
-                        <EditModelDialog row={row.original} />
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <EditModelDialog row={row.original} />
+                            </TooltipTrigger>
+                            <TooltipContent>Edit</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </div>
                     )
                   }
