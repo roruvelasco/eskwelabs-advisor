@@ -115,7 +115,7 @@ Every backend domain at `packages/server/src/<domain>/` follows the same layout:
 ### Prompt Context Flow
 
 - Google Docs remains the prompt/DNA authoring source of truth.
-- `PromptIngestionService` runs from admin refresh/rollback paths and scheduled cron: it reads Google Docs, hashes raw DNA before summarization, stores durable active rows in `prompt_snapshots` and `dna_digests`, and warms Redis.
+- `PromptIngestionService` runs from admin refresh/rollback paths and scheduled cron: it reads Google Docs, hashes raw DNA before summarization, stores durable active rows in `prompt_snapshots` and `dna_digests`, and warms Redis. Advisor prompt Doc IDs are stored on `advisors.prompt_doc_id`; the shared DNA Doc ID is resolved from `dna_source_config` with `GOOGLE_DOCS_DNA_DOC_ID` as an env fallback.
 - `PromptCacheService.refresh()` accepts a `source: 'admin' | 'cron'` parameter; telemetry event names use `${source}_cache_refresh` (or `_failed`) to distinguish admin-initiated vs. cron-initiated refreshes.
 - `PromptCacheJobsController` exposes `GET /api/internal/jobs/prompt-cache/refresh` for cron execution, protected by `Authorization: Bearer <CRON_SECRET>`.
 - `PromptContextService` serves chat turns from Redis first, then active Postgres snapshots. If no active snapshot exists, chat fails safely with `prompt_context_unavailable`; it never fetches Google Docs or calls the summarizer.
@@ -124,7 +124,7 @@ Every backend domain at `packages/server/src/<domain>/` follows the same layout:
 ### Knowledge Context Flow
 
 - The `knowledge` domain is the post-MVP path for source-backed factual grounding without growing the always-on advisor prompt.
-- `KnowledgeIngestionService` ingests registered Google Doc sources into versioned `knowledge_units`; source text remains server-side and admin endpoints return metadata only. After ingestion, units are indexed via `KNOWLEDGE_INDEX_PROVIDER` (`PostgresKnowledgeIndexProvider`) which generates Groq embeddings and stores them in pgvector with denormalized retrieval metadata (status, advisor_scope, content_type, etc.) copied from the unit for same-table HNSW filtering.
+- `KnowledgeIngestionService` ingests registered Google Doc sources from `knowledge_sources` into versioned `knowledge_units`; source text remains server-side and admin endpoints return metadata only. After ingestion, units are indexed via `KNOWLEDGE_INDEX_PROVIDER` (`PostgresKnowledgeIndexProvider`) which generates Groq embeddings and stores them in pgvector with denormalized retrieval metadata (status, advisor_scope, content_type, etc.) copied from the unit for same-table HNSW filtering.
 - `KNOWLEDGE_CONTEXT_RESOLVER` selects query-specific evidence during `MessagesService.prepareTurn()`. Mentoring and clarification turns skip retrieval; factual policy turns prefer `knowledge_rules`; all other modes use semantic vector search (cosine similarity, threshold < 0.3) via `EMBEDDING_PROVIDER`.
 - Vector search uses a materialized CTE (`WITH candidates AS MATERIALIZED`) that queries `knowledge_embeddings` directly with same-table filters (partial HNSW index scoped to `status = 'published'`), splits global/advisor scope into UNION ALL branches for index usage, over-fetches candidates (`max(limit * 10, 50)`), sets `SET LOCAL hnsw.ef_search = 100` and `hnsw.iterative_scan = strict_order` inside the retrieval transaction, then joins to `knowledge_units` only after candidate selection.
 - `BoundedKnowledgeContextResolver` (decorator) wraps `RepositoryKnowledgeContextResolver` with fail-open resilience:

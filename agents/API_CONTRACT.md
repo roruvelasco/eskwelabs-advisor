@@ -54,11 +54,13 @@ Response: `{ data: { id, email, role, isActive } | null }`
 ## Advisors
 
 **Controller**: `AdvisorController` (`packages/server/src/advisors/`)
-**Auth**: `requireActor(['eif', 'admin'])`
+**Auth**: `requireActor(['eif', 'admin'])` on public list, `requireActor(['admin'])` on admin prompt-source routes
 
-| Method | Path            | Description       |
-| ------ | --------------- | ----------------- |
-| `GET`  | `/api/advisors` | List all advisors |
+| Method  | Path                                           | Body                              | Description                                    |
+| ------- | ---------------------------------------------- | --------------------------------- | ---------------------------------------------- |
+| `GET`   | `/api/advisors`                                | —                                 | List all public advisors                       |
+| `GET`   | `/api/admin/advisors/prompt-sources`           | —                                 | List admin-only advisor prompt Doc ID metadata |
+| `PATCH` | `/api/admin/advisors/:advisorId/prompt-source` | `{ promptDocId: string \| null }` | Update an advisor prompt Google Doc ID         |
 
 Response: `{ data: Advisor[] }`
 
@@ -157,6 +159,8 @@ Response (list, paginated): `{ data: Message[], meta: { nextCursor: string | nul
 | `GET`  | `/api/admin/prompt-cache`                                                    | List prompt cache metadata (paginated: `?limit&cursor`)   |
 | `GET`  | `/api/admin/prompt-cache/health`                                             | Active prompt/DNA versions, validation status per advisor |
 | `POST` | `/api/admin/prompt-cache/refresh`                                            | Ingest prompt/DNA snapshots and warm Redis cache          |
+| `GET`  | `/api/admin/prompt-cache/dna-source`                                         | Current shared DNA Doc ID metadata                        |
+| `PUT`  | `/api/admin/prompt-cache/dna-source`                                         | Update shared DNA Doc ID `{ docId: string }`              |
 | `GET`  | `/api/admin/prompt-cache/advisors/:advisorId/snapshots`                      | List advisor prompt snapshot metadata                     |
 | `POST` | `/api/admin/prompt-cache/advisors/:advisorId/snapshots/:snapshotId/activate` | Roll back an advisor to a prior prompt snapshot           |
 | `GET`  | `/api/admin/prompt-cache/dna-digests`                                        | List DNA digest metadata                                  |
@@ -171,15 +175,16 @@ Prompt cache admin endpoints return metadata only. They never return advisor pro
 **Controller**: `KnowledgeController` (`packages/server/src/knowledge/`)
 **Auth**: `requireActor(['admin'])`
 
-| Method | Path                                             | Description                                                           |
-| ------ | ------------------------------------------------ | --------------------------------------------------------------------- |
-| `GET`  | `/api/admin/knowledge/sources`                   | List source metadata (paginated: `?limit&cursor&status&advisorScope`) |
-| `POST` | `/api/admin/knowledge/sources`                   | Register a source `{ sourceType, externalId, title, ... }`            |
-| `POST` | `/api/admin/knowledge/sources/:sourceId/refresh` | Ingest one source into versioned knowledge units                      |
-| `POST` | `/api/admin/knowledge/refresh`                   | Refresh all currently published sources                               |
-| `GET`  | `/api/admin/knowledge/sources/:sourceId/units`   | List source-backed unit metadata                                      |
-| `GET`  | `/api/admin/knowledge/health`                    | Return knowledge source health summary                                |
-| `GET`  | `/api/admin/knowledge/search`                    | Metadata-only admin search preview (`?query&advisorId&limit`)         |
+| Method  | Path                                             | Description                                                           |
+| ------- | ------------------------------------------------ | --------------------------------------------------------------------- |
+| `GET`   | `/api/admin/knowledge/sources`                   | List source metadata (paginated: `?limit&cursor&status&advisorScope`) |
+| `POST`  | `/api/admin/knowledge/sources`                   | Register a source `{ sourceType, externalId, title, ... }`            |
+| `PATCH` | `/api/admin/knowledge/sources/:sourceId`         | Update source metadata / Google Doc ID                                |
+| `POST`  | `/api/admin/knowledge/sources/:sourceId/refresh` | Ingest one source into versioned knowledge units                      |
+| `POST`  | `/api/admin/knowledge/refresh`                   | Refresh all currently published sources                               |
+| `GET`   | `/api/admin/knowledge/sources/:sourceId/units`   | List source-backed unit metadata                                      |
+| `GET`   | `/api/admin/knowledge/health`                    | Return knowledge source health summary                                |
+| `GET`   | `/api/admin/knowledge/search`                    | Metadata-only admin search preview (`?query&advisorId&limit`)         |
 
 Knowledge admin endpoints do not return raw unit text by default. Chat-time evidence selection is server-only and audited in `message_knowledge_audit`.
 

@@ -101,7 +101,7 @@ export function ConversationHistory() {
         <div className="space-y-6">
           <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div className="space-y-2">
-              <h1 className="text-foreground font-serif text-3xl font-semibold">
+              <h1 className="text-foreground font-serif text-3xl font-bold">
                 Conversation history
               </h1>
               <p className="text-muted-foreground text-sm">

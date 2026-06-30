@@ -22,6 +22,7 @@ export * from '../model-config/model-config.schema';
 export * from '../prompt-cache/prompt-cache.schema';
 export * from '../prompt-cache/prompt-snapshots.schema';
 export * from '../prompt-cache/dna-digests.schema';
+export * from '../prompt-cache/dna-source-config.schema';
 export * from '../usage-counters/usage-counters.schema';
 export * from '../telemetry/telemetry.schema';
 export * from '../conversation-titles/conversation-title-jobs.schema';
@@ -175,6 +176,20 @@ Type: `PromptSnapshotRow`
 Indexes: partial unique index where `is_active = true`.
 
 Type: `DnaDigestRow`
+
+### `dna_source_config` (`dnaSourceConfigTable` in code, `dna_source_config` in DB)
+
+Stores the admin-managed shared DNA Google Doc ID. Runtime DNA ingestion reads this row first and falls back to `GOOGLE_DOCS_DNA_DOC_ID` only when no DB config exists.
+
+| Column       | Type                | Constraints               |
+| ------------ | ------------------- | ------------------------- |
+| `id`         | `text`              | PK, default `'default'`   |
+| `doc_id`     | `text`              | NOT NULL                  |
+| `updated_by` | `text`              | nullable                  |
+| `created_at` | `timestamp with tz` | NOT NULL, default `now()` |
+| `updated_at` | `timestamp with tz` | NOT NULL, default `now()` |
+
+Type: `DnaSourceConfigRow`
 
 ### `knowledge_sources` (`knowledgeSourcesTable` in code, `knowledge_sources` in DB)
 

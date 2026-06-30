@@ -182,44 +182,42 @@ export function UsagePanel() {
 
   return (
     <div className="flex flex-1 flex-col gap-6">
-      <Card>
-        <CardContent className="grid gap-3 p-4 md:grid-cols-[1fr_1fr_1.5fr_auto]">
-          <Input
-            type="date"
-            value={fromDayPh}
-            onChange={(event) => setFromDayPh(event.target.value)}
-            aria-label="From day"
-          />
-          <Input
-            type="date"
-            value={toDayPh}
-            onChange={(event) => setToDayPh(event.target.value)}
-            aria-label="To day"
-          />
-          <Select value={userId} onValueChange={setUserId}>
-            <SelectTrigger>
-              <SelectValue placeholder="All users" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All users</SelectItem>
-              {users.map((user) => (
-                <SelectItem key={user.id} value={user.id}>
-                  {user.email}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={handleExport}
-            disabled={counters.length === 0}
-          >
-            <Download className="size-4" />
-            Export
-          </Button>
-        </CardContent>
-      </Card>
+      <div className="grid gap-3 border-b pb-4 md:grid-cols-[1fr_1fr_1.5fr_auto]">
+        <Input
+          type="date"
+          value={fromDayPh}
+          onChange={(event) => setFromDayPh(event.target.value)}
+          aria-label="From day"
+        />
+        <Input
+          type="date"
+          value={toDayPh}
+          onChange={(event) => setToDayPh(event.target.value)}
+          aria-label="To day"
+        />
+        <Select value={userId} onValueChange={setUserId}>
+          <SelectTrigger>
+            <SelectValue placeholder="All users" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All users</SelectItem>
+            {users.map((user) => (
+              <SelectItem key={user.id} value={user.id}>
+                {user.email}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleExport}
+          disabled={counters.length === 0}
+        >
+          <Download className="size-4" />
+          Export
+        </Button>
+      </div>
 
       <div className="grid shrink-0 grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard
@@ -239,73 +237,71 @@ export function UsagePanel() {
         />
       </div>
 
-      <Card className="flex flex-1 flex-col">
-        <CardContent className="flex flex-1 flex-col p-0">
-          {isLoading ? (
-            <div className="space-y-3 px-8 py-8">
-              {Array.from({ length: 3 }).map((_, index) => (
-                <Skeleton key={index} className="h-10 w-full" />
-              ))}
-            </div>
-          ) : counters.length === 0 ? (
-            <div className="flex flex-1 items-center justify-center">
-              <p className="text-muted-foreground text-sm">
-                No usage recorded for today.
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <SortHead className="pl-6">User</SortHead>
-                    <SortHead>Day</SortHead>
-                    <SortHead>Messages</SortHead>
-                    <SortHead>Tokens</SortHead>
-                    <SortHead>Est. Spend</SortHead>
+      <div className="flex flex-1 flex-col">
+        {isLoading ? (
+          <div className="space-y-3 px-6 py-8">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <Skeleton key={index} className="h-10 w-full" />
+            ))}
+          </div>
+        ) : counters.length === 0 ? (
+          <div className="flex flex-1 items-center justify-center py-12">
+            <p className="text-muted-foreground text-sm">
+              No usage recorded for today.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <SortHead className="pl-6">User</SortHead>
+                  <SortHead>Day</SortHead>
+                  <SortHead>Messages</SortHead>
+                  <SortHead>Tokens</SortHead>
+                  <SortHead>Est. Spend</SortHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {counters.map((row) => (
+                  <TableRow key={`${row.userId}-${row.dayPh}`}>
+                    <TableCell className="py-4 pl-6 font-medium">
+                      {row.userEmail ??
+                        emailById.get(row.userId) ??
+                        `${row.userId.slice(0, 8)}...`}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground py-4 text-sm">
+                      {row.dayPh}
+                    </TableCell>
+                    <TableCell className="py-4 tabular-nums">
+                      {row.messagesToday.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="py-4 tabular-nums">
+                      {row.tokensToday.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="py-4 pr-6 tabular-nums">
+                      ${Number(row.estimatedSpendTodayUsd).toFixed(4)}
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {counters.map((row) => (
-                    <TableRow key={`${row.userId}-${row.dayPh}`}>
-                      <TableCell className="py-4 pl-6 font-medium">
-                        {row.userEmail ??
-                          emailById.get(row.userId) ??
-                          `${row.userId.slice(0, 8)}...`}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground py-4 text-sm">
-                        {row.dayPh}
-                      </TableCell>
-                      <TableCell className="py-4 tabular-nums">
-                        {row.messagesToday.toLocaleString()}
-                      </TableCell>
-                      <TableCell className="py-4 tabular-nums">
-                        {row.tokensToday.toLocaleString()}
-                      </TableCell>
-                      <TableCell className="py-4 pr-6 tabular-nums">
-                        ${Number(row.estimatedSpendTodayUsd).toFixed(4)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              {nextCursor && (
-                <div className="border-border border-t p-4">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full"
-                    disabled={countersFetching}
-                    onClick={() => setCursor(nextCursor)}
-                  >
-                    {countersFetching ? 'Loading...' : 'Load more'}
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                ))}
+              </TableBody>
+            </Table>
+            {nextCursor && (
+              <div className="border-border border-t p-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  disabled={countersFetching}
+                  onClick={() => setCursor(nextCursor)}
+                >
+                  {countersFetching ? 'Loading...' : 'Load more'}
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

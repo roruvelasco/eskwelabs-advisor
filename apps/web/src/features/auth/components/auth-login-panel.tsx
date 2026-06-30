@@ -149,7 +149,7 @@ export function AuthLoginPanel({ config }: { config: AuthLoginConfig }) {
 
         <div className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-10">
           <div className="space-y-2 text-center">
-            <h1 className="text-foreground text-balance font-serif text-4xl leading-[1.1] tracking-tight md:text-5xl">
+            <h1 className="text-foreground text-balance font-serif text-4xl font-bold leading-[1.1] tracking-tight md:text-5xl">
               {heading}
             </h1>
             <p className="text-muted-foreground text-sm">{subtitle}</p>

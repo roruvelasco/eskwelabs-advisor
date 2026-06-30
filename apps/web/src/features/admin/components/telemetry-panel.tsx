@@ -28,13 +28,23 @@ interface TelemetryEventRow {
   createdAt: string;
 }
 
-const SEVERITY_VARIANTS: Record<
-  TelemetryEventRow['severity'],
-  'default' | 'outline' | 'secondary' | 'destructive'
-> = {
-  info: 'secondary',
-  warning: 'outline',
-  error: 'destructive'
+const EVENT_LABELS: Record<string, string> = {
+  login_success: 'Login',
+  login_denied: 'Login denied',
+  advisor_selected: 'Advisor selected',
+  conversation_resumed: 'Conversation resumed',
+  message_sent: 'Message sent',
+  llm_call_started: 'LLM call started',
+  llm_call_completed: 'LLM completed',
+  request_blocked: 'Request blocked',
+  prompt_cache_hit: 'Prompt cache hit',
+  prompt_cache_miss: 'Prompt cache miss',
+  dna_digest_regenerated: 'DNA digest regenerated',
+  doc_fetch_error: 'Doc fetch error',
+  provider_error: 'Provider error',
+  supabase_write_error: 'DB write error',
+  admin_model_changed: 'Model changed',
+  admin_cache_refresh: 'Cache refreshed'
 };
 
 function formatDate(iso: string) {
@@ -47,9 +57,27 @@ function formatDate(iso: string) {
   });
 }
 
-function actorLabel(actorId: string | null) {
-  if (!actorId) return '—';
-  return actorId.length > 8 ? `${actorId.slice(0, 8)}...` : actorId;
+function extractUser(payload: Record<string, unknown>) {
+  const email = payload.email;
+  if (typeof email === 'string') return email;
+  return '—';
+}
+
+function extractDetail(payload: Record<string, unknown>) {
+  const parts: string[] = [];
+  if (typeof payload.advisorId === 'string') parts.push(payload.advisorId);
+  if (typeof payload.model === 'string') parts.push(payload.model);
+  if (typeof payload.reason === 'string') parts.push(payload.reason);
+  if (typeof payload.status === 'string') parts.push(payload.status);
+  if (typeof payload.error === 'string') parts.push(payload.error.slice(0, 80));
+  if (typeof payload.provider === 'string') parts.push(payload.provider);
+  return parts.length > 0 ? parts.join(' · ') : '—';
+}
+
+function statusVariant(severity: TelemetryEventRow['severity']) {
+  if (severity === 'error') return 'destructive' as const;
+  if (severity === 'warning') return 'outline' as const;
+  return 'secondary' as const;
 }
 
 function SortHead({
@@ -111,30 +139,28 @@ export function TelemetryPanel() {
               <TableHeader>
                 <TableRow>
                   <SortHead className="pl-6">Event</SortHead>
-                  <SortHead>Severity</SortHead>
-                  <SortHead>Actor</SortHead>
-                  <SortHead>Payload</SortHead>
+                  <SortHead>Status</SortHead>
+                  <SortHead>User</SortHead>
+                  <SortHead>Detail</SortHead>
                   <SortHead>Timestamp</SortHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {events.map((event) => (
                   <TableRow key={event.id}>
-                    <TableCell className="py-4 pl-6 font-mono text-xs font-medium">
-                      {event.eventName}
+                    <TableCell className="py-4 pl-6 text-xs font-medium">
+                      {EVENT_LABELS[event.eventName] ?? event.eventName}
                     </TableCell>
                     <TableCell className="py-4">
-                      <Badge variant={SEVERITY_VARIANTS[event.severity]}>
+                      <Badge variant={statusVariant(event.severity)}>
                         {event.severity}
                       </Badge>
                     </TableCell>
-                    <TableCell className="py-4 font-mono text-xs">
-                      {actorLabel(event.actorId)}
+                    <TableCell className="text-muted-foreground py-4 text-xs">
+                      {extractUser(event.payload)}
                     </TableCell>
-                    <TableCell className="max-w-xs py-4">
-                      <pre className="text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap text-xs">
-                        {JSON.stringify(event.payload)}
-                      </pre>
+                    <TableCell className="text-muted-foreground max-w-xs py-4 text-xs">
+                      {extractDetail(event.payload)}
                     </TableCell>
                     <TableCell className="text-muted-foreground py-4 pr-6 text-xs">
                       {formatDate(event.createdAt)}
