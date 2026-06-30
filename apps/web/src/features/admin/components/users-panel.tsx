@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronsUpDown, PlusIcon } from 'lucide-react';
+import { PlusIcon } from 'lucide-react';
 
 import {
   Badge,
@@ -21,19 +21,14 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  Skeleton,
   Switch,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
   toast
 } from '@eskwelabs-advisor/ui';
 
 import { createUser, updateUser } from '@/lib/domains/admin/api';
 import { usersQuery } from '@/lib/domains/admin/queries';
+import { AdminDataTable } from './admin-data-table';
+import type { ColumnDef } from '@tanstack/react-table';
 
 interface UserRow {
   id: string;
@@ -51,23 +46,6 @@ function formatDate(iso: string | null) {
     timeZone: 'Asia/Manila',
     dateStyle: 'medium'
   });
-}
-
-function SortHead({
-  children,
-  className
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <TableHead className={className}>
-      <span className="flex items-center gap-1.5 text-xs uppercase tracking-widest">
-        {children}
-        <ChevronsUpDown className="text-muted-foreground/40 size-3 shrink-0" />
-      </span>
-    </TableHead>
-  );
 }
 
 export function CreateUserButton() {
@@ -199,54 +177,51 @@ export function UsersPanel() {
   return (
     <Card className="relative flex flex-1 flex-col">
       <CardContent className="flex flex-1 flex-col p-0">
-        {isLoading ? (
-          <div className="space-y-3 px-8 py-8">
-            {Array.from({ length: 4 }).map((_, index) => (
-              <Skeleton key={index} className="h-10 w-full" />
-            ))}
-          </div>
-        ) : users.length === 0 ? (
-          <div className="flex flex-1 items-center justify-center">
-            <p className="text-muted-foreground text-sm">No users found.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <SortHead className="pl-6">Email</SortHead>
-                  <SortHead>Role</SortHead>
-                  <SortHead>Created</SortHead>
-                  <SortHead>Active</SortHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {users.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell className="py-4 pl-6 font-medium">
-                      {user.email}
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <Badge
-                        variant={
-                          user.role === 'admin' ? 'default' : 'secondary'
-                        }
-                      >
-                        {user.role === 'admin' ? 'Admin' : 'EIF'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground py-4 text-sm">
-                      {formatDate(user.createdAt)}
-                    </TableCell>
-                    <TableCell className="py-4 pr-6">
-                      <ActiveSwitch user={user} />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
+        <AdminDataTable
+          columns={
+            [
+              {
+                accessorKey: 'email',
+                header: 'Email',
+                cell: ({ row }) => (
+                  <span className="font-medium">{row.original.email}</span>
+                )
+              },
+              {
+                accessorKey: 'role',
+                header: 'Role',
+                cell: ({ row }) => (
+                  <Badge
+                    variant={
+                      row.original.role === 'admin' ? 'default' : 'secondary'
+                    }
+                  >
+                    {row.original.role === 'admin' ? 'Admin' : 'EIF'}
+                  </Badge>
+                )
+              },
+              {
+                accessorKey: 'createdAt',
+                header: 'Created',
+                cell: ({ row }) => (
+                  <span className="text-muted-foreground text-sm">
+                    {formatDate(row.original.createdAt)}
+                  </span>
+                )
+              },
+              {
+                id: 'active',
+                header: 'Active',
+                cell: ({ row }) => <ActiveSwitch user={row.original} />
+              }
+            ] as ColumnDef<UserRow>[]
+          }
+          data={users}
+          isLoading={isLoading}
+          emptyMessage="No users found."
+          enableSorting={true}
+          enablePagination={false}
+        />
       </CardContent>
     </Card>
   );

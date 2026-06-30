@@ -36,6 +36,8 @@ import {
   TableRow
 } from '@eskwelabs-advisor/ui';
 
+import { cn } from '@/lib/utils';
+
 interface AdminDataTableProps<TData> {
   columns: ColumnDef<TData, unknown>[];
   data: TData[];
@@ -108,16 +110,20 @@ export function AdminDataTable<TData>({
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => {
+                {headerGroup.headers.map((header, index) => {
                   const canSort = enableSorting && header.column.getCanSort();
                   const sortDir = header.column.getIsSorted();
+                  const isFirst = index === 0;
+                  const isLast = index === headerGroup.headers.length - 1;
 
                   return (
                     <TableHead
                       key={header.id}
-                      className={
-                        canSort ? 'cursor-pointer select-none' : undefined
-                      }
+                      className={cn(
+                        canSort && 'cursor-pointer select-none',
+                        isFirst && 'pl-6',
+                        isLast && 'pr-6'
+                      )}
                       onClick={
                         canSort
                           ? header.column.getToggleSortingHandler()
@@ -143,11 +149,22 @@ export function AdminDataTable<TData>({
             {isLoading ? (
               Array.from({ length: loadingRows }).map((_, rowIndex) => (
                 <TableRow key={rowIndex}>
-                  {Array.from({ length: colCount }).map((__, colIndex) => (
-                    <TableCell key={colIndex} className="py-4">
-                      <Skeleton className="h-5 w-full max-w-32" />
-                    </TableCell>
-                  ))}
+                  {Array.from({ length: colCount }).map((__, colIndex) => {
+                    const isFirst = colIndex === 0;
+                    const isLast = colIndex === colCount - 1;
+                    return (
+                      <TableCell
+                        key={colIndex}
+                        className={cn(
+                          'py-4',
+                          isFirst && 'pl-6',
+                          isLast && 'pr-6'
+                        )}
+                      >
+                        <Skeleton className="h-5 w-full max-w-32" />
+                      </TableCell>
+                    );
+                  })}
                 </TableRow>
               ))
             ) : table.getRowModel().rows.length === 0 ? (
@@ -164,14 +181,25 @@ export function AdminDataTable<TData>({
             ) : (
               table.getRowModel().rows.map((row) => (
                 <TableRow key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} className="py-4">
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
-                    </TableCell>
-                  ))}
+                  {row.getVisibleCells().map((cell, index) => {
+                    const isFirst = index === 0;
+                    const isLast = index === row.getVisibleCells().length - 1;
+                    return (
+                      <TableCell
+                        key={cell.id}
+                        className={cn(
+                          'py-4',
+                          isFirst && 'pl-6',
+                          isLast && 'pr-6'
+                        )}
+                      >
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext()
+                        )}
+                      </TableCell>
+                    );
+                  })}
                 </TableRow>
               ))
             )}

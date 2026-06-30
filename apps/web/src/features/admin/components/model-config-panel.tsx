@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronsUpDown } from 'lucide-react';
 
 import {
   Badge,
@@ -21,19 +20,14 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  Skeleton,
   Switch,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
   toast
 } from '@eskwelabs-advisor/ui';
 
 import { updateModelConfig } from '@/lib/domains/admin/api';
 import { modelConfigQuery } from '@/lib/domains/admin/queries';
+import { AdminDataTable } from './admin-data-table';
+import type { ColumnDef } from '@tanstack/react-table';
 
 interface ModelConfigRow {
   advisorId: string;
@@ -82,23 +76,6 @@ function formatDate(iso: string) {
     dateStyle: 'medium',
     timeStyle: 'short'
   });
-}
-
-function SortHead({
-  children,
-  className
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <TableHead className={className}>
-      <span className="flex items-center gap-1.5 text-xs uppercase tracking-widest">
-        {children}
-        <ChevronsUpDown className="text-muted-foreground/40 size-3 shrink-0" />
-      </span>
-    </TableHead>
-  );
 }
 
 function EditModelDialog({ row }: { row: ModelConfigRow }) {
@@ -217,62 +194,72 @@ export function ModelConfigPanel() {
   return (
     <Card className="flex flex-1 flex-col">
       <CardContent className="flex flex-1 flex-col p-0">
-        {isLoading ? (
-          <div className="space-y-3 px-8 py-8">
-            {Array.from({ length: 3 }).map((_, index) => (
-              <Skeleton key={index} className="h-10 w-full" />
-            ))}
-          </div>
-        ) : rows.length === 0 ? (
-          <div className="flex flex-1 items-center justify-center">
-            <p className="text-muted-foreground text-sm">
-              No model configuration rows found.
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <SortHead className="pl-6">Advisor</SortHead>
-                  <SortHead>Provider</SortHead>
-                  <SortHead>Model</SortHead>
-                  <SortHead>Status</SortHead>
-                  <SortHead>Last Updated</SortHead>
-                  <TableHead />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((row) => (
-                  <TableRow key={row.advisorId}>
-                    <TableCell className="py-4 pl-6 font-medium">
-                      {ADVISOR_LABELS[row.advisorId] ?? row.advisorId}
-                    </TableCell>
-                    <TableCell className="py-4 capitalize">
-                      {row.provider}
-                    </TableCell>
-                    <TableCell className="py-4 font-mono text-xs">
-                      {row.model}
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <Badge
-                        variant={row.isEnabled ? 'default' : 'destructive'}
-                      >
-                        {row.isEnabled ? 'Enabled' : 'Disabled'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground py-4 text-xs">
-                      {formatDate(row.updatedAt)}
-                    </TableCell>
-                    <TableCell className="py-4 pr-6 text-right">
-                      <EditModelDialog row={row} />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
+        <AdminDataTable
+          columns={
+            [
+              {
+                accessorKey: 'advisorId',
+                header: 'Advisor',
+                cell: ({ row }) => (
+                  <span className="font-medium">
+                    {ADVISOR_LABELS[row.original.advisorId] ??
+                      row.original.advisorId}
+                  </span>
+                )
+              },
+              {
+                accessorKey: 'provider',
+                header: 'Provider',
+                cell: ({ row }) => (
+                  <span className="capitalize">{row.original.provider}</span>
+                )
+              },
+              {
+                accessorKey: 'model',
+                header: 'Model',
+                cell: ({ row }) => (
+                  <span className="font-mono text-xs">
+                    {row.original.model}
+                  </span>
+                )
+              },
+              {
+                accessorKey: 'isEnabled',
+                header: 'Status',
+                cell: ({ row }) => (
+                  <Badge
+                    variant={row.original.isEnabled ? 'default' : 'destructive'}
+                  >
+                    {row.original.isEnabled ? 'Enabled' : 'Disabled'}
+                  </Badge>
+                )
+              },
+              {
+                accessorKey: 'updatedAt',
+                header: 'Last Updated',
+                cell: ({ row }) => (
+                  <span className="text-muted-foreground text-xs">
+                    {formatDate(row.original.updatedAt)}
+                  </span>
+                )
+              },
+              {
+                id: 'actions',
+                header: '',
+                cell: ({ row }) => (
+                  <div className="text-right">
+                    <EditModelDialog row={row.original} />
+                  </div>
+                )
+              }
+            ] as ColumnDef<ModelConfigRow>[]
+          }
+          data={rows}
+          isLoading={isLoading}
+          emptyMessage="No model configuration rows found."
+          enableSorting={true}
+          enablePagination={false}
+        />
       </CardContent>
     </Card>
   );
