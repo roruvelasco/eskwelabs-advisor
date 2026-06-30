@@ -8,7 +8,7 @@ import {
   CirclePauseIcon,
   PencilIcon,
   PlusIcon,
-  RocketIcon,
+  PlayIcon,
   XCircleIcon
 } from 'lucide-react';
 
@@ -385,7 +385,7 @@ function AdvisorActions({ row }: { row: AdminAdvisor }) {
               disabled={!canPublish || isBusy}
               onClick={() => publishMutation.mutate()}
             >
-              <RocketIcon className="size-4" />
+              <PlayIcon className="size-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Publish</TooltipContent>

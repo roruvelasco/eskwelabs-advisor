@@ -19,7 +19,21 @@ const EIF_USERS: { email: string; fullName: string }[] = [
   { email: 'pedro.reyes@example.com', fullName: 'Pedro Reyes' },
   { email: 'ana.garcia@example.com', fullName: 'Ana Garcia' },
   { email: 'carlos.tan@example.com', fullName: 'Carlos Tan' },
-  { email: 'sofia.lim@example.com', fullName: 'Sofia Lim' }
+  { email: 'sofia.lim@example.com', fullName: 'Sofia Lim' },
+  { email: 'miguel.fernandez@example.com', fullName: 'Miguel Fernandez' },
+  { email: 'angela.villanueva@example.com', fullName: 'Angela Villanueva' },
+  { email: 'rico.gonzales@example.com', fullName: 'Rico Gonzales' },
+  { email: 'diana.mendoza@example.com', fullName: 'Diana Mendoza' },
+  { email: 'paolo.aquino@example.com', fullName: 'Paolo Aquino' },
+  { email: 'jasmine.cruz@example.com', fullName: 'Jasmine Cruz' },
+  { email: 'victor.soriano@example.com', fullName: 'Victor Soriano' },
+  { email: 'raquel.dimasac@example.com', fullName: 'Raquel Dimasac' },
+  { email: 'mark.alvarez@example.com', fullName: 'Mark Alvarez' },
+  { email: 'liza.bautista@example.com', fullName: 'Liza Bautista' },
+  { email: 'daniel.martinez@example.com', fullName: 'Daniel Martinez' },
+  { email: 'kayla.rivera@example.com', fullName: 'Kayla Rivera' },
+  { email: 'joshua.mercado@example.com', fullName: 'Joshua Mercado' },
+  { email: 'nicole.castillo@example.com', fullName: 'Nicole Castillo' }
 ];
 
 type Turn = { user: string; assistant: string };
@@ -592,12 +606,6 @@ function tokenCost(promptTokens: number, completionTokens: number): string {
   return (micros / 1_000_000).toString();
 }
 
-function dayPh(daysAgo: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - daysAgo);
-  return d.toISOString().slice(0, 10);
-}
-
 function daysAgoDate(daysAgo: number, hourOffset = 0): Date {
   const d = new Date();
   d.setDate(d.getDate() - daysAgo);
@@ -610,14 +618,22 @@ async function main() {
 
   const passwordHash = await bcrypt.hash(PASSWORD, 10);
 
-  const allUserEmails = [INTERN_EMAIL].concat(EIF_USERS.map((u) => u.email));
-
   // ── Users ────────────────────────────────────────────────────────────
   const userRows = await sql`
     INSERT INTO users ${sql(
       [
-        { email: ADMIN_EMAIL, password_hash: passwordHash, role: 'admin', is_active: true },
-        { email: INTERN_EMAIL, password_hash: passwordHash, role: 'eif', is_active: true },
+        {
+          email: ADMIN_EMAIL,
+          password_hash: passwordHash,
+          role: 'admin',
+          is_active: true
+        },
+        {
+          email: INTERN_EMAIL,
+          password_hash: passwordHash,
+          role: 'eif',
+          is_active: true
+        },
         ...EIF_USERS.map((u) => ({
           email: u.email,
           password_hash: passwordHash,
@@ -688,11 +704,11 @@ async function main() {
   }> = [];
 
   console.log('Creating conversations and messages...');
-  const providers = ['groq'];
-  const models = ['llama-3.3-70b-versatile'];
+  const providers = ['groq', 'gemini', 'gpt'];
+  const models = ['llama-3.3-70b-versatile', 'gemini-2.0-flash', 'gpt-4o-mini'];
 
   for (const [ei, eifUser] of eifRows.entries()) {
-    const numConvos = ei === 0 ? SEEDS.length : rand(4, 8);
+    const numConvos = ei === 0 ? SEEDS.length : rand(6, 15);
     const sources =
       ei === 0
         ? SEEDS.map((s) => ({ ...s, advisorIdx: null, dayOffset: null }))
@@ -703,23 +719,61 @@ async function main() {
         sources && sources[ci]
           ? advisors[ci % advisors.length]
           : pick(advisors);
-      const daysAgo = sources && sources[ci]
-        ? rand(28, 30) - Math.floor(ci / 4)
-        : rand(0, 60);
+      const daysAgo =
+        sources && sources[ci]
+          ? rand(28, 30) - Math.floor(ci / 4)
+          : rand(0, 60);
 
       const title =
         sources && sources[ci]
           ? sources[ci].title
-          : `Seed conversation ${ci + 1} for ${eifUser.email}`;
-      const turns =
-        sources && sources[ci]
-          ? sources[ci].turns
           : [
-              {
-                user: `This is a test message from ${eifUser.email}. What can you help me with today?`,
-                assistant: `Hello! I'm your advisor. Based on your query, here's what I can help with: understanding data concepts, building dashboards, working with SSOT memos, and more. Let me know what you'd like to focus on.`
-              }
-            ];
+              'EDA on sales data',
+              'Building a dashboard',
+              'Cleaning messy CSV',
+              'Statistics help needed',
+              'Capstone question',
+              'SQL query optimization',
+              'Model deployment',
+              'Data visualization tips',
+              'A/B testing setup',
+              'Feature engineering',
+              'Time series analysis',
+              'ML pipeline question',
+              'Data warehousing',
+              'Web scraping help',
+              'Python performance'
+            ][rand(0, 14)];
+      const turns: Turn[] = sources && sources[ci] ? sources[ci].turns : [];
+      if (turns.length === 0) {
+        const numTurns = rand(3, 10);
+        for (let ti = 0; ti < numTurns; ti++) {
+          if (ti % 2 === 0) {
+            turns.push({
+              user: [
+                'What approach would you recommend for this?',
+                'Can you give me an example?',
+                'How do I implement this in Python?',
+                'What tools should I use?',
+                'Is there a simpler way to do this?',
+                'Can you explain this further?',
+                'What are the key considerations here?',
+                'How do I avoid common mistakes?',
+                'What should I read to learn more?',
+                'Does this approach scale well?'
+              ][rand(0, 9)],
+              assistant:
+                'Here are some practical steps to consider. First, start by understanding your data quality. Then, choose an appropriate method based on your specific context. The key is to iterate quickly and validate your assumptions early.'
+            });
+          } else {
+            turns.push({
+              user: 'That makes sense. What about handling edge cases?',
+              assistant:
+                'Good question. Edge cases are exactly where the real learning happens. I recommend writing unit tests for your edge cases first, then building your solution around them. This is called test-driven development and it works particularly well for data pipelines.'
+            });
+          }
+        }
+      }
 
       const convoId = randomUUID();
       const convoCreatedAt = daysAgoDate(daysAgo, rand(8, 20));
@@ -733,7 +787,9 @@ async function main() {
         const promptTokens = rand(200, 3000);
         const completionTokens = rand(100, 2000);
         const minutesOffset = ti * 3 + rand(0, 2);
-        const msgTime = new Date(convoCreatedAt.getTime() + minutesOffset * 60000);
+        const msgTime = new Date(
+          convoCreatedAt.getTime() + minutesOffset * 60000
+        );
 
         const userRow = {
           conversationId: convoId,
@@ -785,11 +841,16 @@ async function main() {
       }
     }
   }
-  console.log(`  ${conversationsCreated} conversations, ${messagesCreated} messages`);
+  console.log(
+    `  ${conversationsCreated} conversations, ${messagesCreated} messages`
+  );
 
   // ── Usage counters (aggregated from messages) ────────────────────────
   console.log('\nBuilding usage counters from messages...');
-  const counterMap = new Map<string, { messages: number; tokens: number; spend: string }>();
+  const counterMap = new Map<
+    string,
+    { messages: number; tokens: number; spend: string }
+  >();
   for (const msg of allMessages) {
     if (msg.role !== 'assistant') continue;
     const dp = msg.createdAt.toISOString().slice(0, 10);
@@ -827,12 +888,21 @@ async function main() {
   // ── Telemetry events ─────────────────────────────────────────────────
   console.log('\nCreating telemetry events...');
   const eventNames = [
-    'login_success', 'login_denied', 'advisor_selected', 'conversation_resumed',
-    'message_sent', 'llm_call_started', 'llm_call_completed', 'request_blocked',
-    'prompt_cache_hit', 'prompt_cache_miss', 'admin_cache_refresh',
-    'admin_cache_refresh_failed', 'rate_limit_hit', 'budget_limit_hit'
+    'login_success',
+    'login_denied',
+    'advisor_selected',
+    'conversation_resumed',
+    'message_sent',
+    'llm_call_started',
+    'llm_call_completed',
+    'request_blocked',
+    'prompt_cache_hit',
+    'prompt_cache_miss',
+    'admin_cache_refresh',
+    'admin_cache_refresh_failed',
+    'rate_limit_hit',
+    'budget_limit_hit'
   ];
-  const severities = ['info', 'warning', 'error'] as const;
   const telemetryRows: Array<{
     id: string;
     event_name: string;
@@ -842,18 +912,41 @@ async function main() {
     created_at: Date;
   }> = [];
 
-  for (let i = 0; i < 200; i++) {
+  for (let i = 0; i < 500; i++) {
     const eventName = pick(eventNames);
-    const isError = eventName.includes('denied') || eventName.includes('failed') || eventName.includes('limit');
-    const severity = isError && Math.random() < 0.5 ? 'error' : isError && Math.random() < 0.5 ? 'warning' : 'info';
+    const isError =
+      eventName.includes('denied') ||
+      eventName.includes('failed') ||
+      eventName.includes('limit');
+    const severity =
+      isError && Math.random() < 0.5
+        ? 'error'
+        : isError && Math.random() < 0.5
+          ? 'warning'
+          : 'info';
     const actor = Math.random() < 0.8 ? pick(eifRows) : pick(userRows);
-    const daysAgo = rand(0, 30);
+    const daysAgo = rand(0, 60);
+    const payload: Record<string, unknown> = {
+      source: 'seed',
+      iteration: i,
+      duration_ms:
+        eventName === 'llm_call_completed' ? rand(200, 8000) : undefined,
+      model: eventName === 'llm_call_completed' ? pick(models) : undefined,
+      provider:
+        eventName === 'llm_call_completed' ? pick(providers) : undefined,
+      tokens_used:
+        eventName === 'llm_call_completed' ? rand(100, 4000) : undefined,
+      reason: eventName === 'rate_limit_hit' ? 'exceeded quota' : undefined
+    };
+    Object.keys(payload).forEach(
+      (k) => payload[k] === undefined && delete payload[k]
+    );
     telemetryRows.push({
       id: randomUUID(),
       event_name: eventName,
       actor_id: actor.id,
       severity,
-      payload: { source: 'seed', iteration: i },
+      payload,
       created_at: daysAgoDate(daysAgo, rand(0, 23))
     });
   }
@@ -866,61 +959,93 @@ async function main() {
 
   // ── Knowledge sources and units ──────────────────────────────────────
   console.log('\nCreating knowledge sources and units...');
-  const sourceId1 = randomUUID();
-  const sourceId2 = randomUUID();
-  await sql`
-    INSERT INTO knowledge_sources ${sql([
-      {
-        id: sourceId1,
-        source_type: 'google_doc',
-        external_id: '1abc123',
-        title: 'EIF Mentor Handbook',
-        status: 'published',
-        advisor_scope: 'global',
-        content_type: 'mentor_guide'
-      },
-      {
-        id: sourceId2,
-        source_type: 'manual',
-        external_id: 'manual-faq',
-        title: 'Frequently Asked Questions',
-        status: 'published',
-        advisor_scope: 'global',
-        content_type: 'faq'
-      }
-    ])}
-    ON CONFLICT (id) DO NOTHING
-  `;
-  const unitId1 = randomUUID();
-  const unitId2 = randomUUID();
-  await sql`
-    INSERT INTO knowledge_units ${sql([
-      {
-        id: unitId1,
-        source_id: sourceId1,
-        source_revision: 'v1',
-        section_path: '/mentoring/best-practices',
-        content_type: 'mentor_guide',
-        status: 'published',
-        text: 'Always provide concrete, actionable advice. Avoid vague suggestions.',
-        summary: 'Mentoring best practices',
-        content_hash: 'hash1'
-      },
-      {
-        id: unitId2,
-        source_id: sourceId2,
-        source_revision: 'v1',
-        section_path: '/faq/capstone',
-        content_type: 'faq',
-        status: 'published',
-        text: 'The capstone project must include a working prototype or analysis.',
-        summary: 'Capstone requirements',
-        content_hash: 'hash2'
-      }
-    ])}
-    ON CONFLICT (id) DO NOTHING
-  `;
-  console.log(`  2 sources, 2 units`);
+  const knowledgeSources = [
+    {
+      source_type: 'google_doc',
+      external_id: '1abc123',
+      title: 'EIF Mentor Handbook',
+      status: 'published',
+      advisor_scope: 'global',
+      content_type: 'mentor_guide'
+    },
+    {
+      source_type: 'manual',
+      external_id: 'manual-faq',
+      title: 'Frequently Asked Questions',
+      status: 'published',
+      advisor_scope: 'global',
+      content_type: 'faq'
+    },
+    {
+      source_type: 'google_doc',
+      external_id: '1def456',
+      title: 'Data Modeling Best Practices',
+      status: 'published',
+      advisor_scope: 'global',
+      content_type: 'curriculum_guide'
+    },
+    {
+      source_type: 'google_doc',
+      external_id: '1ghi789',
+      title: 'Capstone Project Guidelines',
+      status: 'published',
+      advisor_scope: 'global',
+      content_type: 'project_guide'
+    },
+    {
+      source_type: 'manual',
+      external_id: 'manual-onboarding',
+      title: 'EIF Onboarding Checklist',
+      status: 'published',
+      advisor_scope: 'global',
+      content_type: 'onboarding'
+    },
+    {
+      source_type: 'google_doc',
+      external_id: '1jkl012',
+      title: 'SQL Reference for EIFs',
+      status: 'published',
+      advisor_scope: 'global',
+      content_type: 'reference'
+    }
+  ];
+  const sourceRows = knowledgeSources.map(() => ({ id: randomUUID() }));
+  for (const [i, src] of knowledgeSources.entries()) {
+    await sql`
+      INSERT INTO knowledge_sources ${sql({
+        id: sourceRows[i].id,
+        source_type: src.source_type,
+        external_id: src.external_id,
+        title: src.title,
+        status: src.status,
+        advisor_scope: src.advisor_scope,
+        content_type: src.content_type
+      })}
+      ON CONFLICT (id) DO NOTHING
+    `;
+  }
+  let unitsCreated = 0;
+  for (const src of sourceRows) {
+    const numUnits = rand(2, 4);
+    for (let ui = 0; ui < numUnits; ui++) {
+      await sql`
+        INSERT INTO knowledge_units ${sql({
+          id: randomUUID(),
+          source_id: src.id,
+          source_revision: 'v1',
+          section_path: `/section-${ui + 1}`,
+          content_type: 'advisor_reference',
+          status: 'published',
+          text: `Content for unit ${ui + 1} of source ${src.id}: practical guidance for Eskwelabs learners.`,
+          summary: `Unit ${ui + 1} summary`,
+          content_hash: `hash-${src.id}-${ui}`
+        })}
+        ON CONFLICT (id) DO NOTHING
+      `;
+      unitsCreated++;
+    }
+  }
+  console.log(`  ${knowledgeSources.length} sources, ${unitsCreated} units`);
 
   // ── Prompt snapshots ─────────────────────────────────────────────────
   console.log('\nCreating prompt snapshots...');
@@ -976,7 +1101,7 @@ async function main() {
   console.log('\nCreating budget counters...');
   const now = new Date();
   const budgetRows = [];
-  for (let m = 0; m < 3; m++) {
+  for (let m = 0; m < 6; m++) {
     const d = new Date(now);
     d.setMonth(d.getMonth() - m);
     const monthlyKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -1011,20 +1136,87 @@ async function main() {
     {
       changed_by: userRows.find((u) => u.role === 'admin')?.id,
       previous_config: null,
-      next_config: { maxMessagesPerUserPerDay: 25, maxTokensPerUserPerDay: 100000, dailyBudgetUsd: '10', monthlyBudgetUsd: '300', rateLimitWindowSeconds: 60, rateLimitMaxRequests: 100 },
+      next_config: {
+        maxMessagesPerUserPerDay: 25,
+        maxTokensPerUserPerDay: 100000,
+        dailyBudgetUsd: '10',
+        monthlyBudgetUsd: '300',
+        rateLimitWindowSeconds: 60,
+        rateLimitMaxRequests: 100
+      },
       created_at: daysAgoDate(30)
     },
     {
       changed_by: userRows.find((u) => u.role === 'admin')?.id,
-      previous_config: { maxMessagesPerUserPerDay: 25, maxTokensPerUserPerDay: 100000, dailyBudgetUsd: '10', monthlyBudgetUsd: '300', rateLimitWindowSeconds: 60, rateLimitMaxRequests: 100 },
-      next_config: { maxMessagesPerUserPerDay: 50, maxTokensPerUserPerDay: 150000, dailyBudgetUsd: '15', monthlyBudgetUsd: '300', rateLimitWindowSeconds: 60, rateLimitMaxRequests: 100 },
+      previous_config: {
+        maxMessagesPerUserPerDay: 25,
+        maxTokensPerUserPerDay: 100000,
+        dailyBudgetUsd: '10',
+        monthlyBudgetUsd: '300',
+        rateLimitWindowSeconds: 60,
+        rateLimitMaxRequests: 100
+      },
+      next_config: {
+        maxMessagesPerUserPerDay: 50,
+        maxTokensPerUserPerDay: 150000,
+        dailyBudgetUsd: '15',
+        monthlyBudgetUsd: '300',
+        rateLimitWindowSeconds: 60,
+        rateLimitMaxRequests: 100
+      },
       created_at: daysAgoDate(15)
     },
     {
       changed_by: userRows.find((u) => u.role === 'admin')?.id,
-      previous_config: { maxMessagesPerUserPerDay: 50, maxTokensPerUserPerDay: 150000, dailyBudgetUsd: '15', monthlyBudgetUsd: '300', rateLimitWindowSeconds: 60, rateLimitMaxRequests: 100 },
-      next_config: { maxMessagesPerUserPerDay: 25, maxTokensPerUserPerDay: 100000, dailyBudgetUsd: '10', monthlyBudgetUsd: '300', rateLimitWindowSeconds: 60, rateLimitMaxRequests: 100 },
+      previous_config: {
+        maxMessagesPerUserPerDay: 50,
+        maxTokensPerUserPerDay: 150000,
+        dailyBudgetUsd: '15',
+        monthlyBudgetUsd: '300',
+        rateLimitWindowSeconds: 60,
+        rateLimitMaxRequests: 100
+      },
+      next_config: {
+        maxMessagesPerUserPerDay: 25,
+        maxTokensPerUserPerDay: 100000,
+        dailyBudgetUsd: '10',
+        monthlyBudgetUsd: '300',
+        rateLimitWindowSeconds: 60,
+        rateLimitMaxRequests: 100
+      },
       created_at: daysAgoDate(3)
+    },
+    {
+      changed_by: userRows.find((u) => u.role === 'admin')?.id,
+      previous_config: {
+        maxMessagesPerUserPerDay: 25,
+        maxTokensPerUserPerDay: 100000,
+        dailyBudgetUsd: '10',
+        monthlyBudgetUsd: '300'
+      },
+      next_config: {
+        maxMessagesPerUserPerDay: 30,
+        maxTokensPerUserPerDay: 120000,
+        dailyBudgetUsd: '12',
+        monthlyBudgetUsd: '360'
+      },
+      created_at: daysAgoDate(60)
+    },
+    {
+      changed_by: userRows.find((u) => u.role === 'admin')?.id,
+      previous_config: {
+        maxMessagesPerUserPerDay: 30,
+        maxTokensPerUserPerDay: 120000,
+        dailyBudgetUsd: '12',
+        monthlyBudgetUsd: '360'
+      },
+      next_config: {
+        maxMessagesPerUserPerDay: 25,
+        maxTokensPerUserPerDay: 100000,
+        dailyBudgetUsd: '10',
+        monthlyBudgetUsd: '300'
+      },
+      created_at: daysAgoDate(45)
     }
   ];
   await sql`
@@ -1040,6 +1232,8 @@ async function main() {
   console.log(`Messages          : ${messagesCreated}`);
   console.log(`Usage counters    : ${counterMap.size}`);
   console.log(`Telemetry events  : ${telemetryRows.length}`);
+  console.log(`Knowledge sources : ${knowledgeSources.length}`);
+  console.log(`Knowledge units   : ${unitsCreated}`);
   console.log(`Budget counters   : ${budgetRows.length}`);
   console.log(`Audit events      : ${auditRows.length}`);
   console.log(`\nSeeding complete.`);

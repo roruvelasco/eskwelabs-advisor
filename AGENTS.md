@@ -196,3 +196,37 @@ When the codebase changes (new domain, new table, new route, new env var, packag
 8. **Quirks** — if any new unexpected behavior emerges
 
 Also update the corresponding `agents/*` files for deep-dive details.
+
+## Session Summary: Admin UI Polish & Seed Realism
+
+### Goal
+
+Polish admin UI consistency with a reusable card component, inline headers, table pagination at page size 5, remove redundant elements, and generate realistic seed data.
+
+### Key Decisions
+
+- `AdminCard` extracted as single source of truth for all card-with-table layouts — `tableMode` flag controls `p-0` vs default padding
+- All Users filter removed entirely — per-user filtering rarely used and clutters toolbar
+- Cursor-based "Load more" replaced with client-side pagination — cleaner UX with page navigation
+- Seed script focuses on data quantity metadata realism (token counts, costs, timestamps, multi-provider) rather than deep conversational content
+- Default page size 5 ensures compact tables work on smaller screens while still scannable
+
+### Done
+
+- **AdminCard** created at `apps/web/src/features/admin/components/admin-card.tsx` — reusable Card with `flex flex-1 flex-col`, inline `CardTitle` + `CardDescription`, `tableMode` prop
+- **Usage panel**: inline headers on all cards, All Users filter removed, date pickers + export always single row (`grid-cols-3`), User columns sortable via `accessorFn`, pagination enabled with `pageSize={5}`, "Load more" removed
+- **AdminDataTable**: defaults changed to `pageSize=5`, `pageSizeOptions=[5,10,20,50]`
+- **Telemetry panel**: pie chart removed, `recharts` imports cleaned up, table fills full width
+- **Admin dashboard**: green `h3` Dashboard section header removed (redundant with page title)
+- **Cache and Telemetry tables**: `pageSize` changed from 20 to 5
+- **Seed script** (`scripts/seed.ts`): 20 EIF users + admin + intern, 6-15 conversations per user (250+ total), 3-10 turns each (1800+ messages), 3 providers/models (groq/llama, gemini/gemini-2.0-flash, gpt/gpt-4o-mini), 500 telemetry events with detailed payloads, 6 knowledge sources with 2-4 units each, 6-month budget counters, 5 audit events
+
+### Relevant Files
+
+- `apps/web/src/features/admin/components/admin-card.tsx`
+- `apps/web/src/features/admin/components/admin-data-table.tsx`
+- `apps/web/src/features/admin/components/usage-panel.tsx`
+- `apps/web/src/features/admin/components/telemetry-panel.tsx`
+- `apps/web/src/features/admin/components/admin-dashboard.tsx`
+- `apps/web/src/features/admin/components/cache-panel.tsx`
+- `scripts/seed.ts`
