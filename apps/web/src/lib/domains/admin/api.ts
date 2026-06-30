@@ -42,6 +42,35 @@ export interface PaginatedData<T> {
   meta: { nextCursor: string | null; limit: number };
 }
 
+export interface UsageSummaryResponse {
+  data: {
+    range: {
+      fromDayPh: string;
+      toDayPh: string;
+      timeZone: 'Asia/Manila';
+    };
+    totals: {
+      messages: number;
+      tokens: number;
+      estimatedSpendUsd: string;
+      activeUsers: number;
+    };
+    days: Array<{
+      dayPh: string;
+      messages: number;
+      tokens: number;
+      estimatedSpendUsd: string;
+    }>;
+    topUsers: Array<{
+      userId: string;
+      userEmail?: string;
+      messages: number;
+      tokens: number;
+      estimatedSpendUsd: string;
+    }>;
+  };
+}
+
 export function getAdminUsage(): Promise<DataResponse<unknown>> {
   return apiClient.admin.usage.$get().then(parseApiResponse) as Promise<
     DataResponse<unknown>
@@ -68,6 +97,22 @@ export function listUsageCounters({
       query: queryParams({ userId, dayPh, fromDayPh, toDayPh, limit, cursor })
     })
     .then(parseApiResponse) as Promise<PaginatedData<unknown>>;
+}
+
+export function getUsageSummary({
+  fromDayPh,
+  toDayPh,
+  userId,
+  topUsersLimit
+}: {
+  fromDayPh?: string;
+  toDayPh?: string;
+  userId?: string;
+  topUsersLimit?: number;
+} = {}): Promise<UsageSummaryResponse> {
+  return apiClient.admin['usage-counters'].summary
+    .$get({ query: queryParams({ fromDayPh, toDayPh, userId, topUsersLimit }) })
+    .then(parseApiResponse) as Promise<UsageSummaryResponse>;
 }
 
 export function listModelConfig(): Promise<DataResponse<unknown[]>> {

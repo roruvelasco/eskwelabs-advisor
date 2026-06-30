@@ -165,6 +165,7 @@ Defined in `packages/server/src/config/env.ts` via zod schema. All declared in `
 - All frontend components are placeholders (feature pages), but UI components in `packages/ui` are real shadcn components
 - `apps/web/src/lib/utils.ts` re-exports `cn` from `@eskwelabs-advisor/ui/utils` — necessary for shadcn CLI compatibility
 - shadcn v4 generates Radix imports from the `radix-ui` meta-package (not individual `@radix-ui/react-*` packages)
+- Admin usage charts use `recharts` in `apps/web`, styled with existing shadcn/Tailwind chart tokens from `globals.css`
 - **shadcn CLI requires `-c apps/web`** — the `components.json` lives at `apps/web/components.json` and controls path aliases. Always run `npx shadcn@latest add <component> -c apps/web --yes`, then manually move the generated file from `apps/web/src/components/ui/` to `packages/ui/src/components/ui/` and add its export to `packages/ui/src/index.ts`.
 - **Git hooks** (Husky v9 + lint-staged): `pre-commit` runs Prettier + ESLint on staged files; `pre-push` runs `turbo check` + `turbo test`. Skip with `--no-verify` in emergencies. `git add -p` partial-hunk staging will cause lint-staged to reformat the whole file — commit the full file in that case.
 

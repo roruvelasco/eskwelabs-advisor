@@ -4,6 +4,7 @@ import {
   getAdminUsage,
   getDnaSource,
   getUsageLimits,
+  getUsageSummary,
   getKnowledgeHealth,
   listAdvisorPromptSources,
   listKnowledgeSources,
@@ -52,6 +53,32 @@ export function usageCountersQuery({
     ],
     queryFn: () =>
       listUsageCounters({ userId, dayPh, fromDayPh, toDayPh, limit, cursor })
+  });
+}
+
+export function usageSummaryQuery({
+  fromDayPh,
+  toDayPh,
+  userId,
+  topUsersLimit
+}: {
+  fromDayPh?: string;
+  toDayPh?: string;
+  userId?: string;
+  topUsersLimit?: number;
+} = {}) {
+  return queryOptions({
+    queryKey: [
+      'admin',
+      'usage-counters',
+      'summary',
+      fromDayPh,
+      toDayPh,
+      userId,
+      topUsersLimit
+    ],
+    queryFn: () =>
+      getUsageSummary({ fromDayPh, toDayPh, userId, topUsersLimit })
   });
 }
 

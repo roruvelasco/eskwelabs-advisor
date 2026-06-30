@@ -380,6 +380,12 @@ export function AdminDashboard() {
 
   const adminName = session?.email?.split('@')[0] ?? 'Admin';
   const adminInitials = adminName.slice(0, 2).toUpperCase();
+  const sectionLabel = sections.find((s) => s.id === section)?.label ?? 'Admin';
+  const heading = section === 'usage' ? 'Dashboard Overview' : sectionLabel;
+  const description =
+    section === 'usage'
+      ? 'Monitor platform usage, models, and system health.'
+      : `Manage ${sectionLabel.toLowerCase()} settings and status.`;
 
   const handleSelect = (id: AdminSection) => {
     setSection(id);
@@ -399,7 +405,7 @@ export function AdminDashboard() {
             <MenuIcon className="size-5" />
           </button>
           <h1 className="font-serif text-base font-semibold text-[#f9f9f8]">
-            {sections.find((s) => s.id === section)?.label ?? 'Admin'}
+            {sectionLabel}
           </h1>
           <div className="w-9" />
         </header>
@@ -460,10 +466,10 @@ export function AdminDashboard() {
           <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
             <div className="mb-4 sm:mb-6">
               <h2 className="font-serif text-lg font-bold text-[#222019] sm:text-xl">
-                Dashboard Overview
+                {heading}
               </h2>
               <p className="mt-1 text-xs text-[#8a8578] sm:text-sm">
-                Monitor platform usage, models, and system health.
+                {description}
               </p>
             </div>
 
@@ -472,7 +478,7 @@ export function AdminDashboard() {
             <div className="mt-4 sm:mt-6">
               <div className="mb-3 flex items-center justify-between sm:mb-4">
                 <h3 className="font-serif text-base font-semibold text-[#2d6a4f] sm:text-lg">
-                  {sections.find((s) => s.id === section)?.label}
+                  {sectionLabel}
                 </h3>
                 {section === 'limits' && <LimitsEditButton />}
               </div>

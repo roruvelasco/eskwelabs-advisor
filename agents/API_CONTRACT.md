@@ -195,9 +195,47 @@ Knowledge admin endpoints do not return raw unit text by default. Chat-time evid
 **Controller**: `UsageCounterController` (`packages/server/src/usage-counters/`)
 **Auth**: `requireActor(['admin'])`
 
-| Method | Path                        | Description                                                                     |
-| ------ | --------------------------- | ------------------------------------------------------------------------------- |
-| `GET`  | `/api/admin/usage-counters` | List usage counters (paginated: `?userId&dayPh&fromDayPh&toDayPh&limit&cursor`) |
+| Method | Path                                | Description                                                                                       |
+| ------ | ----------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `GET`  | `/api/admin/usage-counters`         | List usage counters (paginated: `?userId&dayPh&fromDayPh&toDayPh&limit&cursor`)                   |
+| `GET`  | `/api/admin/usage-counters/summary` | Aggregate usage trend and top users (`?userId&fromDayPh&toDayPh&topUsersLimit`, max 90-day range) |
+
+Summary response:
+
+```json
+{
+  "data": {
+    "range": {
+      "fromDayPh": "2026-06-01",
+      "toDayPh": "2026-06-30",
+      "timeZone": "Asia/Manila"
+    },
+    "totals": {
+      "messages": 12,
+      "tokens": 3456,
+      "estimatedSpendUsd": "0.123456",
+      "activeUsers": 3
+    },
+    "days": [
+      {
+        "dayPh": "2026-06-30",
+        "messages": 2,
+        "tokens": 512,
+        "estimatedSpendUsd": "0.012345"
+      }
+    ],
+    "topUsers": [
+      {
+        "userId": "uuid",
+        "userEmail": "intern@example.com",
+        "messages": 5,
+        "tokens": 1200,
+        "estimatedSpendUsd": "0.050000"
+      }
+    ]
+  }
+}
+```
 
 ---
 

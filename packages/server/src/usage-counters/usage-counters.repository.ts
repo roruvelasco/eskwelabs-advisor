@@ -29,6 +29,28 @@ export type UsageCounterRow = Pick<
   | 'estimatedSpendTodayUsd'
 > & { userEmail?: string | null };
 
+export type UsageSummaryDay = {
+  dayPh: string;
+  messages: number;
+  tokens: number;
+  estimatedSpendUsd: string;
+};
+
+export type UsageSummaryTopUser = {
+  userId: string;
+  userEmail?: string | null;
+  messages: number;
+  tokens: number;
+  estimatedSpendUsd: string;
+};
+
+export type UsageSummaryTotals = {
+  messages: number;
+  tokens: number;
+  estimatedSpendUsd: string;
+  activeUsers: number;
+};
+
 type UsageLimitCheck = {
   messages: number;
   tokens: number;
@@ -120,6 +142,124 @@ export class UsageCountersRepository extends Repository {
       .select({ count: count() })
       .from(usageCountersTable);
     return rows[0]?.count ?? 0;
+  }
+
+  async dailyTotals({
+    fromDayPh,
+    toDayPh,
+    userId
+  }: {
+    fromDayPh: string;
+    toDayPh: string;
+    userId?: string;
+  }): Promise<UsageSummaryDay[]> {
+    const whereConditions = [
+      gte(usageCountersTable.dayPh, fromDayPh),
+      lte(usageCountersTable.dayPh, toDayPh),
+      ...(userId ? [eq(usageCountersTable.userId, userId)] : [])
+    ];
+
+    const rows = await this.drizzle.db
+      .select({
+        dayPh: usageCountersTable.dayPh,
+        messages: sql<number>`coalesce(sum(${usageCountersTable.messagesToday}), 0)`,
+        tokens: sql<number>`coalesce(sum(${usageCountersTable.tokensToday}), 0)`,
+        estimatedSpendUsd: sql<string>`coalesce(sum(${usageCountersTable.estimatedSpendTodayUsd}), 0)::text`
+      })
+      .from(usageCountersTable)
+      .where(and(...whereConditions))
+      .groupBy(usageCountersTable.dayPh)
+      .orderBy(asc(usageCountersTable.dayPh));
+
+    return rows.map((row) => ({
+      dayPh: row.dayPh,
+      messages: Number(row.messages),
+      tokens: Number(row.tokens),
+      estimatedSpendUsd: row.estimatedSpendUsd
+    }));
+  }
+
+  async topUsers({
+    fromDayPh,
+    toDayPh,
+    limit,
+    userId
+  }: {
+    fromDayPh: string;
+    toDayPh: string;
+    limit: number;
+    userId?: string;
+  }): Promise<UsageSummaryTopUser[]> {
+    const spend = sql<string>`coalesce(sum(${usageCountersTable.estimatedSpendTodayUsd}), 0)::text`;
+    const tokens = sql<number>`coalesce(sum(${usageCountersTable.tokensToday}), 0)`;
+    const messages = sql<number>`coalesce(sum(${usageCountersTable.messagesToday}), 0)`;
+    const whereConditions = [
+      gte(usageCountersTable.dayPh, fromDayPh),
+      lte(usageCountersTable.dayPh, toDayPh),
+      ...(userId ? [eq(usageCountersTable.userId, userId)] : [])
+    ];
+
+    const rows = await this.drizzle.db
+      .select({
+        userId: usageCountersTable.userId,
+        userEmail: usersTable.email,
+        messages,
+        tokens,
+        estimatedSpendUsd: spend
+      })
+      .from(usageCountersTable)
+      .leftJoin(usersTable, eq(usersTable.id, usageCountersTable.userId))
+      .where(and(...whereConditions))
+      .groupBy(usageCountersTable.userId, usersTable.email)
+      .orderBy(
+        desc(sql`sum(${usageCountersTable.estimatedSpendTodayUsd})`),
+        desc(tokens),
+        desc(messages)
+      )
+      .limit(limit);
+
+    return rows.map((row) => ({
+      userId: row.userId,
+      userEmail: row.userEmail,
+      messages: Number(row.messages),
+      tokens: Number(row.tokens),
+      estimatedSpendUsd: row.estimatedSpendUsd
+    }));
+  }
+
+  async summaryTotals({
+    fromDayPh,
+    toDayPh,
+    userId
+  }: {
+    fromDayPh: string;
+    toDayPh: string;
+    userId?: string;
+  }): Promise<UsageSummaryTotals> {
+    const whereConditions = [
+      gte(usageCountersTable.dayPh, fromDayPh),
+      lte(usageCountersTable.dayPh, toDayPh),
+      ...(userId ? [eq(usageCountersTable.userId, userId)] : [])
+    ];
+
+    const rows = await this.drizzle.db
+      .select({
+        messages: sql<number>`coalesce(sum(${usageCountersTable.messagesToday}), 0)`,
+        tokens: sql<number>`coalesce(sum(${usageCountersTable.tokensToday}), 0)`,
+        estimatedSpendUsd: sql<string>`coalesce(sum(${usageCountersTable.estimatedSpendTodayUsd}), 0)::text`,
+        activeUsers: sql<number>`count(distinct ${usageCountersTable.userId})`
+      })
+      .from(usageCountersTable)
+      .where(and(...whereConditions));
+
+    const row = rows[0];
+
+    return {
+      messages: Number(row?.messages ?? 0),
+      tokens: Number(row?.tokens ?? 0),
+      estimatedSpendUsd: row?.estimatedSpendUsd ?? '0',
+      activeUsers: Number(row?.activeUsers ?? 0)
+    };
   }
 
   async findForUserDay(userId: string, dayPh = getPhilippinesDay()) {

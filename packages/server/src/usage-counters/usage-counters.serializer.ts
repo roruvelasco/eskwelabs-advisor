@@ -1,6 +1,10 @@
 import { paginatedResponse } from '../common/pagination';
 import { usageCounterDto } from './dto/usage-counters.dto';
-import type { UsageCounterRow } from './usage-counters.repository';
+import type {
+  UsageCounterRow,
+  UsageSummaryDay,
+  UsageSummaryTopUser
+} from './usage-counters.repository';
 
 export class UsageCountersSerializer {
   private serialize(row: UsageCounterRow) {
@@ -16,5 +20,27 @@ export class UsageCountersSerializer {
       result.rows.length,
       result.nextCursor
     );
+  }
+
+  summary(result: {
+    range: { fromDayPh: string; toDayPh: string; timeZone: 'Asia/Manila' };
+    totals: {
+      messages: number;
+      tokens: number;
+      estimatedSpendUsd: string;
+      activeUsers: number;
+    };
+    days: UsageSummaryDay[];
+    topUsers: UsageSummaryTopUser[];
+  }) {
+    return {
+      data: {
+        ...result,
+        topUsers: result.topUsers.map((row) => ({
+          ...row,
+          userEmail: row.userEmail ?? undefined
+        }))
+      }
+    };
   }
 }
