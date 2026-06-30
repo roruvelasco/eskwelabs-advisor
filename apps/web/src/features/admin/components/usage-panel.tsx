@@ -387,10 +387,12 @@ export function UsagePanel() {
       <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
         <Card className="flex flex-col">
           <CardHeader>
-            <CardTitle className="text-base">Usage Trend</CardTitle>
-            <CardDescription>
-              Messages, tokens, and spend by PH calendar day.
-            </CardDescription>
+            <div className="flex items-baseline gap-2">
+              <CardTitle className="text-base">Usage Trend</CardTitle>
+              <CardDescription>
+                Messages, tokens, and spend by PH calendar day.
+              </CardDescription>
+            </div>
           </CardHeader>
           <CardContent className="flex flex-1 flex-col pb-6">
             {summaryLoading ? (
