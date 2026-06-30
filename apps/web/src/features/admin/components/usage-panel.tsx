@@ -28,11 +28,6 @@ import {
   ChartTooltip as ShadcnChartTooltip,
   ChartTooltipContent,
   Input,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
   Skeleton
 } from '@eskwelabs-advisor/ui';
 
@@ -46,6 +41,7 @@ import {
 import { AdminDataTable } from './admin-data-table';
 import type { ColumnDef } from '@tanstack/react-table';
 
+import { AdminCard } from './admin-card';
 import { AdminKpiCard } from './admin-kpi-card';
 
 interface UsageCounterRow {
@@ -237,10 +233,8 @@ export function UsagePanel() {
   const todayPh = phToday();
   const [fromDayPh, setFromDayPh] = useState(addDays(todayPh, -29));
   const [toDayPh, setToDayPh] = useState(todayPh);
-  const [userId, setUserId] = useState('all');
   const [cursor, setCursor] = useState<string | undefined>();
   const [pages, setPages] = useState<UsageCounterRow[]>([]);
-  const scopedUserId = userId === 'all' ? undefined : userId;
 
   const {
     data: summaryData,
@@ -248,7 +242,6 @@ export function UsagePanel() {
     error: summaryError
   } = useQuery(
     usageSummaryQuery({
-      userId: scopedUserId,
       fromDayPh,
       toDayPh,
       topUsersLimit: 5
@@ -261,7 +254,6 @@ export function UsagePanel() {
     error: countersError
   } = useQuery(
     usageCountersQuery({
-      userId: scopedUserId,
       fromDayPh,
       toDayPh,
       limit: 50,
@@ -278,7 +270,7 @@ export function UsagePanel() {
   useEffect(() => {
     setCursor(undefined);
     setPages([]);
-  }, [fromDayPh, scopedUserId, toDayPh]);
+  }, [fromDayPh, toDayPh]);
 
   useEffect(() => {
     const rows = (countersData as UsageResponse | undefined)?.data;
@@ -345,7 +337,7 @@ export function UsagePanel() {
 
   return (
     <div className="flex flex-1 flex-col gap-6">
-      <div className="grid gap-3 border-b pb-4 md:grid-cols-[1fr_1fr_1.5fr_auto]">
+      <div className="grid grid-cols-3 gap-3 border-b pb-4">
         <Input
           type="date"
           value={fromDayPh}
@@ -358,19 +350,6 @@ export function UsagePanel() {
           onChange={(event) => setToDayPh(event.target.value)}
           aria-label="To day"
         />
-        <Select value={userId} onValueChange={setUserId}>
-          <SelectTrigger>
-            <SelectValue placeholder="All users" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All users</SelectItem>
-            {users.map((user) => (
-              <SelectItem key={user.id} value={user.id}>
-                {user.email}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
         <Button
           type="button"
           variant="outline"
@@ -575,15 +554,8 @@ export function UsagePanel() {
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Top Users</CardTitle>
-          <CardDescription>
-            Highest estimated spend in this range.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <AdminDataTable
+      <AdminCard title="Top Users" description="Highest estimated spend in this range." tableMode>
+        <AdminDataTable
             columns={
               [
                 {
@@ -638,16 +610,10 @@ export function UsagePanel() {
             enableSorting={true}
             enablePagination={false}
           />
-        </CardContent>
-      </Card>
+      </AdminCard>
 
-      <Card className="flex flex-1 flex-col">
-        <CardHeader>
-          <CardTitle className="text-base">Detailed Usage</CardTitle>
-          <CardDescription>Daily per-user usage counters.</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-1 flex-col p-0">
-          <AdminDataTable
+      <AdminCard title="Detailed Usage" description="Daily per-user usage counters." tableMode>
+        <AdminDataTable
             columns={
               [
                 {
@@ -718,8 +684,7 @@ export function UsagePanel() {
               </Button>
             </div>
           )}
-        </CardContent>
-      </Card>
+      </AdminCard>
     </div>
   );
 }
