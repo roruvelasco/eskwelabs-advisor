@@ -2,8 +2,10 @@ import { queryOptions } from '@tanstack/react-query';
 
 import {
   getAdminUsage,
+  getDnaSource,
   getUsageLimits,
   getKnowledgeHealth,
+  listAdvisorPromptSources,
   listKnowledgeSources,
   listPromptCache,
   listUsageCounters,
@@ -56,6 +58,16 @@ export function usageCountersQuery({
 export const modelConfigQuery = queryOptions({
   queryKey: ['admin', 'model-config'],
   queryFn: listModelConfig
+});
+
+export const advisorPromptSourcesQuery = queryOptions({
+  queryKey: ['admin', 'advisor-prompt-sources'],
+  queryFn: listAdvisorPromptSources
+});
+
+export const dnaSourceQuery = queryOptions({
+  queryKey: ['admin', 'dna-source'],
+  queryFn: getDnaSource
 });
 
 export function promptCacheQuery({

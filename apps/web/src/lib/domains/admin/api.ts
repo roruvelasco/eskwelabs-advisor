@@ -6,6 +6,7 @@ type ModelConfigUpdateInput = {
   model: string;
   isEnabled?: boolean;
 };
+type UpdateAdvisorPromptSourceInput = { promptDocId: string | null };
 type CreateUserInput = { email: string; role: 'eif' | 'admin' };
 type UpdateUserInput = { role?: 'eif' | 'admin'; isActive?: boolean };
 
@@ -75,6 +76,28 @@ export function listModelConfig(): Promise<DataResponse<unknown[]>> {
     .then(parseApiResponse) as Promise<DataResponse<unknown[]>>;
 }
 
+export function listAdvisorPromptSources(): Promise<DataResponse<unknown[]>> {
+  return apiClient.admin.advisors['prompt-sources']
+    .$get()
+    .then(parseApiResponse) as Promise<DataResponse<unknown[]>>;
+}
+
+export function updateAdvisorPromptSource(
+  advisorId: string,
+  input: UpdateAdvisorPromptSourceInput
+): Promise<DataResponse<unknown>> {
+  const update = apiClient.admin.advisors[':advisorId']['prompt-source']
+    .$patch as (input: {
+    param: { advisorId: string };
+    json: UpdateAdvisorPromptSourceInput;
+  }) => Promise<Response>;
+
+  return update({
+    param: { advisorId },
+    json: input
+  }).then(parseApiResponse) as Promise<DataResponse<unknown>>;
+}
+
 export function updateModelConfig(
   advisorId: string,
   input: ModelConfigUpdateInput
@@ -101,6 +124,20 @@ export function refreshPromptCache(): Promise<
 export function getPromptHealth(): Promise<DataResponse<unknown>> {
   return apiClient.admin['prompt-cache'].health
     .$get()
+    .then(parseApiResponse) as Promise<DataResponse<unknown>>;
+}
+
+export function getDnaSource(): Promise<DataResponse<unknown>> {
+  return apiClient.admin['prompt-cache']['dna-source']
+    .$get()
+    .then(parseApiResponse) as Promise<DataResponse<unknown>>;
+}
+
+export function updateDnaSource(input: {
+  docId: string;
+}): Promise<DataResponse<unknown>> {
+  return apiClient.admin['prompt-cache']['dna-source']
+    .$put({ json: input })
     .then(parseApiResponse) as Promise<DataResponse<unknown>>;
 }
 
@@ -268,6 +305,18 @@ interface CreateKnowledgeSourceInput {
   metadata?: Record<string, unknown>;
 }
 
+interface UpdateKnowledgeSourceInput {
+  externalId?: string;
+  title?: string;
+  url?: string | null;
+  owner?: string | null;
+  status?: string;
+  audience?: 'advisor' | 'eif';
+  advisorScope?: string;
+  contentType?: string;
+  metadata?: Record<string, unknown>;
+}
+
 export function listKnowledgeSources({
   limit,
   cursor,
@@ -290,6 +339,22 @@ export function createKnowledgeSource(
   return apiClient.admin.knowledge.sources
     .$post({ json: input as unknown as Record<string, unknown> })
     .then(parseApiResponse) as Promise<DataResponse<unknown>>;
+}
+
+export function updateKnowledgeSource(
+  sourceId: string,
+  input: UpdateKnowledgeSourceInput
+): Promise<DataResponse<unknown>> {
+  const update = apiClient.admin.knowledge.sources[':sourceId']
+    .$patch as (input: {
+    param: { sourceId: string };
+    json: UpdateKnowledgeSourceInput;
+  }) => Promise<Response>;
+
+  return update({
+    param: { sourceId },
+    json: input
+  }).then(parseApiResponse) as Promise<DataResponse<unknown>>;
 }
 
 export function refreshKnowledgeSource(

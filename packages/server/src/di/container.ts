@@ -86,6 +86,7 @@ import {
 } from '../prompt-cache/use-cases/prompt-cache-workflow.use-case';
 import { SystemPromptBuilder } from '../prompt-cache/system-prompt.builder';
 import { DnaDigestsRepository } from '../prompt-cache/dna-digests.repository';
+import { DnaSourceConfigRepository } from '../prompt-cache/dna-source-config.repository';
 import {
   DeterministicPromptContextService,
   PromptContextService,
@@ -251,6 +252,10 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
     .bind({
       provide: DnaDigestsRepository,
       useFactory: (c) => new DnaDigestsRepository(c.get(DrizzleService))
+    })
+    .bind({
+      provide: DnaSourceConfigRepository,
+      useFactory: (c) => new DnaSourceConfigRepository(c.get(DrizzleService))
     })
     .bind({
       provide: TelemetryRepository,
@@ -435,7 +440,9 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
           c.get(PromptIngestionService),
           c.get(PromptSnapshotsRepository),
           c.get(DnaDigestsRepository),
-          c.get(TelemetryService)
+          c.get(TelemetryService),
+          c.get(DnaSourceConfigRepository),
+          c.get(SERVER_ENV)
         )
     })
     .bind({
@@ -449,7 +456,8 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
           c.get(DnaDigestsRepository),
           c.get(RedisService),
           c.get(SERVER_ENV),
-          c.get(TelemetryService)
+          c.get(TelemetryService),
+          c.get(DnaSourceConfigRepository)
         )
     })
     .bind({
