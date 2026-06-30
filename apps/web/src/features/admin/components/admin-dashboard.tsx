@@ -490,28 +490,26 @@ export function AdminDashboard() {
         {/* ── Main area ───────────────────────────────────────────────── */}
         <div className="flex min-w-0 flex-1 flex-col pt-14 md:pt-0">
           <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-            <div className="mb-4 sm:mb-6">
+            <div className="mb-4 flex items-center justify-between sm:mb-6">
               <h2 className="font-serif text-lg font-bold text-[#222019] sm:text-xl">
                 {heading}
                 <span className="ml-2 font-sans text-xs font-normal text-[#8a8578] sm:text-sm">
                   — {description}
                 </span>
               </h2>
+              {section === 'limits' && <LimitsEditButton />}
             </div>
 
             {section !== 'limits' && <OverviewCards section={section} />}
 
             <div className="mt-4 sm:mt-6">
-              <div className="mb-3 flex items-center justify-between sm:mb-4">
-                {section !== 'limits' && section !== 'model-config' ? (
+              {section !== 'limits' && section !== 'model-config' && (
+                <div className="mb-3 flex items-center justify-between sm:mb-4">
                   <h3 className="font-serif text-base font-semibold text-[#2d6a4f] sm:text-lg">
                     {sectionLabel}
                   </h3>
-                ) : (
-                  <div />
-                )}
-                {section === 'limits' && <LimitsEditButton />}
-              </div>
+                </div>
+              )}
 
               <AdminPanel section={section} />
             </div>
