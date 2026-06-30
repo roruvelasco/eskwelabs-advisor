@@ -7,11 +7,20 @@ const databaseUrl =
   process.env.DATABASE_URL ??
   'postgresql://postgres:postgres@127.0.0.1:54322/postgres';
 
-const sql = postgres(databaseUrl);
+const sql = postgres(databaseUrl, { max: 5 });
 
 const ADMIN_EMAIL = 'admin@example.com';
 const INTERN_EMAIL = 'intern@example.com';
 const PASSWORD = 'password123';
+
+const EIF_USERS: { email: string; fullName: string }[] = [
+  { email: 'juan.delacruz@example.com', fullName: 'Juan dela Cruz' },
+  { email: 'maria.santos@example.com', fullName: 'Maria Santos' },
+  { email: 'pedro.reyes@example.com', fullName: 'Pedro Reyes' },
+  { email: 'ana.garcia@example.com', fullName: 'Ana Garcia' },
+  { email: 'carlos.tan@example.com', fullName: 'Carlos Tan' },
+  { email: 'sofia.lim@example.com', fullName: 'Sofia Lim' }
+];
 
 type Turn = { user: string; assistant: string };
 
@@ -569,32 +578,79 @@ A good rule of thumb: you should be able to explain why each engineered feature 
   }
 ] as const;
 
+function rand(min: number, max: number) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function pick<T>(arr: T[]): T {
+  return arr[rand(0, arr.length - 1)];
+}
+
+function tokenCost(promptTokens: number, completionTokens: number): string {
+  const micros =
+    Math.round((promptTokens * 0.15 + completionTokens * 0.6) * 100) * 10000;
+  return (micros / 1_000_000).toString();
+}
+
+function dayPh(daysAgo: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - daysAgo);
+  return d.toISOString().slice(0, 10);
+}
+
+function daysAgoDate(daysAgo: number, hourOffset = 0): Date {
+  const d = new Date();
+  d.setDate(d.getDate() - daysAgo);
+  d.setHours(hourOffset, 0, 0, 0);
+  return d;
+}
+
 async function main() {
   console.log('Seeding database...\n');
 
   const passwordHash = await bcrypt.hash(PASSWORD, 10);
 
-  const users = await sql`
-    INSERT INTO users (email, password_hash, role, is_active) VALUES
-      (${ADMIN_EMAIL}, ${passwordHash}, 'admin', true),
-      (${INTERN_EMAIL}, ${passwordHash}, 'eif', true)
+  const allUserEmails = [INTERN_EMAIL].concat(EIF_USERS.map((u) => u.email));
+
+  // ── Users ────────────────────────────────────────────────────────────
+  const userRows = await sql`
+    INSERT INTO users ${sql(
+      [
+        { email: ADMIN_EMAIL, password_hash: passwordHash, role: 'admin', is_active: true },
+        { email: INTERN_EMAIL, password_hash: passwordHash, role: 'eif', is_active: true },
+        ...EIF_USERS.map((u) => ({
+          email: u.email,
+          password_hash: passwordHash,
+          role: 'eif',
+          is_active: true
+        }))
+      ].map((r) => ({
+        email: r.email as string,
+        password_hash: r.password_hash as string,
+        role: r.role as string,
+        is_active: true as boolean
+      }))
+    )}
     ON CONFLICT (email) DO UPDATE SET
       password_hash = COALESCE(EXCLUDED.password_hash, users.password_hash),
       role = EXCLUDED.role,
       is_active = true
     RETURNING id, email, role
   `;
-  console.log(`Users: ${users.length} upserted`);
-  for (const u of users) console.log(`  ${u.email} (${u.role}) [${u.id}]`);
+  console.log(`Users: ${userRows.length} upserted`);
+  for (const u of userRows) console.log(`  ${u.email} (${u.role}) [${u.id}]`);
 
-  const intern = users.find((u) => u.email === INTERN_EMAIL);
+  const intern = userRows.find((u) => u.email === INTERN_EMAIL);
   if (!intern) throw new Error('Intern user not found after upsert');
+  const eifRows = userRows.filter((u) => u.role === 'eif');
 
+  // ── Advisors ─────────────────────────────────────────────────────────
   const advisors =
     await sql`SELECT id, name FROM advisors WHERE is_active = true`;
   console.log(`\nAdvisors: ${advisors.length} found`);
   for (const a of advisors) console.log(`  ${a.id} — ${a.name}`);
 
+  // ── Model configs ────────────────────────────────────────────────────
   console.log('\nUpserting model configs...');
   for (const a of advisors) {
     await sql`
@@ -607,47 +663,385 @@ async function main() {
         updated_at = NOW()
     `;
   }
-  console.log(
-    `  ${advisors.length} model configs upserted (provider=groq, model=llama-3.3-70b-versatile)\n`
-  );
+  console.log(`  ${advisors.length} model configs upserted\n`);
 
+  // ── Clean slate: conversations + messages ────────────────────────────
   console.log('Deleting existing conversations and messages...');
-  await sql`DELETE FROM messages WHERE conversation_id IN (SELECT id FROM conversations WHERE user_id = ${intern.id})`;
-  await sql`DELETE FROM conversations WHERE user_id = ${intern.id}`;
+  const eifIds = eifRows.map((u) => u.id);
+  await sql`DELETE FROM messages WHERE conversation_id IN (SELECT id FROM conversations WHERE user_id = ANY(${eifIds}))`;
+  await sql`DELETE FROM conversations WHERE user_id = ANY(${eifIds})`;
   console.log('  Done — clean slate.\n');
 
+  // ── Conversations + Messages with metadata ───────────────────────────
   let conversationsCreated = 0;
   let messagesCreated = 0;
+  const allMessages: Array<{
+    conversationId: string;
+    userId: string;
+    role: string;
+    content: string;
+    promptTokens: number;
+    completionTokens: number;
+    estimatedCostUsd: string;
+    latencyMs: number;
+    createdAt: Date;
+  }> = [];
 
-  for (const [i, seed] of SEEDS.entries()) {
-    const advisor = advisors[i % advisors.length];
-    const conversationId = randomUUID();
+  console.log('Creating conversations and messages...');
+  const providers = ['groq'];
+  const models = ['llama-3.3-70b-versatile'];
 
-    await sql`
-      INSERT INTO conversations (id, user_id, advisor_id, title, status)
-      VALUES (${conversationId}, ${intern.id}, ${advisor.id}, ${seed.title}, 'active')
-    `;
+  for (const [ei, eifUser] of eifRows.entries()) {
+    const numConvos = ei === 0 ? SEEDS.length : rand(4, 8);
+    const sources =
+      ei === 0
+        ? SEEDS.map((s) => ({ ...s, advisorIdx: null, dayOffset: null }))
+        : null;
 
-    for (const turn of seed.turns) {
+    for (let ci = 0; ci < numConvos; ci++) {
+      const advisor =
+        sources && sources[ci]
+          ? advisors[ci % advisors.length]
+          : pick(advisors);
+      const daysAgo = sources && sources[ci]
+        ? rand(28, 30) - Math.floor(ci / 4)
+        : rand(0, 60);
+
+      const title =
+        sources && sources[ci]
+          ? sources[ci].title
+          : `Seed conversation ${ci + 1} for ${eifUser.email}`;
+      const turns =
+        sources && sources[ci]
+          ? sources[ci].turns
+          : [
+              {
+                user: `This is a test message from ${eifUser.email}. What can you help me with today?`,
+                assistant: `Hello! I'm your advisor. Based on your query, here's what I can help with: understanding data concepts, building dashboards, working with SSOT memos, and more. Let me know what you'd like to focus on.`
+              }
+            ];
+
+      const convoId = randomUUID();
+      const convoCreatedAt = daysAgoDate(daysAgo, rand(8, 20));
       await sql`
-        INSERT INTO messages (conversation_id, user_id, role, content) VALUES
-          (${conversationId}, ${intern.id}, 'user', ${turn.user}),
-          (${conversationId}, ${intern.id}, 'assistant', ${turn.assistant})
+        INSERT INTO conversations (id, user_id, advisor_id, title, status, created_at)
+        VALUES (${convoId}, ${eifUser.id}, ${advisor.id}, ${title}, 'active', ${convoCreatedAt})
       `;
-      messagesCreated += 2;
+      conversationsCreated++;
+
+      for (const [ti, turn] of turns.entries()) {
+        const promptTokens = rand(200, 3000);
+        const completionTokens = rand(100, 2000);
+        const minutesOffset = ti * 3 + rand(0, 2);
+        const msgTime = new Date(convoCreatedAt.getTime() + minutesOffset * 60000);
+
+        const userRow = {
+          conversationId: convoId,
+          userId: eifUser.id,
+          role: 'user',
+          content: turn.user,
+          promptTokens: 0,
+          completionTokens: 0,
+          estimatedCostUsd: '0',
+          latencyMs: 0,
+          createdAt: new Date(msgTime.getTime() - 30000)
+        };
+        const assistantRow = {
+          conversationId: convoId,
+          userId: eifUser.id,
+          role: 'assistant',
+          content: turn.assistant,
+          promptTokens,
+          completionTokens,
+          estimatedCostUsd: tokenCost(promptTokens, completionTokens),
+          latencyMs: rand(500, 8000),
+          createdAt: msgTime
+        };
+
+        await sql`
+          INSERT INTO messages ${sql(
+            [userRow, assistantRow].map((r) => ({
+              conversation_id: r.conversationId,
+              user_id: r.userId,
+              role: r.role,
+              content: r.content,
+              provider: r.role === 'assistant' ? pick(providers) : null,
+              model: r.role === 'assistant' ? pick(models) : null,
+              prompt_tokens: r.promptTokens,
+              completion_tokens: r.completionTokens,
+              estimated_cost_usd: r.estimatedCostUsd,
+              latency_ms: r.latencyMs,
+              status: 'ok',
+              created_at: r.createdAt
+            }))
+          )}
+        `;
+        allMessages.push(userRow, assistantRow);
+        messagesCreated += 2;
+      }
+
+      if (conversationsCreated % 10 === 0) {
+        console.log(`  ${conversationsCreated} conversations created...`);
+      }
     }
-
-    conversationsCreated++;
-    console.log(
-      `  [${i + 1}/${SEEDS.length}] ${advisor.id} — ${seed.title} (${seed.turns.length} turns)`
-    );
   }
+  console.log(`  ${conversationsCreated} conversations, ${messagesCreated} messages`);
 
+  // ── Usage counters (aggregated from messages) ────────────────────────
+  console.log('\nBuilding usage counters from messages...');
+  const counterMap = new Map<string, { messages: number; tokens: number; spend: string }>();
+  for (const msg of allMessages) {
+    if (msg.role !== 'assistant') continue;
+    const dp = msg.createdAt.toISOString().slice(0, 10);
+    const key = `${msg.userId}:${dp}`;
+    const cur = counterMap.get(key) ?? { messages: 0, tokens: 0, spend: '0' };
+    cur.messages++;
+    cur.tokens += msg.promptTokens + msg.completionTokens;
+    const curSpend = parseFloat(cur.spend);
+    const msgSpend = parseFloat(msg.estimatedCostUsd);
+    cur.spend = (curSpend + msgSpend).toFixed(8);
+    counterMap.set(key, cur);
+  }
+  if (counterMap.size > 0) {
+    const counterRows = [...counterMap.entries()].map(([key, val]) => {
+      const [userId, dp] = key.split(':');
+      return {
+        user_id: userId!,
+        day_ph: dp!,
+        messages_today: val.messages,
+        tokens_today: val.tokens,
+        estimated_spend_today_usd: val.spend
+      };
+    });
+    await sql`
+      INSERT INTO usage_counters ${sql(counterRows)}
+      ON CONFLICT (user_id, day_ph) DO UPDATE SET
+        messages_today = EXCLUDED.messages_today,
+        tokens_today = EXCLUDED.tokens_today,
+        estimated_spend_today_usd = EXCLUDED.estimated_spend_today_usd,
+        updated_at = NOW()
+    `;
+  }
+  console.log(`  ${counterMap.size} usage counter rows`);
+
+  // ── Telemetry events ─────────────────────────────────────────────────
+  console.log('\nCreating telemetry events...');
+  const eventNames = [
+    'login_success', 'login_denied', 'advisor_selected', 'conversation_resumed',
+    'message_sent', 'llm_call_started', 'llm_call_completed', 'request_blocked',
+    'prompt_cache_hit', 'prompt_cache_miss', 'admin_cache_refresh',
+    'admin_cache_refresh_failed', 'rate_limit_hit', 'budget_limit_hit'
+  ];
+  const severities = ['info', 'warning', 'error'] as const;
+  const telemetryRows: Array<{
+    id: string;
+    event_name: string;
+    actor_id: string | null;
+    severity: string;
+    payload: Record<string, unknown>;
+    created_at: Date;
+  }> = [];
+
+  for (let i = 0; i < 200; i++) {
+    const eventName = pick(eventNames);
+    const isError = eventName.includes('denied') || eventName.includes('failed') || eventName.includes('limit');
+    const severity = isError && Math.random() < 0.5 ? 'error' : isError && Math.random() < 0.5 ? 'warning' : 'info';
+    const actor = Math.random() < 0.8 ? pick(eifRows) : pick(userRows);
+    const daysAgo = rand(0, 30);
+    telemetryRows.push({
+      id: randomUUID(),
+      event_name: eventName,
+      actor_id: actor.id,
+      severity,
+      payload: { source: 'seed', iteration: i },
+      created_at: daysAgoDate(daysAgo, rand(0, 23))
+    });
+  }
+  if (telemetryRows.length > 0) {
+    await sql`
+      INSERT INTO telemetry_events ${sql(telemetryRows)}
+    `;
+  }
+  console.log(`  ${telemetryRows.length} telemetry events`);
+
+  // ── Knowledge sources and units ──────────────────────────────────────
+  console.log('\nCreating knowledge sources and units...');
+  const sourceId1 = randomUUID();
+  const sourceId2 = randomUUID();
+  await sql`
+    INSERT INTO knowledge_sources ${sql([
+      {
+        id: sourceId1,
+        source_type: 'google_doc',
+        external_id: '1abc123',
+        title: 'EIF Mentor Handbook',
+        status: 'published',
+        advisor_scope: 'global',
+        content_type: 'mentor_guide'
+      },
+      {
+        id: sourceId2,
+        source_type: 'manual',
+        external_id: 'manual-faq',
+        title: 'Frequently Asked Questions',
+        status: 'published',
+        advisor_scope: 'global',
+        content_type: 'faq'
+      }
+    ])}
+    ON CONFLICT (id) DO NOTHING
+  `;
+  const unitId1 = randomUUID();
+  const unitId2 = randomUUID();
+  await sql`
+    INSERT INTO knowledge_units ${sql([
+      {
+        id: unitId1,
+        source_id: sourceId1,
+        source_revision: 'v1',
+        section_path: '/mentoring/best-practices',
+        content_type: 'mentor_guide',
+        status: 'published',
+        text: 'Always provide concrete, actionable advice. Avoid vague suggestions.',
+        summary: 'Mentoring best practices',
+        content_hash: 'hash1'
+      },
+      {
+        id: unitId2,
+        source_id: sourceId2,
+        source_revision: 'v1',
+        section_path: '/faq/capstone',
+        content_type: 'faq',
+        status: 'published',
+        text: 'The capstone project must include a working prototype or analysis.',
+        summary: 'Capstone requirements',
+        content_hash: 'hash2'
+      }
+    ])}
+    ON CONFLICT (id) DO NOTHING
+  `;
+  console.log(`  2 sources, 2 units`);
+
+  // ── Prompt snapshots ─────────────────────────────────────────────────
+  console.log('\nCreating prompt snapshots...');
+  for (const a of advisors) {
+    await sql`
+      INSERT INTO prompt_snapshots ${sql({
+        id: randomUUID(),
+        advisor_id: a.id,
+        doc_id: `seed-doc-${a.id}`,
+        revision: 'seed-v1',
+        content_text: `System prompt for ${a.name}. You are a helpful advisor.`,
+        hash: `${a.id}-seed-hash`,
+        is_active: true
+      })}
+      ON CONFLICT DO NOTHING
+    `;
+  }
+  console.log(`  ${advisors.length} snapshots`);
+
+  // ── DNA digest ───────────────────────────────────────────────────────
+  console.log('\nCreating DNA digest...');
+  const digestId = randomUUID();
+  await sql`
+    INSERT INTO dna_digests ${sql({
+      id: digestId,
+      doc_id: 'seed-dna-doc',
+      revision: 'seed-v1',
+      digest_text: 'DNA: This platform helps data science learners.',
+      hash: 'dna-seed-hash',
+      is_active: true
+    })}
+    ON CONFLICT DO NOTHING
+  `;
+  console.log('  1 DNA digest');
+
+  // ── Usage limits ─────────────────────────────────────────────────────
+  console.log('\nCreating usage limits...');
+  await sql`
+    INSERT INTO usage_limits ${sql({
+      id: 'default',
+      max_messages_per_user_per_day: 25,
+      max_tokens_per_user_per_day: 100000,
+      daily_budget_usd: '10',
+      monthly_budget_usd: '300',
+      rate_limit_window_seconds: 60,
+      rate_limit_max_requests: 100
+    })}
+    ON CONFLICT (id) DO NOTHING
+  `;
+  console.log('  1 limits row');
+
+  // ── Usage budget counters ────────────────────────────────────────────
+  console.log('\nCreating budget counters...');
+  const now = new Date();
+  const budgetRows = [];
+  for (let m = 0; m < 3; m++) {
+    const d = new Date(now);
+    d.setMonth(d.getMonth() - m);
+    const monthlyKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    budgetRows.push({
+      period_kind: 'monthly',
+      period_key: monthlyKey,
+      estimated_spend_usd: (Math.random() * 250 + 10).toFixed(6)
+    });
+    for (let wd = 0; wd < 4; wd++) {
+      const dd = new Date(d);
+      dd.setDate(dd.getDate() - wd * 7);
+      budgetRows.push({
+        period_kind: 'daily',
+        period_key: dd.toISOString().slice(0, 10),
+        estimated_spend_usd: (Math.random() * 8 + 1).toFixed(6)
+      });
+    }
+  }
+  if (budgetRows.length > 0) {
+    await sql`
+      INSERT INTO usage_budget_counters ${sql(budgetRows)}
+      ON CONFLICT (period_kind, period_key) DO UPDATE SET
+        estimated_spend_usd = EXCLUDED.estimated_spend_usd,
+        updated_at = NOW()
+    `;
+  }
+  console.log(`  ${budgetRows.length} budget counter rows`);
+
+  // ── Usage limit audit events ─────────────────────────────────────────
+  console.log('\nCreating usage limit audit events...');
+  const auditRows = [
+    {
+      changed_by: userRows.find((u) => u.role === 'admin')?.id,
+      previous_config: null,
+      next_config: { maxMessagesPerUserPerDay: 25, maxTokensPerUserPerDay: 100000, dailyBudgetUsd: '10', monthlyBudgetUsd: '300', rateLimitWindowSeconds: 60, rateLimitMaxRequests: 100 },
+      created_at: daysAgoDate(30)
+    },
+    {
+      changed_by: userRows.find((u) => u.role === 'admin')?.id,
+      previous_config: { maxMessagesPerUserPerDay: 25, maxTokensPerUserPerDay: 100000, dailyBudgetUsd: '10', monthlyBudgetUsd: '300', rateLimitWindowSeconds: 60, rateLimitMaxRequests: 100 },
+      next_config: { maxMessagesPerUserPerDay: 50, maxTokensPerUserPerDay: 150000, dailyBudgetUsd: '15', monthlyBudgetUsd: '300', rateLimitWindowSeconds: 60, rateLimitMaxRequests: 100 },
+      created_at: daysAgoDate(15)
+    },
+    {
+      changed_by: userRows.find((u) => u.role === 'admin')?.id,
+      previous_config: { maxMessagesPerUserPerDay: 50, maxTokensPerUserPerDay: 150000, dailyBudgetUsd: '15', monthlyBudgetUsd: '300', rateLimitWindowSeconds: 60, rateLimitMaxRequests: 100 },
+      next_config: { maxMessagesPerUserPerDay: 25, maxTokensPerUserPerDay: 100000, dailyBudgetUsd: '10', monthlyBudgetUsd: '300', rateLimitWindowSeconds: 60, rateLimitMaxRequests: 100 },
+      created_at: daysAgoDate(3)
+    }
+  ];
+  await sql`
+    INSERT INTO usage_limit_audit_events ${sql(auditRows)}
+  `;
+  console.log(`  ${auditRows.length} audit events`);
+
+  // ── Summary ──────────────────────────────────────────────────────────
   console.log(`\n--- Summary ---`);
-  console.log(`Users           : ${users.length}`);
-  console.log(`Advisors found  : ${advisors.length}`);
-  console.log(`Conversations   : ${conversationsCreated} created`);
-  console.log(`Messages        : ${messagesCreated} created`);
+  console.log(`Users             : ${userRows.length}`);
+  console.log(`Advisors found    : ${advisors.length}`);
+  console.log(`Conversations     : ${conversationsCreated}`);
+  console.log(`Messages          : ${messagesCreated}`);
+  console.log(`Usage counters    : ${counterMap.size}`);
+  console.log(`Telemetry events  : ${telemetryRows.length}`);
+  console.log(`Budget counters   : ${budgetRows.length}`);
+  console.log(`Audit events      : ${auditRows.length}`);
   console.log(`\nSeeding complete.`);
 }
 
