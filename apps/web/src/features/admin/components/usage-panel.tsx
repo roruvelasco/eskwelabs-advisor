@@ -7,6 +7,9 @@ import {
   Area,
   AreaChart,
   CartesianGrid,
+  Pie,
+  PieChart,
+  Cell,
   ResponsiveContainer,
   Tooltip as ChartTooltip,
   XAxis,
@@ -21,6 +24,9 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  ChartContainer,
+  ChartTooltip as ShadcnChartTooltip,
+  ChartTooltipContent,
   Input,
   Select,
   SelectContent,
@@ -127,6 +133,82 @@ function BudgetHealth({
       <p className="text-muted-foreground text-xs">
         {formatUsd(spentNumber, 2)} of {formatUsd(budgetNumber, 2)}
       </p>
+    </div>
+  );
+}
+
+function TopUsersSpendChart({
+  topUsers
+}: {
+  topUsers: Array<{
+    userId: string;
+    userEmail?: string;
+    estimatedSpendUsd: string;
+  }>;
+}) {
+  const chartData = useMemo(() => {
+    const colors = [
+      'var(--chart-1)',
+      'var(--chart-2)',
+      'var(--chart-3)',
+      'var(--chart-4)',
+      'var(--chart-5)'
+    ];
+    return topUsers.map((user, i) => ({
+      user: user.userEmail ?? `${user.userId.slice(0, 8)}...`,
+      value: Number(user.estimatedSpendUsd),
+      fill: colors[i % colors.length]
+    }));
+  }, [topUsers]);
+
+  const chartConfig = useMemo(
+    () =>
+      Object.fromEntries(
+        chartData.map((d, i) => [`user-${i}`, { label: d.user, color: d.fill }])
+      ),
+    [chartData]
+  );
+
+  if (chartData.length === 0) return null;
+
+  return (
+    <div className="flex flex-col items-center">
+      <ChartContainer
+        config={chartConfig}
+        className="aspect-square max-h-[240px] w-full"
+      >
+        <PieChart>
+          <ShadcnChartTooltip
+            cursor={false}
+            content={<ChartTooltipContent hideLabel />}
+          />
+          <Pie
+            data={chartData}
+            dataKey="value"
+            nameKey="user"
+            innerRadius={60}
+            strokeWidth={2}
+          >
+            {chartData.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={entry.fill} />
+            ))}
+          </Pie>
+        </PieChart>
+      </ChartContainer>
+      <div className="mt-4 flex flex-col gap-2 text-sm">
+        {chartData.map((item) => (
+          <div key={item.user} className="flex items-center gap-2">
+            <div
+              className="h-2 w-2 shrink-0 rounded-sm"
+              style={{ backgroundColor: item.fill }}
+            />
+            <span className="text-muted-foreground truncate">{item.user}</span>
+            <span className="ml-auto font-medium tabular-nums">
+              {formatUsd(item.value, 2)}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -492,7 +574,8 @@ export function UsagePanel() {
             Highest estimated spend in this range.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="grid gap-6 lg:grid-cols-[1fr_2fr]">
+          <TopUsersSpendChart topUsers={summary?.topUsers ?? []} />
           <AdminDataTable
             columns={
               [
