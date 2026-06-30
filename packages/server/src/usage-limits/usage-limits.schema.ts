@@ -1,11 +1,22 @@
 import {
   integer,
+  jsonb,
   numeric,
   pgTable,
   primaryKey,
   text,
-  timestamp
+  timestamp,
+  uuid
 } from 'drizzle-orm/pg-core';
+
+export type UsageLimitAuditConfig = {
+  maxMessagesPerUserPerDay: number;
+  maxTokensPerUserPerDay: number;
+  dailyBudgetUsd: string;
+  monthlyBudgetUsd: string;
+  rateLimitWindowSeconds: number;
+  rateLimitMaxRequests: number;
+};
 
 export const usageLimitsTable = pgTable('usage_limits', {
   id: text('id').primaryKey().default('default'),
@@ -47,3 +58,18 @@ export const usageBudgetCountersTable = pgTable(
 );
 
 export type UsageBudgetCounter = typeof usageBudgetCountersTable.$inferSelect;
+
+export const usageLimitAuditEventsTable = pgTable('usage_limit_audit_events', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  changedBy: text('changed_by'),
+  previousConfig: jsonb(
+    'previous_config'
+  ).$type<UsageLimitAuditConfig | null>(),
+  nextConfig: jsonb('next_config').$type<UsageLimitAuditConfig>().notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+});
+
+export type UsageLimitAuditEvent =
+  typeof usageLimitAuditEventsTable.$inferSelect;

@@ -1,15 +1,21 @@
-import { eq, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gte, sql } from 'drizzle-orm';
 
 import { Repository } from '../common/factories/repository.factory';
 import { getPhilippinesDay, getPhilippinesMonth } from '../common/utils/day-ph';
+import { telemetryEventsTable } from '../telemetry/telemetry.schema';
+import { usageCountersTable } from '../usage-counters/usage-counters.schema';
 import {
   usdAmount,
   usdGreaterThan,
   usdToMicros
 } from '../usage-counters/money';
+import { usersTable } from '../users/users.schema';
 import {
+  usageLimitAuditEventsTable,
   usageBudgetCountersTable,
   usageLimitsTable,
+  type UsageLimitAuditConfig,
+  type UsageLimitAuditEvent,
   type UsageBudgetCounter,
   type UsageLimits
 } from './usage-limits.schema';
@@ -22,6 +28,34 @@ const DEFAULT_ID = 'default';
 
 type RawUsageBudgetCounter = Partial<UsageBudgetCounter> &
   Record<string, unknown>;
+
+export type UsageLimitsPolicyUsage = {
+  peakMessagesPerUserPerDay: number;
+  peakTokensPerUserPerDay: number;
+  totalMessages: number;
+  totalTokens: number;
+  activeUsers: number;
+};
+
+export type UsageLimitBlockCount = {
+  reason: string;
+  count: number;
+};
+
+export type UsageLimitAuditEventRow = UsageLimitAuditEvent & {
+  changedByEmail?: string | null;
+};
+
+function toAuditConfig(row: UsageLimits): UsageLimitAuditConfig {
+  return {
+    maxMessagesPerUserPerDay: row.maxMessagesPerUserPerDay,
+    maxTokensPerUserPerDay: row.maxTokensPerUserPerDay,
+    dailyBudgetUsd: row.dailyBudgetUsd,
+    monthlyBudgetUsd: row.monthlyBudgetUsd,
+    rateLimitWindowSeconds: row.rateLimitWindowSeconds,
+    rateLimitMaxRequests: row.rateLimitMaxRequests
+  };
+}
 
 function normalizeBudgetCounter(
   row: RawUsageBudgetCounter | undefined,
@@ -98,22 +132,18 @@ export class UsageLimitsRepository extends Repository {
     rateLimitMaxRequests: number;
     updatedBy: string;
   }): Promise<UsageLimits> {
-    const rows = await this.drizzle.db
-      .insert(usageLimitsTable)
-      .values({
-        id: DEFAULT_ID,
-        maxMessagesPerUserPerDay: input.maxMessagesPerUserPerDay,
-        maxTokensPerUserPerDay: input.maxTokensPerUserPerDay,
-        dailyBudgetUsd: input.dailyBudgetUsd,
-        monthlyBudgetUsd: input.monthlyBudgetUsd,
-        rateLimitWindowSeconds: input.rateLimitWindowSeconds,
-        rateLimitMaxRequests: input.rateLimitMaxRequests,
-        updatedBy: input.updatedBy,
-        updatedAt: new Date()
-      })
-      .onConflictDoUpdate({
-        target: usageLimitsTable.id,
-        set: {
+    return this.drizzle.db.transaction(async (tx) => {
+      const existingRows = await tx
+        .select()
+        .from(usageLimitsTable)
+        .where(eq(usageLimitsTable.id, DEFAULT_ID))
+        .limit(1);
+      const previous = existingRows[0] ? toAuditConfig(existingRows[0]) : null;
+      const now = new Date();
+      const rows = await tx
+        .insert(usageLimitsTable)
+        .values({
+          id: DEFAULT_ID,
           maxMessagesPerUserPerDay: input.maxMessagesPerUserPerDay,
           maxTokensPerUserPerDay: input.maxTokensPerUserPerDay,
           dailyBudgetUsd: input.dailyBudgetUsd,
@@ -121,12 +151,108 @@ export class UsageLimitsRepository extends Repository {
           rateLimitWindowSeconds: input.rateLimitWindowSeconds,
           rateLimitMaxRequests: input.rateLimitMaxRequests,
           updatedBy: input.updatedBy,
-          updatedAt: new Date()
-        }
-      })
-      .returning();
+          updatedAt: now
+        })
+        .onConflictDoUpdate({
+          target: usageLimitsTable.id,
+          set: {
+            maxMessagesPerUserPerDay: input.maxMessagesPerUserPerDay,
+            maxTokensPerUserPerDay: input.maxTokensPerUserPerDay,
+            dailyBudgetUsd: input.dailyBudgetUsd,
+            monthlyBudgetUsd: input.monthlyBudgetUsd,
+            rateLimitWindowSeconds: input.rateLimitWindowSeconds,
+            rateLimitMaxRequests: input.rateLimitMaxRequests,
+            updatedBy: input.updatedBy,
+            updatedAt: now
+          }
+        })
+        .returning();
+      const next = rows[0];
 
-    return rows[0];
+      await tx.insert(usageLimitAuditEventsTable).values({
+        changedBy: input.updatedBy,
+        previousConfig: previous,
+        nextConfig: toAuditConfig(next),
+        createdAt: now
+      });
+
+      return next;
+    });
+  }
+
+  async policyUsage({
+    fromDayPh,
+    toDayPh
+  }: {
+    fromDayPh: string;
+    toDayPh: string;
+  }): Promise<UsageLimitsPolicyUsage> {
+    const rows = await this.drizzle.db
+      .select({
+        peakMessagesPerUserPerDay: sql<number>`coalesce(max(${usageCountersTable.messagesToday}), 0)`,
+        peakTokensPerUserPerDay: sql<number>`coalesce(max(${usageCountersTable.tokensToday}), 0)`,
+        totalMessages: sql<number>`coalesce(sum(${usageCountersTable.messagesToday}), 0)`,
+        totalTokens: sql<number>`coalesce(sum(${usageCountersTable.tokensToday}), 0)`,
+        activeUsers: sql<number>`count(distinct ${usageCountersTable.userId})`
+      })
+      .from(usageCountersTable)
+      .where(
+        and(
+          gte(usageCountersTable.dayPh, fromDayPh),
+          sql`${usageCountersTable.dayPh} <= ${toDayPh}`
+        )
+      );
+
+    const row = rows[0];
+
+    return {
+      peakMessagesPerUserPerDay: Number(row?.peakMessagesPerUserPerDay ?? 0),
+      peakTokensPerUserPerDay: Number(row?.peakTokensPerUserPerDay ?? 0),
+      totalMessages: Number(row?.totalMessages ?? 0),
+      totalTokens: Number(row?.totalTokens ?? 0),
+      activeUsers: Number(row?.activeUsers ?? 0)
+    };
+  }
+
+  async blockCountsSince(since: Date): Promise<UsageLimitBlockCount[]> {
+    const reason = sql<string>`coalesce(${telemetryEventsTable.payload}->>'reason', 'unknown')`;
+    const rows = await this.drizzle.db
+      .select({
+        reason,
+        count: count()
+      })
+      .from(telemetryEventsTable)
+      .where(
+        and(
+          eq(telemetryEventsTable.eventName, 'request_blocked'),
+          gte(telemetryEventsTable.createdAt, since)
+        )
+      )
+      .groupBy(reason);
+
+    return rows.map((row) => ({
+      reason: row.reason,
+      count: Number(row.count)
+    }));
+  }
+
+  async listAuditEvents(limit = 10): Promise<UsageLimitAuditEventRow[]> {
+    return this.drizzle.db
+      .select({
+        id: usageLimitAuditEventsTable.id,
+        changedBy: usageLimitAuditEventsTable.changedBy,
+        changedByEmail: usersTable.email,
+        previousConfig: usageLimitAuditEventsTable.previousConfig,
+        nextConfig: usageLimitAuditEventsTable.nextConfig,
+        createdAt: usageLimitAuditEventsTable.createdAt
+      })
+      .from(usageLimitAuditEventsTable)
+      .leftJoin(
+        usersTable,
+        sql`${usersTable.id}::text = ${usageLimitAuditEventsTable.changedBy}`
+      )
+      .orderBy(desc(usageLimitAuditEventsTable.createdAt))
+      .limit(limit);
   }
 
   async findGlobalBudget(

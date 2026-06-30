@@ -19,6 +19,10 @@ export class UsageLimitsController extends Controller {
     this.controller.use('/admin/usage-limits', requireActor(['admin']));
 
     return this.controller
+      .get('/admin/usage-limits/review', async (c) => {
+        const review = await this.usageLimitsService.review();
+        return c.json(this.usageLimitsSerializer.review(review));
+      })
       .get('/admin/usage-limits', async (c) => {
         const [config, status] = await Promise.all([
           this.usageLimitsService.getConfig(),

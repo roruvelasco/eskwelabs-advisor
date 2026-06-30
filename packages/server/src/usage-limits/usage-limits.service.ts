@@ -1,5 +1,11 @@
 import type { ServerEnv } from '../config/env';
-import type { UsageLimitsRepository } from './usage-limits.repository';
+import type {
+  UsageLimitAuditEventRow,
+  UsageLimitBlockCount,
+  UsageLimitsPolicyUsage,
+  UsageLimitsRepository
+} from './usage-limits.repository';
+import { getPhilippinesDay } from '../common/utils/day-ph';
 import type { UsageLimits } from './usage-limits.schema';
 
 export type LimitsConfig = Pick<
@@ -14,6 +20,70 @@ export type LimitsConfig = Pick<
   | 'updatedBy'
   | 'updatedAt'
 >;
+
+export type UsageBudgetStatus = {
+  daily: {
+    periodKey: string;
+    spentUsd: string;
+    budgetUsd: string;
+    remainingUsd: string;
+  };
+  monthly: {
+    periodKey: string;
+    spentUsd: string;
+    budgetUsd: string;
+    remainingUsd: string;
+  };
+};
+
+export type UsageLimitsReview = {
+  config: LimitsConfig;
+  status: UsageBudgetStatus;
+  policy: {
+    range: {
+      fromDayPh: string;
+      toDayPh: string;
+      timeZone: 'Asia/Manila';
+    };
+    metrics: UsageLimitsPolicyUsage;
+  };
+  enforcement: {
+    since: string;
+    counts: {
+      rate: number;
+      cap: number;
+      budget: number;
+      other: number;
+      total: number;
+    };
+  };
+  auditEvents: UsageLimitAuditEventRow[];
+};
+
+function parseDay(dayPh: string) {
+  const [year, month, day] = dayPh.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function addDays(dayPh: string, days: number) {
+  const date = parseDay(dayPh);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function groupedBlockCounts(rows: UsageLimitBlockCount[]) {
+  const counts = { rate: 0, cap: 0, budget: 0, other: 0, total: 0 };
+
+  for (const row of rows) {
+    if (row.reason === 'rate') counts.rate += row.count;
+    else if (row.reason === 'cap') counts.cap += row.count;
+    else if (row.reason === 'budget') counts.budget += row.count;
+    else counts.other += row.count;
+    counts.total += row.count;
+  }
+
+  return counts;
+}
 
 export class UsageLimitsService {
   constructor(
@@ -80,7 +150,7 @@ export class UsageLimitsService {
     );
   }
 
-  async getGlobalBudgetStatus() {
+  async getGlobalBudgetStatus(): Promise<UsageBudgetStatus> {
     const [daily, monthly] = await Promise.all([
       this.usageLimitsRepository.findGlobalBudget('daily'),
       this.usageLimitsRepository.findGlobalBudget('monthly')
@@ -111,6 +181,38 @@ export class UsageLimitsService {
           )
         )
       }
+    };
+  }
+
+  async review(): Promise<UsageLimitsReview> {
+    const toDayPh = getPhilippinesDay();
+    const fromDayPh = addDays(toDayPh, -6);
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const [config, status, policyUsage, blockCounts, auditEvents] =
+      await Promise.all([
+        this.getConfig(),
+        this.getGlobalBudgetStatus(),
+        this.usageLimitsRepository.policyUsage({ fromDayPh, toDayPh }),
+        this.usageLimitsRepository.blockCountsSince(since),
+        this.usageLimitsRepository.listAuditEvents(10)
+      ]);
+
+    return {
+      config,
+      status,
+      policy: {
+        range: {
+          fromDayPh,
+          toDayPh,
+          timeZone: 'Asia/Manila'
+        },
+        metrics: policyUsage
+      },
+      enforcement: {
+        since: since.toISOString(),
+        counts: groupedBlockCounts(blockCounts)
+      },
+      auditEvents
     };
   }
 }
