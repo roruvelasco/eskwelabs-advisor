@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { PencilIcon, MessageSquare, DollarSign, Zap } from 'lucide-react';
+import { PencilIcon } from 'lucide-react';
 
 import {
   Button,
@@ -29,40 +29,19 @@ function formatUsd(value: string | number) {
   return `$${Number(value).toFixed(2)}`;
 }
 
-type CardColor = 'blue' | 'green' | 'amber';
-
-const colorMap: Record<CardColor, { bg: string; text: string }> = {
-  blue: { bg: 'bg-blue-50', text: 'text-blue-600' },
-  green: { bg: 'bg-green-50', text: 'text-green-600' },
-  amber: { bg: 'bg-amber-50', text: 'text-amber-600' }
-};
-
 function LimitsCard({
   title,
-  icon: Icon,
-  color,
   items
 }: {
   title: string;
-  icon: React.ComponentType<{ className?: string }>;
-  color: CardColor;
   items: { label: string; value: string }[];
 }) {
-  const colors = colorMap[color];
-
   return (
     <Card>
       <CardHeader className="pb-3">
-        <div className="flex items-center gap-3">
-          <div
-            className={`flex size-9 items-center justify-center rounded-lg ${colors.bg}`}
-          >
-            <Icon className={`size-4 ${colors.text}`} />
-          </div>
-          <CardTitle className="text-muted-foreground text-sm font-medium">
-            {title}
-          </CardTitle>
-        </div>
+        <CardTitle className="text-muted-foreground text-xs font-medium uppercase tracking-widest">
+          {title}
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         {items.map((item, i) => (
@@ -298,8 +277,6 @@ export function LimitsPanel() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <LimitsCard
               title="Usage caps"
-              icon={MessageSquare}
-              color="blue"
               items={[
                 {
                   label: 'Max messages per user per day',
@@ -313,8 +290,6 @@ export function LimitsPanel() {
             />
             <LimitsCard
               title="Budget"
-              icon={DollarSign}
-              color="green"
               items={[
                 {
                   label: 'Daily budget',
@@ -328,8 +303,6 @@ export function LimitsPanel() {
             />
             <LimitsCard
               title="Rate limit"
-              icon={Zap}
-              color="amber"
               items={[
                 {
                   label: 'Rate limit window',

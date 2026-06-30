@@ -35,6 +35,7 @@ import {
 import { cn } from '@/lib/utils';
 import {
   adminUsageQuery,
+  modelConfigQuery,
   usageLimitsQuery,
   knowledgeHealthQuery
 } from '@/lib/domains/admin/queries';
@@ -81,12 +82,21 @@ interface KnowledgeHealthData {
   units: { total: number; embedded: number };
 }
 
+interface ModelConfigRow {
+  advisorId: string;
+  provider: string;
+  model: string;
+  isEnabled: boolean;
+  updatedBy?: string | null;
+  updatedAt: string;
+}
+
 const sections: Array<{
   id: AdminSection;
   label: string;
   icon: ComponentType<{ className?: string }>;
 }> = [
-  { id: 'usage', label: 'Usage', icon: BarChart3Icon },
+  { id: 'usage', label: 'Dashboard', icon: BarChart3Icon },
   { id: 'model-config', label: 'Models', icon: DatabaseIcon },
   { id: 'knowledge', label: 'Knowledge', icon: LibraryIcon },
   { id: 'limits', label: 'Limits', icon: SettingsIcon },
@@ -139,6 +149,13 @@ function useKpiCards(section: AdminSection) {
   const knowledge = (knowledgeData as { data: KnowledgeHealthData } | undefined)
     ?.data;
 
+  const { data: modelConfigData, isLoading: modelConfigLoading } = useQuery({
+    ...modelConfigQuery,
+    enabled: section === 'model-config'
+  });
+  const modelConfigs =
+    (modelConfigData as { data: ModelConfigRow[] } | undefined)?.data ?? [];
+
   const cardsBySection: Record<
     AdminSection,
     {
@@ -156,12 +173,21 @@ function useKpiCards(section: AdminSection) {
       ]
     },
     'model-config': {
-      isLoading: overviewLoading,
+      isLoading: modelConfigLoading,
       cards: [
-        { label: 'Model Configs', value: overview?.counts.modelConfigs },
-        { label: 'Users', value: overview?.counts.users },
-        { label: 'Usage Rows', value: overview?.counts.usageRows },
-        { label: 'Events', value: overview?.counts.telemetryEvents }
+        { label: 'Total Configs', value: modelConfigs.length },
+        {
+          label: 'Enabled',
+          value: modelConfigs.filter((m) => m.isEnabled).length
+        },
+        {
+          label: 'Disabled',
+          value: modelConfigs.filter((m) => !m.isEnabled).length
+        },
+        {
+          label: 'Providers',
+          value: new Set(modelConfigs.map((m) => m.provider)).size
+        }
       ]
     },
     knowledge: {
@@ -464,22 +490,24 @@ export function AdminDashboard() {
         {/* ── Main area ───────────────────────────────────────────────── */}
         <div className="flex min-w-0 flex-1 flex-col pt-14 md:pt-0">
           <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-            <div className="mb-4 sm:mb-6">
+            <div className="mb-4 flex items-baseline justify-between sm:mb-6">
               <h2 className="font-serif text-lg font-bold text-[#222019] sm:text-xl">
                 {heading}
               </h2>
-              <p className="mt-1 text-xs text-[#8a8578] sm:text-sm">
-                {description}
-              </p>
+              <p className="text-xs text-[#8a8578] sm:text-sm">{description}</p>
             </div>
 
             {section !== 'limits' && <OverviewCards section={section} />}
 
             <div className="mt-4 sm:mt-6">
               <div className="mb-3 flex items-center justify-between sm:mb-4">
-                <h3 className="font-serif text-base font-semibold text-[#2d6a4f] sm:text-lg">
-                  {sectionLabel}
-                </h3>
+                {section !== 'limits' && section !== 'model-config' ? (
+                  <h3 className="font-serif text-base font-semibold text-[#2d6a4f] sm:text-lg">
+                    {sectionLabel}
+                  </h3>
+                ) : (
+                  <div />
+                )}
                 {section === 'limits' && <LimitsEditButton />}
               </div>
 
