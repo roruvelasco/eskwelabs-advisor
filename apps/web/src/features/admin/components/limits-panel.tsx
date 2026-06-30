@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangleIcon, PencilIcon } from 'lucide-react';
+import { PencilIcon } from 'lucide-react';
 
 import {
   Badge,
@@ -21,12 +21,6 @@ import {
   Input,
   Label,
   Skeleton,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
   toast
 } from '@eskwelabs-advisor/ui';
 
@@ -41,6 +35,8 @@ import {
 } from '@/lib/domains/admin/queries';
 
 import { AdminKpiCard } from './admin-kpi-card';
+import { AdminDataTable } from './admin-data-table';
+import type { ColumnDef } from '@tanstack/react-table';
 
 type LimitReview = UsageLimitsReviewResponse['data'];
 
@@ -354,51 +350,62 @@ function PolicyCalibration({ review }: { review: LimitReview }) {
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="pl-6">Policy</TableHead>
-                <TableHead>Configured Limit</TableHead>
-                <TableHead>Recent Pressure</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((row) => (
-                <TableRow key={row.label}>
-                  <TableCell className="py-4 pl-6">
-                    <p className="font-medium">{row.label}</p>
-                    <p className="text-muted-foreground text-xs">
-                      {row.intent}
-                    </p>
-                  </TableCell>
-                  <TableCell className="py-4 font-semibold tabular-nums">
-                    {row.limit}
-                  </TableCell>
-                  <TableCell className="py-4">
-                    <div className="space-y-1.5">
-                      <p className="text-sm tabular-nums">{row.observed}</p>
-                      {row.percent !== null && (
-                        <div className="bg-muted h-2 w-44 overflow-hidden rounded-full">
-                          <div
-                            className="bg-primary h-full rounded-full"
-                            style={{ width: `${row.percent}%` }}
-                          />
-                        </div>
-                      )}
+        <AdminDataTable
+          columns={[
+            {
+              accessorKey: 'label',
+              header: 'Policy',
+              cell: ({ row }) => (
+                <div>
+                  <p className="font-medium">{row.original.label}</p>
+                  <p className="text-muted-foreground text-xs">
+                    {row.original.intent}
+                  </p>
+                </div>
+              )
+            },
+            {
+              accessorKey: 'limit',
+              header: 'Configured Limit',
+              cell: ({ row }) => (
+                <span className="font-semibold tabular-nums">
+                  {row.original.limit}
+                </span>
+              )
+            },
+            {
+              accessorKey: 'observed',
+              header: 'Recent Pressure',
+              cell: ({ row }) => (
+                <div className="space-y-1.5">
+                  <p className="text-sm tabular-nums">
+                    {row.original.observed}
+                  </p>
+                  {row.original.percent !== null && (
+                    <div className="bg-muted h-2 w-44 overflow-hidden rounded-full">
+                      <div
+                        className="bg-primary h-full rounded-full"
+                        style={{ width: `${row.original.percent}%` }}
+                      />
                     </div>
-                  </TableCell>
-                  <TableCell className="py-4 pr-6">
-                    <Badge variant={statusVariant(row.percent)}>
-                      {statusLabel(row.percent)}
-                    </Badge>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+                  )}
+                </div>
+              )
+            },
+            {
+              id: 'status',
+              header: 'Status',
+              cell: ({ row }) => (
+                <Badge variant={statusVariant(row.original.percent)}>
+                  {statusLabel(row.original.percent)}
+                </Badge>
+              )
+            }
+          ]}
+          data={rows}
+          enableSorting={false}
+          enablePagination={false}
+        />
       </CardContent>
     </Card>
   );
@@ -428,100 +435,110 @@ function EnforcementPressure({ review }: { review: LimitReview }) {
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="pl-6">Block Type</TableHead>
-                <TableHead>Count</TableHead>
-                <TableHead>Reason</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {cards.map((card) => (
-                <TableRow key={card.label}>
-                  <TableCell className="py-4 pl-6 font-medium">
-                    {card.label}
-                  </TableCell>
-                  <TableCell className="py-4 font-semibold tabular-nums">
-                    {card.value.toLocaleString()}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground py-4 text-sm">
-                    {card.detail}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+        <AdminDataTable
+          columns={[
+            {
+              accessorKey: 'label',
+              header: 'Block Type',
+              cell: ({ row }) => (
+                <span className="font-medium">{row.original.label}</span>
+              )
+            },
+            {
+              accessorKey: 'value',
+              header: 'Count',
+              cell: ({ row }) => (
+                <span className="font-semibold tabular-nums">
+                  {row.original.value.toLocaleString()}
+                </span>
+              )
+            },
+            {
+              accessorKey: 'detail',
+              header: 'Reason',
+              cell: ({ row }) => (
+                <span className="text-muted-foreground text-sm">
+                  {row.original.detail}
+                </span>
+              )
+            }
+          ]}
+          data={cards}
+          enableSorting={false}
+          enablePagination={false}
+        />
       </CardContent>
     </Card>
   );
 }
 
 function ChangeHistory({ review }: { review: LimitReview }) {
+  const columns: ColumnDef<LimitReview['auditEvents'][number]>[] = [
+    {
+      accessorKey: 'createdAt',
+      header: 'Changed',
+      cell: ({ row }) => (
+        <span className="text-muted-foreground text-sm">
+          {formatDate(row.original.createdAt)}
+        </span>
+      )
+    },
+    {
+      accessorKey: 'changedByEmail',
+      header: 'Admin',
+      cell: ({ row }) => (
+        <span className="font-medium">
+          {row.original.changedByEmail ??
+            row.original.changedBy ??
+            'Unknown admin'}
+        </span>
+      )
+    },
+    {
+      id: 'values',
+      header: 'Values',
+      cell: ({ row }) => {
+        const fields = changedFields(
+          row.original.previousConfig,
+          row.original.nextConfig
+        );
+        return (
+          <div className="flex flex-wrap gap-2">
+            {fields.length === 0 ? (
+              <Badge variant="outline">No value changes</Badge>
+            ) : (
+              fields.map((field) => (
+                <Badge key={field.key} variant="outline">
+                  {field.label}: {field.previous} → {field.next}
+                </Badge>
+              ))
+            )}
+          </div>
+        );
+      }
+    }
+  ];
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Change History</CardTitle>
-        <CardDescription>
-          Durable audit events for limit edits recorded after this release.
-        </CardDescription>
+        <div className="flex items-baseline gap-2">
+          <CardTitle className="text-base">Change History</CardTitle>
+          <CardDescription>
+            Durable audit events for limit edits recorded after this release.
+          </CardDescription>
+        </div>
       </CardHeader>
       <CardContent className="p-0">
-        {review.auditEvents.length === 0 ? (
-          <div className="flex items-center gap-3 px-6 py-8">
-            <AlertTriangleIcon className="text-muted-foreground size-4" />
-            <p className="text-muted-foreground text-sm">
-              No limit changes recorded yet.
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="pl-6">Changed</TableHead>
-                  <TableHead>Admin</TableHead>
-                  <TableHead>Values</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {review.auditEvents.map((event) => {
-                  const fields = changedFields(
-                    event.previousConfig,
-                    event.nextConfig
-                  );
-                  return (
-                    <TableRow key={event.id}>
-                      <TableCell className="text-muted-foreground py-4 pl-6 text-sm">
-                        {formatDate(event.createdAt)}
-                      </TableCell>
-                      <TableCell className="py-4 font-medium">
-                        {event.changedByEmail ??
-                          event.changedBy ??
-                          'Unknown admin'}
-                      </TableCell>
-                      <TableCell className="py-4 pr-6">
-                        <div className="flex flex-wrap gap-2">
-                          {fields.length === 0 ? (
-                            <Badge variant="outline">No value changes</Badge>
-                          ) : (
-                            fields.map((field) => (
-                              <Badge key={field.key} variant="outline">
-                                {field.label}: {field.previous} → {field.next}
-                              </Badge>
-                            ))
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        )}
+        <AdminDataTable
+          columns={columns}
+          data={review.auditEvents}
+          emptyMessage="No limit changes recorded yet."
+          enableSorting={true}
+          enablePagination={true}
+          enableFiltering={false}
+          pageSize={10}
+        />
       </CardContent>
     </Card>
   );
