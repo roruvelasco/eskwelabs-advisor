@@ -39,7 +39,7 @@ import { LimitsEditButton, LimitsPanel } from './limits-panel';
 import { ModelConfigPanel } from './model-config-panel';
 import { TelemetryPanel } from './telemetry-panel';
 import { UsagePanel } from './usage-panel';
-import { UsersPanel } from './users-panel';
+import { CreateUserButton, UsersPanel } from './users-panel';
 import { AdminKpiCard } from './admin-kpi-card';
 
 type AdminSection =
@@ -468,6 +468,7 @@ export function AdminDashboard() {
                 </span>
               </h2>
               {section === 'limits' && <LimitsEditButton />}
+              {section === 'users' && <CreateUserButton />}
             </div>
 
             {section !== 'limits' && section !== 'users' && (

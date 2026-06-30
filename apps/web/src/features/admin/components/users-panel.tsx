@@ -70,7 +70,7 @@ function SortHead({
   );
 }
 
-function CreateUserButton() {
+export function CreateUserButton() {
   const [open, setOpen] = useState(false);
 
   return (
@@ -198,9 +198,6 @@ export function UsersPanel() {
 
   return (
     <Card className="relative flex flex-1 flex-col">
-      <div className="flex items-center justify-end border-b px-4 py-3 sm:px-6">
-        <CreateUserButton />
-      </div>
       <CardContent className="flex flex-1 flex-col p-0">
         {isLoading ? (
           <div className="space-y-3 px-8 py-8">
