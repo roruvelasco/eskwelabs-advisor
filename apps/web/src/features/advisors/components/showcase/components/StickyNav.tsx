@@ -9,7 +9,7 @@ export function StickyNav({
   visible,
   activeIndex,
   sectionRefs,
-  navTheme,
+  navTheme
 }: {
   visible: boolean;
   activeIndex: number;
@@ -17,7 +17,10 @@ export function StickyNav({
   navTheme: ThemeTokens;
 }) {
   function scrollToSection(i: number) {
-    sectionRefs.current[i]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    sectionRefs.current[i]?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start'
+    });
   }
 
   return (
@@ -28,7 +31,7 @@ export function StickyNav({
         pointerEvents: visible ? 'auto' : 'none',
         transform: visible ? 'translateY(0)' : 'translateY(-10px)',
         backgroundColor: navTheme.navBg,
-        borderColor: navTheme.navBorder,
+        borderColor: navTheme.navBorder
       }}
       role="navigation"
       aria-label="Advisor sections"
@@ -52,7 +55,10 @@ export function StickyNav({
               className="rounded-full px-3 py-1.5 font-sans text-xs uppercase tracking-widest transition-all duration-300 focus-visible:outline-none focus-visible:ring-2"
               style={
                 isActive
-                  ? { background: navTheme.navActiveBg, color: navTheme.navActiveText }
+                  ? {
+                      background: navTheme.navActiveBg,
+                      color: navTheme.navActiveText
+                    }
                   : { color: navTheme.navText }
               }
             >

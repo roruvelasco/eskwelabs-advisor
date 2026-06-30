@@ -12,7 +12,7 @@ export function DashboardVisual({
   triggered,
   theme,
   imageSrc,
-  imageAlt,
+  imageAlt
 }: {
   triggered: boolean;
   theme: ThemeTokens;
@@ -23,13 +23,18 @@ export function DashboardVisual({
   const linePoints = '0,60 20,45 40,55 60,30 80,40 100,20';
 
   if (imageSrc) {
-    return <VisualFrame imageSrc={imageSrc} imageAlt={imageAlt} theme={theme} />;
+    return (
+      <VisualFrame imageSrc={imageSrc} imageAlt={imageAlt} theme={theme} />
+    );
   }
 
   return (
     <div
       className="relative flex flex-col gap-3 overflow-hidden rounded-2xl p-5 shadow-sm"
-      style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}` }}
+      style={{
+        background: theme.cardBg,
+        border: `1px solid ${theme.cardBorder}`
+      }}
     >
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -52,15 +57,20 @@ export function DashboardVisual({
         {[
           { label: 'Sessions', value: '2,481' },
           { label: 'Decisions', value: '94' },
-          { label: 'Clarity', value: '98%' },
+          { label: 'Clarity', value: '98%' }
         ].map((m, i) => (
           <motion.div
             key={m.label}
             initial={{ opacity: 0, scale: 0.9 }}
-            animate={triggered ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.9 }}
+            animate={
+              triggered ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.9 }
+            }
             transition={{ duration: 0.45, delay: 0.08 * i, ease: EASE }}
             className="flex flex-col gap-0.5 rounded-xl p-3"
-            style={{ background: theme.bg, border: `1px solid ${theme.cardBorder}` }}
+            style={{
+              background: theme.bg,
+              border: `1px solid ${theme.cardBorder}`
+            }}
           >
             <span
               className="font-serif text-lg font-medium"
@@ -81,7 +91,10 @@ export function DashboardVisual({
       {/* Bar chart */}
       <div
         className="flex items-end gap-1.5 rounded-xl p-4"
-        style={{ background: theme.bg, border: `1px solid ${theme.cardBorder}` }}
+        style={{
+          background: theme.bg,
+          border: `1px solid ${theme.cardBorder}`
+        }}
       >
         {bars.map((h, i) => (
           <motion.div
@@ -98,9 +111,16 @@ export function DashboardVisual({
       {/* Line chart */}
       <div
         className="overflow-hidden rounded-xl p-4"
-        style={{ background: theme.bg, border: `1px solid ${theme.cardBorder}` }}
+        style={{
+          background: theme.bg,
+          border: `1px solid ${theme.cardBorder}`
+        }}
       >
-        <svg viewBox="0 0 100 70" className="h-14 w-full" preserveAspectRatio="none">
+        <svg
+          viewBox="0 0 100 70"
+          className="h-14 w-full"
+          preserveAspectRatio="none"
+        >
           <motion.polyline
             points={linePoints}
             fill="none"
@@ -109,7 +129,11 @@ export function DashboardVisual({
             strokeLinecap="round"
             strokeLinejoin="round"
             initial={{ pathLength: 0, opacity: 0 }}
-            animate={triggered ? { pathLength: 1, opacity: 1 } : { pathLength: 0, opacity: 0 }}
+            animate={
+              triggered
+                ? { pathLength: 1, opacity: 1 }
+                : { pathLength: 0, opacity: 0 }
+            }
             transition={{ duration: 1.1, delay: 0.25, ease: 'easeInOut' }}
           />
           <motion.polygon

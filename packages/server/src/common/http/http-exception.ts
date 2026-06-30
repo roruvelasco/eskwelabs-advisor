@@ -21,6 +21,10 @@ export function notFound(message = 'Not found') {
   return new HttpException(404, message, 'not_found');
 }
 
+export function conflict(message = 'Conflict') {
+  return new HttpException(409, message, 'conflict');
+}
+
 export function rateLimited(
   message = 'Rate limit exceeded',
   details?: Record<string, unknown>
