@@ -39,12 +39,11 @@ import {
   refreshAllKnowledgeSources,
   refreshKnowledgeSource,
   refreshPromptCache,
-  updateAdvisorPromptSource,
   updateDnaSource,
   updateKnowledgeSource
 } from '@/lib/domains/admin/api';
 import {
-  advisorPromptSourcesQuery,
+  adminAdvisorsQuery,
   dnaSourceQuery,
   knowledgeSourcesQuery,
   telemetryQuery,
@@ -52,17 +51,7 @@ import {
 } from '@/lib/domains/admin/queries';
 import { AdminEmptyState } from './admin-table';
 
-type SourceKind = 'advisor_prompt' | 'dna' | 'knowledge_reference';
-
-interface AdvisorPromptSource {
-  advisorId: string;
-  name: string;
-  description: string;
-  promptDocId: string | null;
-  isActive: boolean;
-  status: string;
-  updatedAt: string;
-}
+type SourceKind = 'dna' | 'knowledge_reference';
 
 interface DnaSource {
   docId: string | null;
@@ -115,13 +104,6 @@ const CONTENT_TYPES = [
   'advisor_reference'
 ];
 
-const ADVISOR_SCOPES = [
-  'global',
-  'data-dashboard',
-  'ssot-memo',
-  'data-modeling'
-];
-
 const LOG_EVENTS = new Set([
   'admin_cache_refresh',
   'admin_cache_refresh_failed',
@@ -159,7 +141,6 @@ function shortValue(value: string | null) {
 }
 
 function kindLabel(kind: SourceKind) {
-  if (kind === 'advisor_prompt') return 'Advisor Prompt';
   if (kind === 'dna') return 'Shared DNA';
   return 'Knowledge Reference';
 }
@@ -183,7 +164,13 @@ function payloadString(payload: Record<string, unknown>, key: string) {
   return typeof value === 'string' ? value : null;
 }
 
-function EditSourceDialog({ row }: { row: SelectionRow }) {
+function EditSourceDialog({
+  row,
+  advisorScopes
+}: {
+  row: SelectionRow;
+  advisorScopes: string[];
+}) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [docId, setDocId] = useState(row.docId ?? '');
@@ -199,11 +186,6 @@ function EditSourceDialog({ row }: { row: SelectionRow }) {
   const mutation = useMutation({
     mutationFn: () => {
       const trimmedDocId = docId.trim();
-      if (row.kind === 'advisor_prompt') {
-        return updateAdvisorPromptSource(row.id, {
-          promptDocId: trimmedDocId || null
-        });
-      }
       if (row.kind === 'dna') {
         return updateDnaSource({ docId: trimmedDocId });
       }
@@ -216,9 +198,6 @@ function EditSourceDialog({ row }: { row: SelectionRow }) {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ['admin', 'advisor-prompt-sources']
-      });
       queryClient.invalidateQueries({ queryKey: ['admin', 'dna-source'] });
       queryClient.invalidateQueries({
         queryKey: ['admin', 'knowledge-sources']
@@ -233,8 +212,8 @@ function EditSourceDialog({ row }: { row: SelectionRow }) {
   });
 
   const canSave =
-    row.kind === 'advisor_prompt' || row.kind === 'dna'
-      ? docId.trim().length > 0 || row.kind === 'advisor_prompt'
+    row.kind === 'dna'
+      ? docId.trim().length > 0
       : docId.trim().length > 0 && title.trim().length > 0;
 
   return (
@@ -295,7 +274,7 @@ function EditSourceDialog({ row }: { row: SelectionRow }) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {ADVISOR_SCOPES.map((scope) => (
+                    {advisorScopes.map((scope) => (
                       <SelectItem key={scope} value={scope}>
                         {scope}
                       </SelectItem>
@@ -336,7 +315,11 @@ function EditSourceDialog({ row }: { row: SelectionRow }) {
   );
 }
 
-function AddKnowledgeSourceDialog() {
+function AddKnowledgeSourceDialog({
+  advisorScopes
+}: {
+  advisorScopes: string[];
+}) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
@@ -433,7 +416,7 @@ function AddKnowledgeSourceDialog() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {ADVISOR_SCOPES.map((scope) => (
+                  {advisorScopes.map((scope) => (
                     <SelectItem key={scope} value={scope}>
                       {scope}
                     </SelectItem>
@@ -508,30 +491,16 @@ function RefreshAllButton() {
   );
 }
 
-function SelectionsTable() {
+function SelectionsTable({ advisorScopes }: { advisorScopes: string[] }) {
   const queryClient = useQueryClient();
-  const promptSourcesQuery = useQuery(advisorPromptSourcesQuery);
   const dnaQuery = useQuery(dnaSourceQuery);
   const sourcesQuery = useQuery(knowledgeSourcesQuery());
 
-  const promptSources =
-    (promptSourcesQuery.data as { data: AdvisorPromptSource[] } | undefined)
-      ?.data ?? [];
   const dnaSource = (dnaQuery.data as { data: DnaSource } | undefined)?.data;
   const knowledgeSources =
     (sourcesQuery.data as { data: KnowledgeSource[] } | undefined)?.data ?? [];
 
   const rows: SelectionRow[] = [
-    ...promptSources.map((source) => ({
-      id: source.advisorId,
-      kind: 'advisor_prompt' as const,
-      label: source.name,
-      scope: source.advisorId,
-      docId: source.promptDocId,
-      status: source.status,
-      revision: null,
-      refreshedAt: source.updatedAt
-    })),
     {
       id: 'dna',
       kind: 'dna',
@@ -566,9 +535,6 @@ function SelectionsTable() {
       queryClient.invalidateQueries({
         queryKey: ['admin', 'knowledge-sources']
       });
-      queryClient.invalidateQueries({
-        queryKey: ['admin', 'advisor-prompt-sources']
-      });
       queryClient.invalidateQueries({ queryKey: ['admin', 'dna-source'] });
       queryClient.invalidateQueries({ queryKey: ['admin', 'prompt-health'] });
       queryClient.invalidateQueries({ queryKey: ['admin', 'prompt-cache'] });
@@ -580,12 +546,8 @@ function SelectionsTable() {
     }
   });
 
-  const isLoading =
-    promptSourcesQuery.isLoading ||
-    dnaQuery.isLoading ||
-    sourcesQuery.isLoading;
-  const hasError =
-    promptSourcesQuery.error || dnaQuery.error || sourcesQuery.error;
+  const isLoading = dnaQuery.isLoading || sourcesQuery.isLoading;
+  const hasError = dnaQuery.error || sourcesQuery.error;
 
   if (hasError) {
     return (
@@ -593,7 +555,6 @@ function SelectionsTable() {
         message="Failed to load document sources."
         actionLabel="Retry"
         onAction={() => {
-          promptSourcesQuery.refetch();
           dnaQuery.refetch();
           sourcesQuery.refetch();
         }}
@@ -681,7 +642,10 @@ function SelectionsTable() {
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <EditSourceDialog row={row.original} />
+                      <EditSourceDialog
+                        row={row.original}
+                        advisorScopes={advisorScopes}
+                      />
                     </TooltipTrigger>
                     <TooltipContent>Edit</TooltipContent>
                   </Tooltip>
@@ -794,6 +758,13 @@ function LogsTable() {
 
 export function KnowledgePanel() {
   useQuery({ ...knowledgeHealthQuery, staleTime: 30_000 });
+  const advisorsQuery = useQuery(adminAdvisorsQuery({ limit: 100 }));
+  const advisorScopes = [
+    'global',
+    ...(advisorsQuery.data?.data ?? [])
+      .filter((advisor) => advisor.isActive && advisor.status === 'active')
+      .map((advisor) => advisor.id)
+  ];
   const [activeTab, setActiveTab] = useState<'selections' | 'logs'>(
     'selections'
   );
@@ -829,12 +800,16 @@ export function KnowledgePanel() {
         </div>
         {activeTab === 'selections' && (
           <div className="flex items-center gap-3">
-            <AddKnowledgeSourceDialog />
+            <AddKnowledgeSourceDialog advisorScopes={advisorScopes} />
             <RefreshAllButton />
           </div>
         )}
       </div>
-      {activeTab === 'selections' ? <SelectionsTable /> : <LogsTable />}
+      {activeTab === 'selections' ? (
+        <SelectionsTable advisorScopes={advisorScopes} />
+      ) : (
+        <LogsTable />
+      )}
     </Card>
   );
 }
