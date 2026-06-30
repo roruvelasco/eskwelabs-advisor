@@ -2,16 +2,12 @@
 
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Pie, PieChart, Cell } from 'recharts';
 
 import {
   Badge,
   Button,
   Card,
-  CardContent,
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent
+  CardContent
 } from '@eskwelabs-advisor/ui';
 
 import { telemetryQuery } from '@/lib/domains/admin/queries';
@@ -87,28 +83,6 @@ export function TelemetryPanel() {
     [data]
   );
 
-  const severityData = useMemo(() => {
-    const counts = { info: 0, warning: 0, error: 0 };
-    for (const event of events) {
-      counts[event.severity]++;
-    }
-    return [
-      { severity: 'Info', value: counts.info, fill: 'var(--color-info)' },
-      {
-        severity: 'Warning',
-        value: counts.warning,
-        fill: 'var(--color-warning)'
-      },
-      { severity: 'Error', value: counts.error, fill: 'var(--color-error)' }
-    ];
-  }, [events]);
-
-  const chartConfig = {
-    info: { label: 'Info', color: 'var(--chart-2)' },
-    warning: { label: 'Warning', color: 'var(--chart-4)' },
-    error: { label: 'Error', color: 'var(--chart-1)' }
-  };
-
   if (error) {
     return (
       <Card>
@@ -126,44 +100,7 @@ export function TelemetryPanel() {
 
   return (
     <Card className="flex flex-1 flex-col">
-      <CardContent className="grid gap-6 pt-6 md:grid-cols-[280px_1fr]">
-        <div className="flex flex-col items-center">
-          <ChartContainer
-            config={chartConfig}
-            className="aspect-square h-[220px] w-[220px]"
-          >
-            <PieChart>
-              <ChartTooltip
-                cursor={false}
-                content={<ChartTooltipContent hideLabel />}
-              />
-              <Pie
-                data={severityData}
-                dataKey="value"
-                nameKey="severity"
-                innerRadius={70}
-                outerRadius={105}
-                strokeWidth={2}
-              >
-                {severityData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.fill} />
-                ))}
-              </Pie>
-            </PieChart>
-          </ChartContainer>
-          <div className="mt-4 flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm">
-            {severityData.map((item) => (
-              <div key={item.severity} className="flex items-center gap-2">
-                <div
-                  className="h-2.5 w-2.5 rounded-sm"
-                  style={{ backgroundColor: item.fill }}
-                />
-                <span className="text-muted-foreground">{item.severity}</span>
-                <span className="font-semibold tabular-nums">{item.value}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+      <CardContent className="flex flex-1 flex-col p-0">
         <AdminDataTable
           columns={
             [
