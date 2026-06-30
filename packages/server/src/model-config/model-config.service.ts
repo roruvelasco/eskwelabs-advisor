@@ -26,4 +26,12 @@ export class ModelConfigService {
   ) {
     return this.modelConfigRepository.upsert(advisorId, input);
   }
+
+  async setEnabled(advisorId: string, isEnabled: boolean, updatedBy?: string) {
+    return this.modelConfigRepository.setEnabled(
+      advisorId,
+      isEnabled,
+      updatedBy
+    );
+  }
 }

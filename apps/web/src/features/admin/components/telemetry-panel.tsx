@@ -125,131 +125,104 @@ export function TelemetryPanel() {
   }
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardContent className="grid gap-6 pt-6 lg:grid-cols-[1fr_2fr]">
-          <div className="flex flex-col items-center">
-            <ChartContainer
-              config={chartConfig}
-              className="aspect-square max-h-[240px] w-full"
-            >
-              <PieChart>
-                <ChartTooltip
-                  cursor={false}
-                  content={<ChartTooltipContent hideLabel />}
+    <Card className="flex flex-1 flex-col">
+      <CardContent className="grid gap-6 pt-6 md:grid-cols-[280px_1fr]">
+        <div className="flex flex-col items-center">
+          <ChartContainer
+            config={chartConfig}
+            className="aspect-square h-[220px] w-[220px]"
+          >
+            <PieChart>
+              <ChartTooltip
+                cursor={false}
+                content={<ChartTooltipContent hideLabel />}
+              />
+              <Pie
+                data={severityData}
+                dataKey="value"
+                nameKey="severity"
+                innerRadius={70}
+                outerRadius={105}
+                strokeWidth={2}
+              >
+                {severityData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.fill} />
+                ))}
+              </Pie>
+            </PieChart>
+          </ChartContainer>
+          <div className="mt-4 flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm">
+            {severityData.map((item) => (
+              <div key={item.severity} className="flex items-center gap-2">
+                <div
+                  className="h-2.5 w-2.5 rounded-sm"
+                  style={{ backgroundColor: item.fill }}
                 />
-                <Pie
-                  data={severityData}
-                  dataKey="value"
-                  nameKey="severity"
-                  innerRadius={60}
-                  strokeWidth={2}
-                >
-                  {severityData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.fill} />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ChartContainer>
-            <div className="mt-4 grid grid-cols-3 gap-4 text-sm">
-              {severityData.map((item) => (
-                <div key={item.severity} className="flex items-center gap-2">
-                  <div
-                    className="h-2 w-2 rounded-sm"
-                    style={{ backgroundColor: item.fill }}
-                  />
-                  <span className="text-muted-foreground">{item.severity}</span>
-                  <span className="ml-auto font-medium tabular-nums">
-                    {item.value}
+                <span className="text-muted-foreground">{item.severity}</span>
+                <span className="font-semibold tabular-nums">{item.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <AdminDataTable
+          columns={
+            [
+              {
+                accessorKey: 'eventName',
+                header: 'Event',
+                cell: ({ row }) => (
+                  <span className="text-xs font-medium">
+                    {EVENT_LABELS[row.original.eventName] ??
+                      row.original.eventName}
                   </span>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="flex flex-col items-center justify-center text-center">
-            <p className="font-serif text-4xl font-bold text-[#2d6a4f]">
-              {events.length}
-            </p>
-            <p className="text-muted-foreground mt-1 text-sm">Total events</p>
-            <div className="mt-4 flex gap-6 text-sm">
-              <div>
-                <p className="font-semibold tabular-nums">
-                  {severityData[2].value}
-                </p>
-                <p className="text-destructive text-xs">Errors</p>
-              </div>
-              <div>
-                <p className="font-semibold tabular-nums">
-                  {severityData[1].value}
-                </p>
-                <p className="text-muted-foreground text-xs">Warnings</p>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-      <Card className="flex flex-1 flex-col">
-        <CardContent className="flex flex-1 flex-col p-0">
-          <AdminDataTable
-            columns={
-              [
-                {
-                  accessorKey: 'eventName',
-                  header: 'Event',
-                  cell: ({ row }) => (
-                    <span className="text-xs font-medium">
-                      {EVENT_LABELS[row.original.eventName] ??
-                        row.original.eventName}
-                    </span>
-                  )
-                },
-                {
-                  accessorKey: 'severity',
-                  header: 'Status',
-                  cell: ({ row }) => (
-                    <Badge variant={statusVariant(row.original.severity)}>
-                      {row.original.severity}
-                    </Badge>
-                  )
-                },
-                {
-                  id: 'user',
-                  header: 'User',
-                  cell: ({ row }) => (
-                    <span className="text-muted-foreground text-xs">
-                      {extractUser(row.original.payload)}
-                    </span>
-                  )
-                },
-                {
-                  id: 'detail',
-                  header: 'Detail',
-                  cell: ({ row }) => (
-                    <span className="text-muted-foreground max-w-xs text-xs">
-                      {extractDetail(row.original.payload)}
-                    </span>
-                  )
-                },
-                {
-                  accessorKey: 'createdAt',
-                  header: 'Timestamp',
-                  cell: ({ row }) => (
-                    <span className="text-muted-foreground text-xs">
-                      {formatDate(row.original.createdAt)}
-                    </span>
-                  )
-                }
-              ] as ColumnDef<TelemetryEventRow>[]
-            }
-            data={events}
-            isLoading={isLoading}
-            emptyMessage="No events recorded yet."
-            enableSorting={true}
-            enablePagination={true}
-            pageSize={20}
-          />
-        </CardContent>
-      </Card>
-    </div>
+                )
+              },
+              {
+                accessorKey: 'severity',
+                header: 'Status',
+                cell: ({ row }) => (
+                  <Badge variant={statusVariant(row.original.severity)}>
+                    {row.original.severity}
+                  </Badge>
+                )
+              },
+              {
+                id: 'user',
+                header: 'User',
+                cell: ({ row }) => (
+                  <span className="text-muted-foreground text-xs">
+                    {extractUser(row.original.payload)}
+                  </span>
+                )
+              },
+              {
+                id: 'detail',
+                header: 'Detail',
+                cell: ({ row }) => (
+                  <span className="text-muted-foreground max-w-xs text-xs">
+                    {extractDetail(row.original.payload)}
+                  </span>
+                )
+              },
+              {
+                accessorKey: 'createdAt',
+                header: 'Timestamp',
+                cell: ({ row }) => (
+                  <span className="text-muted-foreground text-xs">
+                    {formatDate(row.original.createdAt)}
+                  </span>
+                )
+              }
+            ] as ColumnDef<TelemetryEventRow>[]
+          }
+          data={events}
+          isLoading={isLoading}
+          emptyMessage="No events recorded yet."
+          enableSorting={true}
+          enablePagination={true}
+          pageSize={20}
+        />
+      </CardContent>
+    </Card>
   );
 }

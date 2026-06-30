@@ -50,21 +50,13 @@ const ADVISOR_LABELS: Record<string, string> = {
 };
 
 const PROVIDERS: Record<string, { label: string; models: string[] }> = {
-  google: {
-    label: 'Google',
-    models: ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
+  gemini: {
+    label: 'Gemini',
+    models: ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.0-flash']
   },
   groq: {
     label: 'Groq',
     models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant']
-  },
-  openai: {
-    label: 'OpenAI',
-    models: ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo']
-  },
-  anthropic: {
-    label: 'Anthropic',
-    models: ['claude-3-5-sonnet-latest', 'claude-3-5-haiku-latest']
   },
   deterministic: {
     label: 'Deterministic',
@@ -95,6 +87,8 @@ function EditModelDialog({ row }: { row: ModelConfigRow }) {
       updateModelConfig(row.advisorId, { provider, model, isEnabled }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'model-config'] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'advisors'] });
+      queryClient.invalidateQueries({ queryKey: ['advisors'] });
       queryClient.invalidateQueries({ queryKey: ['admin', 'usage'] });
       toast.success('Model configuration updated');
       setOpen(false);
@@ -226,11 +220,11 @@ export function ModelConfigPanel() {
   return (
     <div className="space-y-6">
       <Card>
-        <CardContent className="grid gap-6 pt-6 lg:grid-cols-[1fr_2fr]">
+        <CardContent className="grid gap-6 pt-6 md:grid-cols-[280px_1fr]">
           <div className="flex flex-col items-center">
             <ChartContainer
               config={chartConfig}
-              className="aspect-square max-h-[240px] w-full"
+              className="aspect-square h-[220px] w-[220px]"
             >
               <PieChart>
                 <ChartTooltip
@@ -241,7 +235,8 @@ export function ModelConfigPanel() {
                   data={providerData}
                   dataKey="value"
                   nameKey="provider"
-                  innerRadius={60}
+                  innerRadius={70}
+                  outerRadius={105}
                   strokeWidth={2}
                 >
                   {providerData.map((entry, index) => (
@@ -250,115 +245,93 @@ export function ModelConfigPanel() {
                 </Pie>
               </PieChart>
             </ChartContainer>
-            <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+            <div className="mt-4 flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm">
               {providerData.map((item) => (
                 <div key={item.provider} className="flex items-center gap-2">
                   <div
-                    className="h-2 w-2 rounded-sm"
+                    className="h-2.5 w-2.5 rounded-sm"
                     style={{ backgroundColor: item.fill }}
                   />
                   <span className="text-muted-foreground">{item.provider}</span>
-                  <span className="ml-auto font-medium tabular-nums">
+                  <span className="font-semibold tabular-nums">
                     {item.value}
                   </span>
                 </div>
               ))}
             </div>
           </div>
-          <div className="flex flex-col items-center justify-center text-center">
-            <p className="font-serif text-4xl font-bold text-[#2d6a4f]">
-              {rows.length}
-            </p>
-            <p className="text-muted-foreground mt-1 text-sm">
-              Total configurations
-            </p>
-            <div className="mt-4 flex gap-6 text-sm">
-              <div>
-                <p className="font-semibold tabular-nums">
-                  {rows.filter((r) => r.isEnabled).length}
-                </p>
-                <p className="text-muted-foreground text-xs">Enabled</p>
-              </div>
-              <div>
-                <p className="font-semibold tabular-nums">
-                  {rows.filter((r) => !r.isEnabled).length}
-                </p>
-                <p className="text-muted-foreground text-xs">Disabled</p>
-              </div>
-            </div>
+          <div>
+            <AdminDataTable
+              columns={
+                [
+                  {
+                    accessorKey: 'advisorId',
+                    header: 'Advisor',
+                    cell: ({ row }) => (
+                      <span className="font-medium">
+                        {ADVISOR_LABELS[row.original.advisorId] ??
+                          row.original.advisorId}
+                      </span>
+                    )
+                  },
+                  {
+                    accessorKey: 'provider',
+                    header: 'Provider',
+                    cell: ({ row }) => (
+                      <span className="capitalize">
+                        {row.original.provider}
+                      </span>
+                    )
+                  },
+                  {
+                    accessorKey: 'model',
+                    header: 'Model',
+                    cell: ({ row }) => (
+                      <span className="font-mono text-xs">
+                        {row.original.model}
+                      </span>
+                    )
+                  },
+                  {
+                    accessorKey: 'isEnabled',
+                    header: 'Status',
+                    cell: ({ row }) => (
+                      <Badge
+                        variant={
+                          row.original.isEnabled ? 'default' : 'destructive'
+                        }
+                      >
+                        {row.original.isEnabled ? 'Enabled' : 'Disabled'}
+                      </Badge>
+                    )
+                  },
+                  {
+                    accessorKey: 'updatedAt',
+                    header: 'Last Updated',
+                    cell: ({ row }) => (
+                      <span className="text-muted-foreground text-xs">
+                        {formatDate(row.original.updatedAt)}
+                      </span>
+                    )
+                  },
+                  {
+                    id: 'actions',
+                    header: '',
+                    cell: ({ row }) => (
+                      <div className="text-right">
+                        <EditModelDialog row={row.original} />
+                      </div>
+                    )
+                  }
+                ] as ColumnDef<ModelConfigRow>[]
+              }
+              data={rows}
+              isLoading={isLoading}
+              emptyMessage="No model configuration rows found."
+              enableSorting={true}
+              enablePagination={false}
+            />
           </div>
-        </CardContent>
-      </Card>
-      <Card className="flex flex-1 flex-col">
-        <CardContent className="flex flex-1 flex-col p-0">
-          <AdminDataTable
-            columns={
-              [
-                {
-                  accessorKey: 'advisorId',
-                  header: 'Advisor',
-                  cell: ({ row }) => (
-                    <span className="font-medium">
-                      {ADVISOR_LABELS[row.original.advisorId] ??
-                        row.original.advisorId}
-                    </span>
-                  )
-                },
-                {
-                  accessorKey: 'provider',
-                  header: 'Provider',
-                  cell: ({ row }) => (
-                    <span className="capitalize">{row.original.provider}</span>
-                  )
-                },
-                {
-                  accessorKey: 'model',
-                  header: 'Model',
-                  cell: ({ row }) => (
-                    <span className="font-mono text-xs">
-                      {row.original.model}
-                    </span>
-                  )
-                },
-                {
-                  accessorKey: 'isEnabled',
-                  header: 'Status',
-                  cell: ({ row }) => (
-                    <Badge
-                      variant={
-                        row.original.isEnabled ? 'default' : 'destructive'
-                      }
-                    >
-                      {row.original.isEnabled ? 'Enabled' : 'Disabled'}
-                    </Badge>
-                  )
-                },
-                {
-                  accessorKey: 'updatedAt',
-                  header: 'Last Updated',
-                  cell: ({ row }) => (
-                    <span className="text-muted-foreground text-xs">
-                      {formatDate(row.original.updatedAt)}
-                    </span>
-                  )
-                },
-                {
-                  id: 'actions',
-                  header: '',
-                  cell: ({ row }) => (
-                    <div className="text-right">
-                      <EditModelDialog row={row.original} />
-                    </div>
-                  )
-                }
-              ] as ColumnDef<ModelConfigRow>[]
-            }
-            data={rows}
-            isLoading={isLoading}
-            emptyMessage="No model configuration rows found."
-            enableSorting={true}
-            enablePagination={false}
-          />
         </CardContent>
       </Card>
     </div>
