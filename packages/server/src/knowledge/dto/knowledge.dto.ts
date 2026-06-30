@@ -48,6 +48,29 @@ export const createKnowledgeSourceDto = createInsertSchema(
   metadata: true
 });
 
+export const updateKnowledgeSourceDto = createInsertSchema(
+  knowledgeSourcesTable,
+  {
+    externalId: (s) => s.min(1),
+    title: (s) => s.min(1),
+    advisorScope: (s) => s.min(1),
+    contentType: (s) => s.min(1),
+    audience: (s) => s.min(1)
+  }
+)
+  .pick({
+    externalId: true,
+    title: true,
+    url: true,
+    owner: true,
+    status: true,
+    audience: true,
+    advisorScope: true,
+    contentType: true,
+    metadata: true
+  })
+  .partial();
+
 export const knowledgeUnitDto = createSelectSchema(knowledgeUnitsTable).pick({
   id: true,
   sourceId: true,
@@ -84,3 +107,4 @@ export const knowledgeSearchDto = z.object({
 });
 
 export type CreateKnowledgeSourceDto = z.infer<typeof createKnowledgeSourceDto>;
+export type UpdateKnowledgeSourceDto = z.infer<typeof updateKnowledgeSourceDto>;

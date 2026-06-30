@@ -41,7 +41,7 @@ export class DrizzleService {
         ...(isLocal ? {} : { ssl: 'require' })
       });
       globalThis.__drizzle_client = this.client;
-  }
+    }
 
     this.db = drizzle(this.client, { schema, casing: 'snake_case' });
   }

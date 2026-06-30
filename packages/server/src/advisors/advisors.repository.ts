@@ -32,4 +32,14 @@ export class AdvisorsRepository extends Repository {
     if (!advisor?.isActive) return undefined;
     return advisor;
   }
+
+  async updatePromptDocId(advisorId: string, promptDocId: string | null) {
+    const rows = await this.drizzle.db
+      .update(advisorsTable)
+      .set({ promptDocId, updatedAt: new Date() })
+      .where(eq(advisorsTable.id, advisorId))
+      .returning();
+
+    return rows[0];
+  }
 }

@@ -40,4 +40,28 @@ export class AdvisorsSerializer {
       )
     );
   }
+
+  promptSources(
+    rows: Array<{
+      id: string;
+      name: string;
+      description: string;
+      promptDocId: string | null;
+      isActive: boolean;
+      status: string;
+      updatedAt: Date;
+    }>
+  ) {
+    return dataResponse(
+      rows.map((row) => ({
+        advisorId: row.id,
+        name: row.name,
+        description: row.description,
+        promptDocId: row.promptDocId,
+        isActive: row.isActive,
+        status: row.status,
+        updatedAt: row.updatedAt
+      }))
+    );
+  }
 }

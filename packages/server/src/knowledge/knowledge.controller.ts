@@ -4,7 +4,8 @@ import { parseJsonBody } from '../common/middleware/validation.middleware';
 import { requireActor } from '../common/middleware/auth.middleware';
 import {
   createKnowledgeSourceDto,
-  knowledgeSearchDto
+  knowledgeSearchDto,
+  updateKnowledgeSourceDto
 } from './dto/knowledge.dto';
 import { knowledgeListFiltersDto } from './dto/knowledge.filters.dto';
 import type { KnowledgeSerializer } from './knowledge.serializer';
@@ -37,6 +38,16 @@ export class KnowledgeController extends Controller {
         const actor = c.get('actor');
         const input = await parseJsonBody(c, createKnowledgeSourceDto);
         const source = await this.knowledgeService.createSource(
+          { ...input, metadata: input.metadata ?? undefined },
+          actor?.id
+        );
+        return c.json(this.knowledgeSerializer.source(source));
+      })
+      .patch('/admin/knowledge/sources/:sourceId', async (c) => {
+        const actor = c.get('actor');
+        const input = await parseJsonBody(c, updateKnowledgeSourceDto);
+        const source = await this.knowledgeService.updateSource(
+          c.req.param('sourceId'),
           { ...input, metadata: input.metadata ?? undefined },
           actor?.id
         );

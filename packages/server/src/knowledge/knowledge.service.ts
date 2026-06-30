@@ -1,7 +1,9 @@
 import type { TelemetryService } from '../telemetry/telemetry.service';
+import { notFound } from '../common/http/http-exception';
 import type {
   CreateKnowledgeSourceInput,
-  KnowledgeRepository
+  KnowledgeRepository,
+  UpdateKnowledgeSourceInput
 } from './knowledge.repository';
 import type { KnowledgeIngestionService } from './knowledge-ingestion.service';
 
@@ -32,6 +34,24 @@ export class KnowledgeService {
     return source;
   }
 
+  async updateSource(
+    sourceId: string,
+    input: UpdateKnowledgeSourceInput,
+    actorId?: string
+  ) {
+    const source = await this.knowledgeRepository.updateSource(sourceId, input);
+    if (!source) {
+      throw notFound('Knowledge source not found');
+    }
+    await this.recordTelemetry('knowledge_source_updated', actorId, 'info', {
+      sourceId: source.id,
+      sourceType: source.sourceType,
+      advisorScope: source.advisorScope,
+      contentType: source.contentType
+    });
+    return source;
+  }
+
   async listUnitsForSource(sourceId: string) {
     return this.knowledgeRepository.listUnitsForSource(sourceId);
   }
@@ -45,6 +65,16 @@ export class KnowledgeService {
     }
 
     const result = await this.knowledgeIngestionService.ingestSource(sourceId);
+    await this.recordTelemetry(
+      'knowledge_source_refreshed',
+      undefined,
+      'info',
+      {
+        sourceId,
+        revision: result.source.revision,
+        unitCount: result.units.length
+      }
+    );
     return {
       status: 'refreshed' as const,
       sourceId,
@@ -83,8 +113,24 @@ export class KnowledgeService {
   }
 
   async health() {
+    const [sourceCount, activeSourceCount, unitCount, embeddedUnitCount] =
+      await Promise.all([
+        this.knowledgeRepository.countSources(),
+        this.knowledgeRepository.countActiveSources(),
+        this.knowledgeRepository.countUnits(),
+        this.knowledgeRepository.countEmbeddedUnits()
+      ]);
+
     return {
-      sourceCount: await this.knowledgeRepository.countSources()
+      sourceCount,
+      sources: {
+        total: sourceCount,
+        active: activeSourceCount
+      },
+      units: {
+        total: unitCount,
+        embedded: embeddedUnitCount
+      }
     };
   }
 

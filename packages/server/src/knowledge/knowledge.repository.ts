@@ -43,6 +43,18 @@ export type CreateKnowledgeSourceInput = {
   metadata?: Record<string, unknown>;
 };
 
+export type UpdateKnowledgeSourceInput = Partial<{
+  externalId: string;
+  title: string;
+  url: string | null;
+  owner: string | null;
+  status: string;
+  audience: string;
+  advisorScope: string;
+  contentType: string;
+  metadata: Record<string, unknown>;
+}>;
+
 export type CreateKnowledgeUnitInput = {
   sourceId: string;
   sourceRevision: string;
@@ -129,6 +141,28 @@ export class KnowledgeRepository extends Repository {
     return rows[0]?.count ?? 0;
   }
 
+  async countActiveSources(): Promise<number> {
+    const rows = await this.drizzle.db
+      .select({ count: count() })
+      .from(knowledgeSourcesTable)
+      .where(eq(knowledgeSourcesTable.status, 'published'));
+    return rows[0]?.count ?? 0;
+  }
+
+  async countUnits(): Promise<number> {
+    const rows = await this.drizzle.db
+      .select({ count: count() })
+      .from(knowledgeUnitsTable);
+    return rows[0]?.count ?? 0;
+  }
+
+  async countEmbeddedUnits(): Promise<number> {
+    const rows = await this.drizzle.db
+      .select({ count: count() })
+      .from(knowledgeEmbeddingsTable);
+    return rows[0]?.count ?? 0;
+  }
+
   async createSource(input: CreateKnowledgeSourceInput) {
     const rows = await this.drizzle.db
       .insert(knowledgeSourcesTable)
@@ -140,6 +174,16 @@ export class KnowledgeRepository extends Repository {
         contentType: input.contentType ?? 'advisor_reference',
         metadata: input.metadata ?? {}
       })
+      .returning();
+
+    return rows[0];
+  }
+
+  async updateSource(id: string, input: UpdateKnowledgeSourceInput) {
+    const rows = await this.drizzle.db
+      .update(knowledgeSourcesTable)
+      .set({ ...input, updatedAt: new Date() })
+      .where(eq(knowledgeSourcesTable.id, id))
       .returning();
 
     return rows[0];
