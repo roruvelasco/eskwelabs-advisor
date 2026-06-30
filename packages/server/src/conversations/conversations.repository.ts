@@ -1,7 +1,8 @@
-import { and, desc, eq, lt, or } from 'drizzle-orm';
+import { and, desc, eq, ilike, isNull, lt, or } from 'drizzle-orm';
 
 import { Repository } from '../common/factories/repository.factory';
-import { decodeCursor, encodeCursor } from '../common/pagination';
+import { decodeCursor, paginateResult } from '../common/pagination';
+import type { PaginatedResult } from '../common/pagination';
 import {
   conversationsTable,
   type ConversationTitleSource,
@@ -16,19 +17,18 @@ export interface ConversationRow {
   title: string;
   titleSource: string;
   status: string;
+  deletedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface PaginatedResult<T> {
-  rows: T[];
-  nextCursor: string | null;
-}
+export type { PaginatedResult } from '../common/pagination';
 
 function toRow(conversation: Conversation): ConversationRow {
   return {
     ...conversation,
     advisorRuntimeVersionId: conversation.advisorRuntimeVersionId ?? undefined,
+    deletedAt: conversation.deletedAt?.toISOString() ?? null,
     createdAt: conversation.createdAt.toISOString(),
     updatedAt: conversation.updatedAt.toISOString()
   };
@@ -39,10 +39,12 @@ export class ConversationsRepository extends Repository {
     userId: string,
     {
       advisorId,
+      search,
       limit = 50,
       cursor
     }: {
       advisorId?: string;
+      search?: string;
       limit?: number;
       cursor?: string;
     } = {}
@@ -67,7 +69,9 @@ export class ConversationsRepository extends Repository {
 
     const whereConditions = [
       eq(conversationsTable.userId, userId),
+      isNull(conversationsTable.deletedAt),
       ...(advisorId ? [eq(conversationsTable.advisorId, advisorId)] : []),
+      ...(search ? [ilike(conversationsTable.title, `%${search}%`)] : []),
       ...(cursorConditions ? [cursorConditions] : [])
     ];
 
@@ -78,17 +82,16 @@ export class ConversationsRepository extends Repository {
       .orderBy(desc(conversationsTable.updatedAt), desc(conversationsTable.id))
       .limit(limit + 1);
 
-    const hasMore = rows.length > limit;
-    const resultRows = hasMore ? rows.slice(0, limit) : rows;
+    const { rows: trimmed, nextCursor } = paginateResult(
+      rows,
+      limit,
+      (last) => ({
+        updatedAt: last.updatedAt.toISOString(),
+        id: last.id
+      })
+    );
 
-    const nextCursor = hasMore
-      ? encodeCursor({
-          updatedAt: resultRows[resultRows.length - 1].updatedAt.toISOString(),
-          id: resultRows[resultRows.length - 1].id
-        })
-      : null;
-
-    return { rows: resultRows.map(toRow), nextCursor };
+    return { rows: trimmed.map(toRow), nextCursor };
   }
 
   async findForUser(userId: string, id: string) {
@@ -98,7 +101,8 @@ export class ConversationsRepository extends Repository {
       .where(
         and(
           eq(conversationsTable.id, id),
-          eq(conversationsTable.userId, userId)
+          eq(conversationsTable.userId, userId),
+          isNull(conversationsTable.deletedAt)
         )
       )
       .limit(1);
@@ -155,11 +159,13 @@ export class ConversationsRepository extends Repository {
 
   async deleteForUser(userId: string, conversationId: string) {
     const deleted = await this.drizzle.db
-      .delete(conversationsTable)
+      .update(conversationsTable)
+      .set({ status: 'deleted', deletedAt: new Date(), updatedAt: new Date() })
       .where(
         and(
           eq(conversationsTable.id, conversationId),
-          eq(conversationsTable.userId, userId)
+          eq(conversationsTable.userId, userId),
+          isNull(conversationsTable.deletedAt)
         )
       )
       .returning({ id: conversationsTable.id });

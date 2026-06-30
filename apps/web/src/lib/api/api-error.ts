@@ -24,3 +24,17 @@ export async function parseApiResponse<T>(response: Response): Promise<T> {
 
   return body as T;
 }
+
+export function queryParams(
+  input: Record<string, string | number | boolean | undefined | null>
+) {
+  const query: Record<string, string> = {};
+
+  for (const [key, value] of Object.entries(input)) {
+    if (value !== undefined && value !== null && value !== '') {
+      query[key] = String(value);
+    }
+  }
+
+  return query;
+}

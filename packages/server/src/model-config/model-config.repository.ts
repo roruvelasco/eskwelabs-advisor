@@ -57,4 +57,18 @@ export class ModelConfigRepository extends Repository {
 
     return rows[0];
   }
+
+  async setEnabled(
+    advisorId: string,
+    isEnabled: boolean,
+    updatedBy?: string
+  ): Promise<ModelConfig | undefined> {
+    const rows = await this.drizzle.db
+      .update(modelConfigTable)
+      .set({ isEnabled, updatedBy, updatedAt: new Date() })
+      .where(eq(modelConfigTable.advisorId, advisorId))
+      .returning();
+
+    return rows[0];
+  }
 }

@@ -16,8 +16,8 @@ export const fadeUp: Variants = {
   visible: (d: number = 0) => ({
     opacity: 1,
     y: 0,
-    transition: { duration: 0.6, ease: EASE, delay: d },
-  }),
+    transition: { duration: 0.6, ease: EASE, delay: d }
+  })
 };
 
 // ─── Stat card ────────────────────────────────────────────────────────────────
@@ -28,7 +28,7 @@ export function StatCard({
   label,
   delay,
   triggered,
-  theme,
+  theme
 }: {
   value: number;
   suffix: string;

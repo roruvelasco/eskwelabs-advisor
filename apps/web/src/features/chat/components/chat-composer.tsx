@@ -1,16 +1,23 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { SendHorizonal } from 'lucide-react';
+import { SendHorizonal, X } from 'lucide-react';
 import { Button, Textarea } from '@eskwelabs-advisor/ui';
 import { cn } from '@/lib/utils';
 
 interface ChatComposerProps {
   onSend?: (text: string) => void;
+  onStop?: () => void;
   disabled?: boolean;
+  isStreaming?: boolean;
 }
 
-export function ChatComposer({ disabled = false, onSend }: ChatComposerProps) {
+export function ChatComposer({
+  disabled = false,
+  isStreaming = false,
+  onSend,
+  onStop
+}: ChatComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [value, setValue] = useState('');
 
@@ -71,20 +78,33 @@ export function ChatComposer({ disabled = false, onSend }: ChatComposerProps) {
         onKeyDown={handleKeyDown}
       />
 
-      <Button
-        variant="default"
-        size="icon"
-        aria-label="Send message"
-        type="button"
-        disabled={!hasText || disabled}
-        onClick={submit}
-        className={cn(
-          'motion-press mb-0.5 shrink-0 transition-all duration-150 active:scale-95',
-          hasText ? 'size-8 rounded-full' : 'size-8 rounded-lg'
-        )}
-      >
-        <SendHorizonal size={15} aria-hidden="true" />
-      </Button>
+      {isStreaming ? (
+        <Button
+          variant="outline"
+          size="icon"
+          aria-label="Stop response"
+          type="button"
+          onClick={onStop}
+          className="motion-press mb-0.5 size-8 shrink-0 rounded-full transition-all duration-150 active:scale-95"
+        >
+          <X size={15} aria-hidden="true" />
+        </Button>
+      ) : (
+        <Button
+          variant="default"
+          size="icon"
+          aria-label="Send message"
+          type="button"
+          disabled={!hasText || disabled}
+          onClick={submit}
+          className={cn(
+            'motion-press mb-0.5 shrink-0 transition-all duration-150 active:scale-95',
+            hasText ? 'size-8 rounded-full' : 'size-8 rounded-lg'
+          )}
+        >
+          <SendHorizonal size={15} aria-hidden="true" />
+        </Button>
+      )}
     </div>
   );
 }

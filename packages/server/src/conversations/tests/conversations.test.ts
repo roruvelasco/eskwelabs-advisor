@@ -66,7 +66,7 @@ function createConversationRuntimeService(config?: {
         }
       };
     },
-    checkReadiness: async () => ({ ready: true as const, runtime: {} })
+    checkReadiness: async () => ({ ready: true as const, reasons: [] as [] })
   } as never;
 }
 
@@ -231,7 +231,7 @@ describe('title source semantics', () => {
         isEnabled: true
       }
     }),
-    checkReadiness: async () => ({ ready: true as const, runtime: {} })
+    checkReadiness: async () => ({ ready: true as const, reasons: [] as [] })
   } as never;
 
   function captureCreate() {

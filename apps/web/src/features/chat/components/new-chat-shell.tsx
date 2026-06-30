@@ -23,8 +23,6 @@ import { streamChatTurn } from '@/lib/domains/chat/api';
 import { conversationQuery } from '@/lib/domains/conversations/queries';
 import { advisorsQuery } from '@/lib/domains/advisors/queries';
 
-const CONSENT_KEY = 'eskwelabs-advisor:monitoring-notice-seen';
-
 type StreamFinalData = {
   userMessage: { id: string; role: string; content: string };
   assistantMessage: { id: string; role: string; content: string };
@@ -49,6 +47,10 @@ function toDisplayStatus(status?: string): Message['status'] {
   return status as Message['status'];
 }
 
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === 'AbortError';
+}
+
 function ChatLayoutInner() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -59,6 +61,7 @@ function ChatLayoutInner() {
   const [stableSidebarAdvisorId, setStableSidebarAdvisorId] =
     useState<string>();
   const streamRef = useRef<{
+    abortController: AbortController;
     clientTurnId: string;
     assistantTempId: string;
     createdConversationId?: string;
@@ -71,31 +74,33 @@ function ChatLayoutInner() {
   const [acknowledged, setAcknowledged] = useState(false);
   const [consentError, setConsentError] = useState<string>();
 
-  const { isLoading: isConsentLoading } = useQuery({
+  const {
+    data: consentData,
+    isLoading: isConsentLoading,
+    refetch: refetchConsent
+  } = useQuery({
     queryKey: ['consent'],
     queryFn: getConsent
   });
 
   useEffect(() => {
     if (isConsentLoading) return;
-    const seen = window.sessionStorage.getItem(CONSENT_KEY) === 'true';
-    setConsentOpen(!seen);
-  }, [isConsentLoading]);
+    const consentedAt = (
+      consentData as { consentedAt?: string | null } | undefined
+    )?.consentedAt;
+    setConsentOpen(!consentedAt);
+  }, [consentData, isConsentLoading]);
 
   const handleAcknowledge = async () => {
     setIsAcknowledging(true);
     setConsentError(undefined);
     try {
       await acknowledgeConsent();
+      await refetchConsent();
     } catch {
       setConsentError('Could not record acknowledgement. Please try again.');
       setIsAcknowledging(false);
       return;
-    }
-    try {
-      window.sessionStorage.setItem(CONSENT_KEY, 'true');
-    } catch {
-      // ignore
     }
     setAcknowledged(true);
     setTimeout(() => setConsentOpen(false), 1100);
@@ -111,8 +116,9 @@ function ChatLayoutInner() {
       const clientTurnId = crypto.randomUUID();
       const userTempId = `user:${crypto.randomUUID()}`;
       const assistantTempId = `assistant:${crypto.randomUUID()}`;
+      const abortController = new AbortController();
 
-      streamRef.current = { clientTurnId, assistantTempId };
+      streamRef.current = { abortController, clientTurnId, assistantTempId };
       if (!conversationId) setActiveDraftId(clientTurnId);
 
       const optimisticTurn: CacheMessage[] = [
@@ -230,7 +236,8 @@ function ChatLayoutInner() {
                 ?.message ?? 'Chat stream failed'
             );
           }
-        }
+        },
+        { signal: abortController.signal }
       );
 
       if (!finalData) throw new Error('Chat stream ended without final data');
@@ -242,10 +249,15 @@ function ChatLayoutInner() {
       await queryClient.invalidateQueries({ queryKey: ['conversations'] });
       streamRef.current = null;
     },
-    onError: () => {
+    onError: (error) => {
       setActiveDraftId(null);
       const info = streamRef.current;
       if (!info) return;
+      const wasCancelled = isAbortError(error);
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : 'Response failed.';
 
       const liveKey = info.createdConversationId ?? conversationId;
       const cacheKey = liveKey
@@ -259,8 +271,10 @@ function ChatLayoutInner() {
             msg.id === info.assistantTempId
               ? {
                   ...msg,
-                  content: msg.content || 'Request failed.',
-                  status: 'error'
+                  content:
+                    msg.content ||
+                    (wasCancelled ? 'Response stopped.' : message),
+                  status: wasCancelled ? 'cancelled' : 'error'
                 }
               : msg
           )
@@ -270,6 +284,12 @@ function ChatLayoutInner() {
       streamRef.current = null;
     }
   });
+
+  useEffect(() => {
+    return () => {
+      streamRef.current?.abortController.abort();
+    };
+  }, []);
 
   const {
     data: messagesResponse,
@@ -330,6 +350,9 @@ function ChatLayoutInner() {
     },
     [sendMutation]
   );
+  const handleStop = useCallback(() => {
+    streamRef.current?.abortController.abort();
+  }, []);
 
   return (
     <>
@@ -386,12 +409,18 @@ function ChatLayoutInner() {
             </div>
           ) : hasMessages ? (
             <>
-              <ChatMessages messages={loadedMessages} />
+              <ChatMessages messages={loadedMessages} onRetry={handleSend} />
               <div className="border-border/50 shrink-0 border-t p-3">
                 <ChatComposer
                   disabled={sendMutation.isPending}
+                  isStreaming={sendMutation.isPending}
                   onSend={handleSend}
+                  onStop={handleStop}
                 />
+                <p className="text-muted-foreground mt-2 text-center text-xs">
+                  Conversations are logged and monitored for quality, safety,
+                  and usage reporting.
+                </p>
               </div>
             </>
           ) : (
@@ -408,7 +437,9 @@ function ChatLayoutInner() {
 
                 <ChatComposer
                   disabled={sendMutation.isPending}
+                  isStreaming={sendMutation.isPending}
                   onSend={handleSend}
+                  onStop={handleStop}
                 />
               </Container>
             </div>

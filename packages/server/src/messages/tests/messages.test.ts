@@ -2,13 +2,14 @@ import { describe, expect, test } from 'bun:test';
 
 import { HttpException } from '../../common/http/http-exception';
 import { MessagesService } from '../messages.service';
+import { QueryPolicyService } from '../query-policy.service';
 import type { MessageCreateInput, MessageRow } from '../messages.repository';
 import type { Actor } from '../../common/utils/hono';
 import type {
   LlmChatChunk,
   LlmChatRequest
 } from '../../adapters/advisor-adapters';
-import { CompiledSystemPromptBuilder } from '../../prompt-cache/compiled-system-prompt.builder';
+import { SystemPromptBuilder } from '../../prompt-cache/system-prompt.builder';
 
 const actor: Actor = {
   id: crypto.randomUUID(),
@@ -16,6 +17,8 @@ const actor: Actor = {
   role: 'eif',
   isActive: true
 };
+
+let testSeq = 0;
 
 type StreamEvent =
   | { type: 'conversation.ready'; data: { conversationId: string } }
@@ -42,6 +45,7 @@ function createPersistenceService() {
           role: 'user' as const,
           content: i.userMessage.content,
           status: 'ok' as const,
+          seq: ++testSeq,
           createdAt: new Date().toISOString()
         },
         assistantMessage: {
@@ -59,6 +63,7 @@ function createPersistenceService() {
           latencyMs: i.assistantMessage.latencyMs,
           promptDocRevision: i.assistantMessage.promptDocRevision,
           dnaDigestVersion: i.assistantMessage.dnaDigestVersion,
+          seq: ++testSeq,
           createdAt: new Date().toISOString()
         }
       };
@@ -127,8 +132,8 @@ function createAdvisorRuntimeService(runtime: {
   advisorName?: string;
   runtimeVersionId?: string;
   promptContext?: {
-    systemPrompt?: string;
-    systemPromptHash?: string;
+    advisorPromptText?: string;
+    dnaDigestText?: string;
     promptSnapshotHash?: string;
     promptDocRevision?: string;
     dnaDigestVersion?: string;
@@ -140,16 +145,24 @@ function createAdvisorRuntimeService(runtime: {
   };
 }) {
   return {
+    resolveModelConfig: async () => ({
+      advisorId: runtime.advisorId,
+      advisorName: runtime.advisorName ?? runtime.advisorId,
+      modelConfig: {
+        provider: runtime.modelConfig?.provider ?? 'deterministic',
+        model: runtime.modelConfig?.model ?? 'deterministic-model',
+        isEnabled: runtime.modelConfig?.isEnabled ?? true
+      }
+    }),
     resolveRunnableVersion: async () => ({
       advisorId: runtime.advisorId,
       advisorName: runtime.advisorName ?? runtime.advisorId,
       runtimeVersionId: runtime.runtimeVersionId ?? crypto.randomUUID(),
       promptContext: {
-        systemPrompt:
-          runtime.promptContext?.systemPrompt ??
-          'System instructions <scope_policy>\nshared dna digest',
-        systemPromptHash:
-          runtime.promptContext?.systemPromptHash ?? 'sys-prompt-hash',
+        advisorPromptText:
+          runtime.promptContext?.advisorPromptText ?? 'System instructions',
+        dnaDigestText:
+          runtime.promptContext?.dnaDigestText ?? 'shared dna digest',
         promptSnapshotHash:
           runtime.promptContext?.promptSnapshotHash ?? 'prompt-hash',
         promptDocRevision:
@@ -164,7 +177,7 @@ function createAdvisorRuntimeService(runtime: {
     }),
     checkReadiness: async () => ({
       ready: true as const,
-      runtime: {}
+      reasons: [] as []
     })
   } as never;
 }
@@ -188,6 +201,7 @@ async function* streamShouldNotBeCalled(): AsyncGenerator<LlmChatChunk> {
 function createMessageRow(input: MessageCreateInput): MessageRow {
   return {
     id: crypto.randomUUID(),
+    seq: ++testSeq,
     createdAt: new Date().toISOString(),
     ...input
   };
@@ -253,17 +267,9 @@ function createPromptContext(input?: {
   return {
     getForAdvisor: async () => {
       input?.onLoad?.();
-      const advisorPromptText =
-        input?.advisorPromptText ?? 'System instructions';
-      const dnaDigestText = input?.dnaDigestText ?? 'shared dna digest';
-      const compiled = new CompiledSystemPromptBuilder().build({
-        advisorPromptText,
-        dnaDigestText
-      });
-
       return {
-        systemPrompt: compiled.text,
-        systemPromptHash: compiled.hash,
+        advisorPromptText: input?.advisorPromptText ?? 'System instructions',
+        dnaDigestText: input?.dnaDigestText ?? 'shared dna digest',
         promptSnapshotHash: input?.promptSnapshotHash ?? 'prompt-hash',
         promptDocRevision: input?.promptDocRevision ?? 'prompt-revision',
         dnaDigestVersion: input?.dnaDigestVersion ?? 'dna-hash'
@@ -296,7 +302,8 @@ describe('messages service', () => {
         createAdvisorRuntimeService({
           advisorId,
           promptContext: {
-            systemPrompt: `System instructions for ${advisorId}\n<scope_policy>\nshared dna digest`,
+            advisorPromptText: `System instructions for ${advisorId}`,
+            dnaDigestText: 'shared dna digest',
             promptSnapshotHash: `prompt:${advisorId}`,
             dnaDigestVersion: 'dna:digest:shared'
           },
@@ -309,8 +316,8 @@ describe('messages service', () => {
           getForAdvisor: async () => {
             dnaCalls += 1;
             return {
-              systemPrompt: `System instructions for ${advisorId}\n<scope_policy>\nshared dna digest`,
-              systemPromptHash: 'hash',
+              advisorPromptText: `System instructions for ${advisorId}`,
+              dnaDigestText: 'shared dna digest',
               promptSnapshotHash: `prompt:${advisorId}`,
               promptDocRevision: 'revision',
               dnaDigestVersion: 'dna:digest:shared'
@@ -333,6 +340,8 @@ describe('messages service', () => {
         createCostCapEnforcer(),
         { incrementTurn: async () => undefined } as never,
         { record: async () => undefined } as never,
+        new QueryPolicyService(),
+        new SystemPromptBuilder(),
         { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
         createPersistenceService(),
         createTitleWorker(),
@@ -367,6 +376,7 @@ describe('messages service', () => {
 
   test('runs a chat turn without leaking system prompt content', async () => {
     const conversationId = crypto.randomUUID();
+    const telemetry: Array<{ eventName: string; payload: unknown }> = [];
     const messagesService = new MessagesService(
       createMessageRepository() as never,
       {
@@ -385,7 +395,8 @@ describe('messages service', () => {
       createAdvisorRuntimeService({
         advisorId: 'data-dashboard',
         promptContext: {
-          systemPrompt: 'System instructions\n<scope_policy>\nDNA digest'
+          advisorPromptText: 'System instructions',
+          dnaDigestText: 'DNA digest'
         },
         modelConfig: { provider: 'deterministic', model: 'deterministic-model' }
       }),
@@ -405,7 +416,18 @@ describe('messages service', () => {
       },
       createCostCapEnforcer(),
       { incrementTurn: async () => undefined } as never,
-      { record: async () => undefined } as never,
+      {
+        record: async (
+          eventName: string,
+          _actorId: string,
+          _severity: string,
+          payload: unknown
+        ) => {
+          telemetry.push({ eventName, payload });
+        }
+      } as never,
+      new QueryPolicyService(),
+      new SystemPromptBuilder(),
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
       createPersistenceService(),
       createTitleWorker(),
@@ -420,6 +442,23 @@ describe('messages service', () => {
     expect(turn.assistantMessage.content).toContain('Draft response');
     expect(JSON.stringify(turn)).not.toContain('System instructions');
     expect(JSON.stringify(turn)).not.toContain('DNA digest');
+    expect(telemetry.map((event) => event.eventName)).toEqual([
+      'message_sent',
+      'llm_call_started',
+      'llm_call_completed',
+      'chat_turn_completed'
+    ]);
+    expect(telemetry).toContainEqual({
+      eventName: 'llm_call_completed',
+      payload: expect.objectContaining({
+        conversationId,
+        provider: 'deterministic',
+        model: 'deterministic-model',
+        promptTokens: 100,
+        completionTokens: 20,
+        estimatedCostUsd: '0.001'
+      })
+    });
   });
 
   test('streams chunks and a final safe payload', async () => {
@@ -442,7 +481,8 @@ describe('messages service', () => {
       createAdvisorRuntimeService({
         advisorId: 'data-dashboard',
         promptContext: {
-          systemPrompt: 'System instructions\n<scope_policy>\nDNA digest'
+          advisorPromptText: 'System instructions',
+          dnaDigestText: 'DNA digest'
         },
         modelConfig: { provider: 'deterministic', model: 'deterministic-model' }
       }),
@@ -471,6 +511,8 @@ describe('messages service', () => {
       createCostCapEnforcer(),
       { incrementTurn: async () => undefined } as never,
       { record: async () => undefined } as never,
+      new QueryPolicyService(),
+      new SystemPromptBuilder(),
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
       createPersistenceService(),
       createTitleWorker(),
@@ -495,6 +537,356 @@ describe('messages service', () => {
     ).toBe(100);
   });
 
+  test('streaming prompt-context failures stay structured before provider calls', async () => {
+    let providerCalls = 0;
+    const createdMessages: MessageRow[] = [];
+    const telemetry: Array<{ eventName: string; payload: unknown }> = [];
+    const service = new MessagesService(
+      createMessageRepository({ createdMessages }) as never,
+      {
+        assertOwns: async () => ({
+          id: 'conversation-id',
+          userId: actor.id,
+          advisorId: 'data-dashboard',
+          title: 'Untitled',
+          status: 'active',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        })
+      } as never,
+      createModelRateService(),
+      {
+        resolveRunnableVersion: async () => {
+          throw new HttpException(
+            503,
+            'Prompt context is incomplete',
+            'prompt_context_incomplete'
+          );
+        }
+      } as never,
+      createPromptContext(),
+      {
+        complete: async () => {
+          providerCalls += 1;
+          throw new Error('provider should not be called');
+        },
+        async *stream() {
+          providerCalls += 1;
+          yield { type: 'delta' as const, content: '' };
+        }
+      },
+      createCostCapEnforcer(),
+      { incrementTurn: async () => undefined } as never,
+      {
+        record: async (
+          eventName: string,
+          _actorId: string,
+          _severity: string,
+          payload: unknown
+        ) => {
+          telemetry.push({ eventName, payload });
+        }
+      } as never,
+      new QueryPolicyService(),
+      new SystemPromptBuilder(),
+      { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
+      createPersistenceService(),
+      createTitleWorker(),
+      createDeferredRunner()
+    );
+
+    const events: StreamEvent[] = [];
+    await expect(async () => {
+      for await (const event of service.streamChatTurn(actor, {
+        conversationId: crypto.randomUUID(),
+        content: 'Stream this'
+      })) {
+        events.push(event);
+      }
+    }).toThrow('Prompt context is incomplete');
+
+    expect(events).toEqual([]);
+    expect(providerCalls).toBe(0);
+    expect(createdMessages).toHaveLength(0);
+    expect(telemetry).toContainEqual({
+      eventName: 'request_blocked',
+      payload: expect.objectContaining({
+        code: 'prompt_context_incomplete',
+        reason: 'prompt_context_incomplete'
+      })
+    });
+  });
+
+  test('streaming rejects runtime prompt context missing advisorPromptText', async () => {
+    let providerCalls = 0;
+    const service = new MessagesService(
+      createMessageRepository() as never,
+      {
+        assertOwns: async () => ({
+          id: 'conversation-id',
+          userId: actor.id,
+          advisorId: 'data-dashboard',
+          title: 'Untitled',
+          status: 'active',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        })
+      } as never,
+      createModelRateService(),
+      {
+        resolveRunnableVersion: async () => ({
+          advisorId: 'data-dashboard',
+          advisorName: 'Data Dashboard',
+          runtimeVersionId: crypto.randomUUID(),
+          promptContext: {
+            advisorPromptText: undefined,
+            dnaDigestText: 'shared dna digest',
+            promptSnapshotHash: 'prompt-hash',
+            promptDocRevision: 'prompt-revision',
+            dnaDigestVersion: 'dna-hash'
+          },
+          modelConfig: {
+            provider: 'deterministic',
+            model: 'deterministic-model',
+            isEnabled: true
+          }
+        })
+      } as never,
+      createPromptContext(),
+      {
+        complete: async () => {
+          providerCalls += 1;
+          throw new Error('provider should not be called');
+        },
+        async *stream() {
+          providerCalls += 1;
+          yield { type: 'delta' as const, content: '' };
+        }
+      },
+      createCostCapEnforcer(),
+      { incrementTurn: async () => undefined } as never,
+      { record: async () => undefined } as never,
+      new QueryPolicyService(),
+      new SystemPromptBuilder(),
+      { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
+      createPersistenceService(),
+      createTitleWorker(),
+      createDeferredRunner()
+    );
+
+    await expect(async () => {
+      for await (const _event of service.streamChatTurn(actor, {
+        conversationId: crypto.randomUUID(),
+        content: 'hello'
+      })) {
+        void _event;
+      }
+    }).toThrow('Prompt context is incomplete');
+
+    expect(providerCalls).toBe(0);
+  });
+
+  test('streaming rejects malformed user content before provider calls', async () => {
+    let providerCalls = 0;
+    const telemetry: Array<{ eventName: string; payload: unknown }> = [];
+    const service = new MessagesService(
+      createMessageRepository() as never,
+      {
+        assertOwns: async () => ({
+          id: 'conversation-id',
+          userId: actor.id,
+          advisorId: 'data-dashboard',
+          title: 'Untitled',
+          status: 'active',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        })
+      } as never,
+      createModelRateService(),
+      createAdvisorRuntimeService({
+        advisorId: 'data-dashboard',
+        modelConfig: { provider: 'deterministic', model: 'deterministic-model' }
+      }),
+      createPromptContext(),
+      {
+        complete: async () => {
+          providerCalls += 1;
+          throw new Error('provider should not be called');
+        },
+        async *stream() {
+          providerCalls += 1;
+          yield { type: 'delta' as const, content: '' };
+        }
+      },
+      createCostCapEnforcer(),
+      { incrementTurn: async () => undefined } as never,
+      {
+        record: async (
+          eventName: string,
+          _actorId: string,
+          _severity: string,
+          payload: unknown
+        ) => {
+          telemetry.push({ eventName, payload });
+        }
+      } as never,
+      new QueryPolicyService(),
+      new SystemPromptBuilder(),
+      { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
+      createPersistenceService(),
+      createTitleWorker(),
+      createDeferredRunner()
+    );
+
+    await expect(async () => {
+      for await (const _event of service.streamChatTurn(actor, {
+        conversationId: crypto.randomUUID(),
+        content: undefined
+      } as never)) {
+        void _event;
+      }
+    }).toThrow('Invalid chat message content');
+
+    expect(providerCalls).toBe(0);
+    expect(telemetry).toContainEqual({
+      eventName: 'request_blocked',
+      payload: expect.objectContaining({
+        code: 'chat_turn_invalid_input'
+      })
+    });
+  });
+
+  test('streaming rejects malformed conversation history before provider calls', async () => {
+    let providerCalls = 0;
+    const history = [
+      {
+        id: crypto.randomUUID(),
+        conversationId: 'conversation-id',
+        userId: actor.id,
+        role: 'user' as const,
+        content: undefined,
+        status: 'ok' as const,
+        seq: 1,
+        createdAt: new Date().toISOString()
+      } as unknown as MessageRow
+    ];
+    const service = new MessagesService(
+      createMessageRepository({ history }) as never,
+      {
+        assertOwns: async () => ({
+          id: 'conversation-id',
+          userId: actor.id,
+          advisorId: 'data-dashboard',
+          title: 'Untitled',
+          status: 'active',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        })
+      } as never,
+      createModelRateService(),
+      createAdvisorRuntimeService({
+        advisorId: 'data-dashboard',
+        modelConfig: { provider: 'deterministic', model: 'deterministic-model' }
+      }),
+      createPromptContext(),
+      {
+        complete: async () => {
+          providerCalls += 1;
+          throw new Error('provider should not be called');
+        },
+        async *stream() {
+          providerCalls += 1;
+          yield { type: 'delta' as const, content: '' };
+        }
+      },
+      createCostCapEnforcer(),
+      { incrementTurn: async () => undefined } as never,
+      { record: async () => undefined } as never,
+      new QueryPolicyService(),
+      new SystemPromptBuilder(),
+      { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
+      createPersistenceService(),
+      createTitleWorker(),
+      createDeferredRunner()
+    );
+
+    await expect(async () => {
+      for await (const _event of service.streamChatTurn(actor, {
+        conversationId: crypto.randomUUID(),
+        content: 'hello'
+      })) {
+        void _event;
+      }
+    }).toThrow('Conversation history is invalid');
+
+    expect(providerCalls).toBe(0);
+  });
+
+  test('streaming rejects invalid provider usage metadata', async () => {
+    const createdMessages: MessageRow[] = [];
+    const service = new MessagesService(
+      createMessageRepository({ createdMessages }) as never,
+      {
+        assertOwns: async () => ({
+          id: 'conversation-id',
+          userId: actor.id,
+          advisorId: 'data-dashboard',
+          title: 'Untitled',
+          status: 'active',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        })
+      } as never,
+      createModelRateService(),
+      createAdvisorRuntimeService({
+        advisorId: 'data-dashboard',
+        modelConfig: { provider: 'deterministic', model: 'deterministic-model' }
+      }),
+      createPromptContext(),
+      {
+        complete: async () => {
+          throw new Error('complete should not be called');
+        },
+        async *stream() {
+          yield { type: 'delta' as const, content: 'partial ' };
+          yield {
+            type: 'done' as const,
+            usage: {
+              promptTokens: 10,
+              completionTokens: 2,
+              totalTokens: 12,
+              estimatedCostUsd: undefined
+            } as never
+          };
+        }
+      },
+      createCostCapEnforcer(),
+      { incrementTurn: async () => undefined } as never,
+      { record: async () => undefined } as never,
+      new QueryPolicyService(),
+      new SystemPromptBuilder(),
+      { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
+      createPersistenceService(),
+      createTitleWorker(),
+      createDeferredRunner()
+    );
+
+    await expect(async () => {
+      for await (const _event of service.streamChatTurn(actor, {
+        conversationId: crypto.randomUUID(),
+        content: 'hello'
+      })) {
+        void _event;
+      }
+    }).toThrow('LLM stream returned invalid usage metadata');
+
+    expect(createdMessages.at(-1)).toMatchObject({
+      role: 'assistant',
+      status: 'error',
+      blockReason: 'provider_usage_invalid'
+    });
+  });
+
   test('includes bounded successful conversation history before the newest user message', async () => {
     let capturedRequest: LlmChatRequest | undefined;
     const history = Array.from(
@@ -506,6 +898,7 @@ describe('messages service', () => {
         role: index % 2 === 0 ? 'user' : 'assistant',
         content: `history-${index}`,
         status: 'ok',
+        seq: index + 1,
         createdAt: new Date(index).toISOString()
       })
     );
@@ -518,6 +911,7 @@ describe('messages service', () => {
       content: 'blocked-history',
       status: 'blocked',
       blockReason: 'daily_message_limit',
+      seq: 100,
       createdAt: new Date().toISOString()
     });
 
@@ -560,6 +954,8 @@ describe('messages service', () => {
       createCostCapEnforcer(),
       { incrementTurn: async () => undefined } as never,
       { record: async () => undefined } as never,
+      new QueryPolicyService(),
+      new SystemPromptBuilder(),
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
       createPersistenceService(),
       createTitleWorker(),
@@ -586,6 +982,7 @@ describe('messages service', () => {
   test('requires terminal stream usage before persisting streamed assistant usage', async () => {
     const createdMessages: MessageRow[] = [];
     const increments: unknown[] = [];
+    const telemetry: Array<{ eventName: string; payload: unknown }> = [];
     const service = new MessagesService(
       createMessageRepository({ createdMessages }) as never,
       {
@@ -622,7 +1019,18 @@ describe('messages service', () => {
           increments.push(input);
         }
       } as never,
-      { record: async () => undefined } as never,
+      {
+        record: async (
+          eventName: string,
+          _actorId: string,
+          _severity: string,
+          payload: unknown
+        ) => {
+          telemetry.push({ eventName, payload });
+        }
+      } as never,
+      new QueryPolicyService(),
+      new SystemPromptBuilder(),
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
       createPersistenceService(),
       createTitleWorker(),
@@ -646,6 +1054,13 @@ describe('messages service', () => {
       role: 'assistant',
       status: 'error',
       blockReason: 'missing_stream_usage'
+    });
+    expect(telemetry).toContainEqual({
+      eventName: 'provider_error',
+      payload: expect.objectContaining({
+        conversationId: 'conversation-id',
+        code: 'missing_stream_usage'
+      })
     });
   });
 
@@ -693,6 +1108,8 @@ describe('messages service', () => {
       }),
       { incrementTurn: async () => undefined } as never,
       { record: async () => undefined } as never,
+      new QueryPolicyService(),
+      new SystemPromptBuilder(),
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
       createPersistenceService(),
       createTitleWorker(),
@@ -767,6 +1184,8 @@ describe('messages service', () => {
           telemetry.push({ eventName, payload });
         }
       } as never,
+      new QueryPolicyService(),
+      new SystemPromptBuilder(),
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
       createPersistenceService(),
       createTitleWorker(),
@@ -795,6 +1214,7 @@ describe('messages service', () => {
   test('persists paired user and assistant error rows when provider fails after preflight', async () => {
     const createdMessages: MessageRow[] = [];
     const increments: unknown[] = [];
+    const telemetry: Array<{ eventName: string; payload: unknown }> = [];
     const service = new MessagesService(
       createMessageRepository({ createdMessages }) as never,
       {
@@ -830,7 +1250,18 @@ describe('messages service', () => {
           increments.push(input);
         }
       } as never,
-      { record: async () => undefined } as never,
+      {
+        record: async (
+          eventName: string,
+          _actorId: string,
+          _severity: string,
+          payload: unknown
+        ) => {
+          telemetry.push({ eventName, payload });
+        }
+      } as never,
+      new QueryPolicyService(),
+      new SystemPromptBuilder(),
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
       createPersistenceService(),
       createTitleWorker(),
@@ -855,6 +1286,99 @@ describe('messages service', () => {
       role: 'assistant',
       status: 'error',
       blockReason: 'provider_error'
+    });
+    expect(telemetry.map((event) => event.eventName)).toContain(
+      'provider_error'
+    );
+    expect(telemetry).toContainEqual({
+      eventName: 'provider_error',
+      payload: expect.objectContaining({
+        conversationId: 'conversation-id',
+        provider: 'deterministic',
+        model: 'deterministic-model',
+        code: 'provider_error'
+      })
+    });
+  });
+
+  test('records supabase_write_error when successful turn persistence fails', async () => {
+    const createdMessages: MessageRow[] = [];
+    const telemetry: Array<{ eventName: string; payload: unknown }> = [];
+    const persistenceError = new Error('write failed') as Error & {
+      code: string;
+    };
+    persistenceError.code = 'supabase_write_failed';
+    const service = new MessagesService(
+      createMessageRepository({ createdMessages }) as never,
+      {
+        assertOwns: async () => ({
+          id: 'conversation-id',
+          userId: actor.id,
+          advisorId: 'data-dashboard',
+          title: 'Untitled',
+          status: 'active',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }),
+        touch: async () => undefined
+      } as never,
+      createModelRateService(),
+      createAdvisorRuntimeService({
+        advisorId: 'data-dashboard',
+        modelConfig: { provider: 'deterministic', model: 'deterministic-model' }
+      }),
+      createPromptContext({
+        advisorPromptText: 'System instructions',
+        dnaDigestText: 'shared dna digest'
+      }),
+      {
+        complete: async () => ({
+          content: 'ok',
+          promptTokens: 10,
+          completionTokens: 2,
+          latencyMs: 1,
+          estimatedCostUsd: '0.0001'
+        }),
+        stream: streamShouldNotBeCalled
+      },
+      createCostCapEnforcer(),
+      { incrementTurn: async () => undefined } as never,
+      {
+        record: async (
+          eventName: string,
+          _actorId: string,
+          _severity: string,
+          payload: unknown
+        ) => {
+          telemetry.push({ eventName, payload });
+        }
+      } as never,
+      new QueryPolicyService(),
+      new SystemPromptBuilder(),
+      { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
+      {
+        persist: async () => {
+          throw persistenceError;
+        }
+      } as never,
+      createTitleWorker(),
+      createDeferredRunner()
+    );
+
+    await expect(
+      service.chatTurn(actor, {
+        conversationId: crypto.randomUUID(),
+        content: 'persist this'
+      })
+    ).rejects.toThrow('write failed');
+
+    expect(createdMessages).toHaveLength(2);
+    expect(telemetry).toContainEqual({
+      eventName: 'supabase_write_error',
+      payload: expect.objectContaining({
+        conversationId: 'conversation-id',
+        code: 'supabase_write_failed'
+      })
     });
   });
 
@@ -911,6 +1435,8 @@ describe('messages service', () => {
           telemetry.push({ eventName, payload });
         }
       } as never,
+      new QueryPolicyService(),
+      new SystemPromptBuilder(),
       {
         DEFAULT_MAX_OUTPUT_TOKENS: 2000
       } as never,
@@ -966,6 +1492,8 @@ describe('messages service', () => {
       createCostCapEnforcer(),
       { incrementTurn: async () => undefined } as never,
       { record: async () => undefined } as never,
+      new QueryPolicyService(),
+      new SystemPromptBuilder(),
       { DEFAULT_MAX_OUTPUT_TOKENS: 2000 } as never,
       createPersistenceService(),
       createTitleWorker(),

@@ -38,7 +38,11 @@ export function MessageResponse({
 }) {
   return (
     <div className={cn('ai-message-response', className)}>
-      <Streamdown animated isAnimating={isAnimating}>
+      <Streamdown
+        animated
+        isAnimating={isAnimating}
+        linkSafety={{ enabled: false }}
+      >
         {children}
       </Streamdown>
     </div>

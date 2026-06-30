@@ -2,20 +2,22 @@ import { describe, expect, test } from 'bun:test';
 
 import { UsersService } from '../users.service';
 import type { User } from '../users.schema';
-import type { PaginatedResult } from '../users.repository';
+import { UsersRepository } from '../users.repository';
+import type { PaginatedResult } from '../../common/pagination';
 import { createUserDto } from '../dto/create-user.dto';
 
-describe('users service', () => {
-  const user: User = {
-    id: '11111111-1111-4111-8111-111111111111',
-    email: 'eif@example.com',
-    passwordHash: null,
-    role: 'eif',
-    isActive: true,
-    consentAcknowledgedAt: null,
-    createdAt: new Date(0)
-  };
+const user: User = {
+  id: '11111111-1111-4111-8111-111111111111',
+  email: 'eif@example.com',
+  passwordHash: null,
+  role: 'eif',
+  isActive: true,
+  consentAcknowledgedAt: null,
+  createdAt: new Date(0),
+  updatedAt: new Date(0)
+};
 
+describe('users service', () => {
   function serviceFor(repository: {
     list?: () => Promise<PaginatedResult<User>>;
     findByEmail?: (email: string) => Promise<User | undefined>;
@@ -111,6 +113,67 @@ describe('users service', () => {
     ).resolves.toMatchObject({
       id: user.id,
       isActive: false
+    });
+  });
+});
+
+describe('users repository', () => {
+  test('createOrReactivate uses an atomic email upsert', async () => {
+    const calls: unknown[] = [];
+    const repository = Object.create(
+      UsersRepository.prototype
+    ) as UsersRepository;
+    const repositoryInternals = repository as unknown as {
+      drizzle: unknown;
+      findByEmail: () => never;
+    };
+
+    repositoryInternals.findByEmail = () => {
+      throw new Error('findByEmail should not be called');
+    };
+    repositoryInternals.drizzle = {
+      db: {
+        insert: () => ({
+          values: (values: unknown) => {
+            calls.push({ values });
+            return {
+              onConflictDoUpdate: (update: unknown) => {
+                calls.push({ update });
+                return {
+                  returning: async () => [
+                    {
+                      ...user,
+                      email: 'eif@example.com',
+                      isActive: true
+                    }
+                  ]
+                };
+              }
+            };
+          }
+        })
+      }
+    };
+
+    await expect(
+      repository.createOrReactivate('EIF@Example.COM', 'admin')
+    ).resolves.toMatchObject({
+      email: 'eif@example.com',
+      isActive: true
+    });
+
+    expect(calls[0]).toEqual({
+      values: {
+        email: 'eif@example.com',
+        role: 'admin',
+        isActive: true
+      }
+    });
+    expect(calls[1]).toMatchObject({
+      update: {
+        target: expect.any(Object),
+        set: { role: 'admin', isActive: true }
+      }
     });
   });
 });

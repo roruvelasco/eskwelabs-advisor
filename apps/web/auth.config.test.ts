@@ -16,13 +16,26 @@ const adminActor = {
 };
 
 function authConfigFor(
-  resolveLogin: () => Promise<typeof actor | typeof adminActor | null>
+  resolveLogin: () => Promise<typeof actor | typeof adminActor | null>,
+  telemetry: Array<{ eventName: string; payload: Record<string, unknown> }> = []
 ) {
-  return createAuthConfig({
-    resolveLogin,
-    resolveActor: async () => actor,
-    resolveCredentials: async () => actor
-  });
+  return createAuthConfig(
+    {
+      resolveLogin,
+      resolveActor: async () => actor,
+      resolveCredentials: async () => actor
+    },
+    {
+      record: async (
+        eventName: string,
+        _actorId: string | undefined,
+        _severity: string,
+        payload: Record<string, unknown>
+      ) => {
+        telemetry.push({ eventName, payload });
+      }
+    }
+  );
 }
 
 function signInInput(email?: string, provider = 'google') {
@@ -46,11 +59,25 @@ describe('auth config', () => {
   });
 
   test('allows allow-listed users to sign in', async () => {
-    const config = authConfigFor(async () => actor);
+    const telemetry: Array<{
+      eventName: string;
+      payload: Record<string, unknown>;
+    }> = [];
+    const config = authConfigFor(async () => actor, telemetry);
 
     await expect(
       config.callbacks?.signIn?.(signInInput(actor.email))
     ).resolves.toBe(true);
+    expect(telemetry).toEqual([
+      {
+        eventName: 'login_success',
+        payload: {
+          email: actor.email,
+          role: actor.role,
+          provider: 'google'
+        }
+      }
+    ]);
   });
 
   test('allows admin users through the admin provider', async () => {
@@ -62,11 +89,27 @@ describe('auth config', () => {
   });
 
   test('rejects EIF users from the admin provider before session creation', async () => {
-    const config = authConfigFor(async () => actor);
+    const telemetry: Array<{
+      eventName: string;
+      payload: Record<string, unknown>;
+    }> = [];
+    const config = authConfigFor(async () => actor, telemetry);
 
     await expect(
       config.callbacks?.signIn?.(signInInput(actor.email, 'google-admin'))
-    ).resolves.toBe('/admin/login');
+    ).resolves.toBe('/admin/login?error=AdminRequired');
+    expect(telemetry).toEqual([
+      {
+        eventName: 'login_denied',
+        payload: {
+          email: actor.email,
+          reason: 'role_mismatch',
+          provider: 'google-admin',
+          expectedRole: 'admin',
+          actualRole: 'eif'
+        }
+      }
+    ]);
   });
 
   test('rejects admin users from the EIF provider before session creation', async () => {
@@ -74,15 +117,29 @@ describe('auth config', () => {
 
     await expect(
       config.callbacks?.signIn?.(signInInput(adminActor.email, 'google'))
-    ).resolves.toBe('/admin/login');
+    ).resolves.toBe('/login?error=UseAdminLogin');
   });
 
   test('redirects missing allow-list users to a stable login error', async () => {
-    const config = authConfigFor(async () => null);
+    const telemetry: Array<{
+      eventName: string;
+      payload: Record<string, unknown>;
+    }> = [];
+    const config = authConfigFor(async () => null, telemetry);
 
     await expect(
       config.callbacks?.signIn?.(signInInput('missing@example.com'))
-    ).resolves.toBe('/login');
+    ).resolves.toBe('/login?error=NotAllowlisted');
+    expect(telemetry).toEqual([
+      {
+        eventName: 'login_denied',
+        payload: {
+          email: 'missing@example.com',
+          reason: 'not_in_allowlist',
+          provider: 'google'
+        }
+      }
+    ]);
   });
 
   test('redirects auth service failures to a safe login error', async () => {
@@ -93,7 +150,7 @@ describe('auth config', () => {
 
     await expect(
       config.callbacks?.signIn?.(signInInput(actor.email))
-    ).resolves.toBe('/login');
+    ).resolves.toBe('/login?error=AuthServiceUnavailable');
   });
 
   test('redirects admin auth service failures to the admin login', async () => {
@@ -104,6 +161,18 @@ describe('auth config', () => {
 
     await expect(
       config.callbacks?.signIn?.(signInInput(adminActor.email, 'google-admin'))
-    ).resolves.toBe('/admin/login');
+    ).resolves.toBe('/admin/login?error=AuthServiceUnavailable');
+  });
+
+  test('keeps credentials users behind the same allow-list and role checks', async () => {
+    const config = createAuthConfig({
+      resolveLogin: async () => actor,
+      resolveActor: async () => actor,
+      resolveCredentials: async () => actor
+    });
+
+    await expect(
+      config.callbacks?.signIn?.(signInInput(actor.email, 'credentials'))
+    ).resolves.toBe(true);
   });
 });

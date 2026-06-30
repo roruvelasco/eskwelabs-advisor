@@ -64,6 +64,104 @@
       "when": 1781535134152,
       "tag": "0008_aspiring_gargoyle",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1781718503137,
+      "tag": "0009_stiff_switch",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1781719665371,
+      "tag": "0010_groovy_dragon_lord",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1782115771961,
+      "tag": "0011_early_switch",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1782118500000,
+      "tag": "0012_db_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1782120000000,
+      "tag": "0013_many_bloodscream",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1782121000000,
+      "tag": "0014_complete_rls_coverage",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1782200000000,
+      "tag": "0015_add_prompt_hashes_to_messages",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1782250000000,
+      "tag": "0016_add_validation_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1782300643526,
+      "tag": "0017_knowledge_architecture",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1782400000000,
+      "tag": "0018_pgvector_search",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1783200000000,
+      "tag": "0019_fts_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1782315917440,
+      "tag": "0020_big_lockheed",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1782824074718,
+      "tag": "0021_old_invaders",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1782833953029,
+      "tag": "0022_chubby_tyger_tiger",
+      "breakpoints": true
     }
   ]
 }

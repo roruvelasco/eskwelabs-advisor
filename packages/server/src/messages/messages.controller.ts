@@ -4,12 +4,17 @@ import {
   requireConsent
 } from '../common/middleware/auth.middleware';
 import { parseJsonBody } from '../common/middleware/validation.middleware';
+import { validationFailed } from '../common/http/http-exception';
 import { streamSSE } from 'hono/streaming';
-import { paginationParamsDto } from '../common/pagination';
+import { dataResponse, paginationParamsDto } from '../common/pagination';
 import { z } from 'zod';
 
 import { MessagesSerializer } from './messages.serializer';
 import { MessagesService } from './messages.service';
+import {
+  ChatTurnUseCase,
+  StreamChatTurnUseCase
+} from './use-cases/chat-turn.use-case';
 
 const chatTurnSchema = z
   .object({
@@ -25,7 +30,9 @@ const chatTurnSchema = z
 export class MessageController extends Controller {
   constructor(
     private messagesService: MessagesService,
-    private messagesSerializer: MessagesSerializer
+    private messagesSerializer: MessagesSerializer,
+    private chatTurnUseCase: ChatTurnUseCase,
+    private streamChatTurnUseCase: StreamChatTurnUseCase
   ) {
     super();
   }
@@ -45,9 +52,9 @@ export class MessageController extends Controller {
         const actor = c.get('actor')!;
         const conversationId = c.req.query('conversationId');
         if (!conversationId) {
-          return c.json(
-            this.messagesSerializer.list({ rows: [], nextCursor: null })
-          );
+          throw validationFailed({
+            issues: [{ path: ['conversationId'], message: 'Required' }]
+          });
         }
         const pagination = paginationParamsDto.parse({
           limit: c.req.query('limit'),
@@ -64,8 +71,8 @@ export class MessageController extends Controller {
       .post('/chat-turn', async (c) => {
         const actor = c.get('actor')!;
         const input = await parseJsonBody(c, chatTurnSchema);
-        const turn = await this.messagesService.chatTurn(actor, input);
-        return c.json({ data: turn }, 201);
+        const turn = await this.chatTurnUseCase.execute(actor, input);
+        return c.json(dataResponse(turn), 201);
       })
       .post('/chat-turn/stream', async (c) => {
         const actor = c.get('actor')!;
@@ -73,7 +80,7 @@ export class MessageController extends Controller {
 
         return streamSSE(c, async (stream) => {
           try {
-            for await (const event of this.messagesService.streamChatTurn(
+            for await (const event of this.streamChatTurnUseCase.execute(
               actor,
               input
             )) {

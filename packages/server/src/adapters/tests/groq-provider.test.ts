@@ -3,10 +3,13 @@ import { describe, expect, test } from 'bun:test';
 import { HttpException } from '../../common/http/http-exception';
 import type { ServerEnv } from '../../config/env';
 import {
+  GroqDnaDigestSummarizer,
   GroqLlmProvider,
   RoutingLlmProvider,
   GeminiLlmProvider,
-  DeterministicLlmProvider
+  DeterministicLlmProvider,
+  DeterministicDnaDigestSummarizer,
+  GoogleDocsGeminiDnaDigestGenerator
 } from '../advisor-adapters';
 import {
   getModelRate,
@@ -801,6 +804,47 @@ describe('GeminiLlmProvider', () => {
   };
 
   describe('complete()', () => {
+    test('sends Gemini API key in a header instead of the URL', async () => {
+      let capturedUrl = '';
+      let capturedHeaders: Record<string, string> = {};
+      const original = globalThis.fetch;
+
+      globalThis.fetch = (async (
+        url: RequestInfo | URL,
+        init?: RequestInit
+      ) => {
+        capturedUrl = url.toString();
+        capturedHeaders = init?.headers as Record<string, string>;
+        return {
+          ok: true,
+          status: 200,
+          headers: new Map(),
+          json: async () => ({
+            candidates: [{ content: { parts: [{ text: 'Response' }] } }],
+            usageMetadata: {
+              promptTokenCount: 5,
+              candidatesTokenCount: 3,
+              totalTokenCount: 8
+            }
+          }),
+          text: async () => ''
+        } as unknown as Response;
+      }) as unknown as typeof fetch;
+
+      try {
+        const provider = new GeminiLlmProvider(geminiEnv);
+        await provider.complete(geminiRequest);
+
+        expect(capturedUrl).not.toContain('key=');
+        expect(capturedUrl).toBe(
+          'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent'
+        );
+        expect(capturedHeaders['x-goog-api-key']).toBe('test-gemini-key');
+      } finally {
+        globalThis.fetch = original;
+      }
+    });
+
     test('passes a signal to fetch', async () => {
       let capturedInit: RequestInit | undefined;
       const restore = mockFetch({
@@ -881,6 +925,47 @@ describe('GeminiLlmProvider', () => {
   });
 
   describe('stream()', () => {
+    test('keeps only SSE format in the Gemini stream URL query', async () => {
+      let capturedUrl = '';
+      let capturedHeaders: Record<string, string> = {};
+      const stream = new ControlledStream();
+      const original = globalThis.fetch;
+
+      globalThis.fetch = (async (
+        url: RequestInfo | URL,
+        init?: RequestInit
+      ) => {
+        capturedUrl = url.toString();
+        capturedHeaders = init?.headers as Record<string, string>;
+        return {
+          ok: true,
+          status: 200,
+          headers: new Map(),
+          json: async () => ({}),
+          text: async () => '',
+          body: stream.stream
+        } as unknown as Response;
+      }) as unknown as typeof fetch;
+
+      try {
+        const provider = new GeminiLlmProvider(geminiEnv);
+        const gen = provider.stream(geminiRequest);
+
+        stream.write('data: [DONE]\n\n');
+        stream.close();
+
+        await gen.next();
+
+        expect(capturedUrl).toBe(
+          'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:streamGenerateContent?alt=sse'
+        );
+        expect(capturedUrl).not.toContain('key=');
+        expect(capturedHeaders['x-goog-api-key']).toBe('test-gemini-key');
+      } finally {
+        globalThis.fetch = original;
+      }
+    });
+
     test('passes a signal to fetch', async () => {
       let capturedInit: RequestInit | undefined;
       const stream = new ControlledStream();
@@ -952,6 +1037,251 @@ describe('GeminiLlmProvider', () => {
         code: 'gemini_not_configured'
       });
     });
+  });
+
+  describe('DNA digest generation', () => {
+    test('sends Gemini API key in a header instead of the URL', async () => {
+      let capturedUrl = '';
+      let capturedHeaders: Record<string, string> = {};
+      let capturedBody = '';
+      const original = globalThis.fetch;
+
+      globalThis.fetch = (async (
+        url: RequestInfo | URL,
+        init?: RequestInit
+      ) => {
+        capturedUrl = url.toString();
+        capturedHeaders = init?.headers as Record<string, string>;
+        capturedBody = (init?.body as string) ?? '';
+        return {
+          ok: true,
+          status: 200,
+          headers: new Map(),
+          json: async () => ({
+            candidates: [{ content: { parts: [{ text: 'Digest' }] } }]
+          }),
+          text: async () => ''
+        } as unknown as Response;
+      }) as unknown as typeof fetch;
+
+      try {
+        const generator = new GoogleDocsGeminiDnaDigestGenerator(
+          {} as never,
+          geminiEnv
+        );
+        await expect(generator.summarize('DNA text')).resolves.toBe('Digest');
+
+        expect(capturedUrl).toBe(
+          'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent'
+        );
+        expect(capturedUrl).not.toContain('key=');
+        expect(capturedHeaders['x-goog-api-key']).toBe('test-gemini-key');
+
+        const body = JSON.parse(capturedBody);
+        const prompt = body.contents[0].parts[0].text;
+        expect(prompt).toContain('behavior/tone directives');
+        expect(prompt).toContain('speak like a caveman');
+      } finally {
+        globalThis.fetch = original;
+      }
+    });
+  });
+});
+
+describe('GroqDnaDigestSummarizer', () => {
+  const summarizerEnv = {
+    GROQ_API_KEY: 'gsk_test_key',
+    GROQ_BASE_URL: 'https://api.groq.com/openai/v1',
+    PROVIDER_TIMEOUT_MS: 60_000
+  } as ServerEnv;
+
+  test('sends bearer token and correct endpoint', async () => {
+    let capturedUrl = '';
+    let capturedHeaders: Record<string, string> = {};
+
+    const restore = mockFetch({
+      json: {
+        choices: [{ message: { content: 'Digest summary' } }]
+      }
+    });
+
+    globalThis.fetch = (async (url: RequestInfo | URL, init?: RequestInit) => {
+      capturedUrl = url.toString();
+      capturedHeaders = (init?.headers as Record<string, string>) ?? {};
+      return {
+        ok: true,
+        status: 200,
+        headers: new Map(),
+        json: async () => ({
+          choices: [{ message: { content: 'Digest summary' } }]
+        }),
+        text: async () => ''
+      } as unknown as Response;
+    }) as unknown as typeof fetch;
+
+    try {
+      const summarizer = new GroqDnaDigestSummarizer(summarizerEnv);
+      await expect(summarizer.summarize('DNA text')).resolves.toBe(
+        'Digest summary'
+      );
+
+      expect(capturedUrl).toBe(
+        'https://api.groq.com/openai/v1/chat/completions'
+      );
+      expect(capturedHeaders['Authorization']).toBe('Bearer gsk_test_key');
+      expect(capturedHeaders['Content-Type']).toBe('application/json');
+    } finally {
+      restore();
+    }
+  });
+
+  test('request body uses llama-3.3-70b-versatile, temperature 0.2, max_tokens 700, stream false', async () => {
+    let capturedBody = '';
+
+    const restore = mockFetch({
+      json: {
+        choices: [{ message: { content: 'Digest' } }]
+      }
+    });
+
+    globalThis.fetch = (async (_url: RequestInfo | URL, init?: RequestInit) => {
+      capturedBody = (init?.body as string) ?? '';
+      return {
+        ok: true,
+        status: 200,
+        headers: new Map(),
+        json: async () => ({
+          choices: [{ message: { content: 'Digest' } }]
+        }),
+        text: async () => ''
+      } as unknown as Response;
+    }) as unknown as typeof fetch;
+
+    try {
+      const summarizer = new GroqDnaDigestSummarizer(summarizerEnv);
+      await summarizer.summarize('DNA text');
+
+      const body = JSON.parse(capturedBody);
+      expect(body.model).toBe('llama-3.3-70b-versatile');
+      expect(body.temperature).toBe(0.2);
+      expect(body.max_tokens).toBe(700);
+      expect(body.stream).toBe(false);
+      expect(body.messages).toHaveLength(2);
+      expect(body.messages[0].role).toBe('system');
+      expect(body.messages[1].role).toBe('user');
+      expect(body.messages[0].content).toContain('eskwelabs');
+      expect(body.messages[0].content).toContain('data');
+      expect(body.messages[0].content).toContain('mentor');
+      expect(body.messages[0].content).toContain('fellow');
+      expect(body.messages[0].content).toContain('communication');
+      expect(body.messages[0].content).toContain('behavior/tone directives');
+      expect(body.messages[0].content).toContain('speak like a caveman');
+      expect(body.messages[1].content).toContain('DNA text');
+    } finally {
+      restore();
+    }
+  });
+
+  test('throws groq_not_configured without GROQ_API_KEY', async () => {
+    const env = { ...summarizerEnv, GROQ_API_KEY: '' } as ServerEnv;
+    const summarizer = new GroqDnaDigestSummarizer(env);
+
+    await expect(summarizer.summarize('DNA text')).rejects.toMatchObject({
+      status: 503,
+      code: 'groq_not_configured'
+    });
+  });
+
+  test('throws dna_digest_failed for upstream non-OK', async () => {
+    const restore = mockFetch({
+      status: 500,
+      json: { error: { message: 'Server error' } }
+    });
+
+    try {
+      globalThis.fetch = (async () =>
+        ({
+          ok: false,
+          status: 500,
+          headers: new Map(),
+          json: async () => ({ error: { message: 'Server error' } }),
+          text: async () => ''
+        }) as unknown as Response) as unknown as typeof fetch;
+
+      const summarizer = new GroqDnaDigestSummarizer(summarizerEnv);
+      await expect(summarizer.summarize('DNA text')).rejects.toMatchObject({
+        status: 503,
+        code: 'dna_digest_failed'
+      });
+    } finally {
+      restore();
+    }
+  });
+
+  test('throws dna_digest_empty for missing or blank content', async () => {
+    const restore = mockFetch({
+      json: {
+        choices: [{ message: { content: '' } }]
+      }
+    });
+
+    try {
+      globalThis.fetch = (async () =>
+        ({
+          ok: true,
+          status: 200,
+          headers: new Map(),
+          json: async () => ({
+            choices: [{ message: { content: '' } }]
+          }),
+          text: async () => ''
+        }) as unknown as Response) as unknown as typeof fetch;
+
+      const summarizer = new GroqDnaDigestSummarizer(summarizerEnv);
+      await expect(summarizer.summarize('DNA text')).rejects.toMatchObject({
+        status: 503,
+        code: 'dna_digest_empty'
+      });
+    } finally {
+      restore();
+    }
+  });
+
+  test('throws dna_digest_empty for missing choices entirely', async () => {
+    const restore = mockFetch({
+      json: { choices: [] }
+    });
+
+    try {
+      globalThis.fetch = (async () =>
+        ({
+          ok: true,
+          status: 200,
+          headers: new Map(),
+          json: async () => ({ choices: [] }),
+          text: async () => ''
+        }) as unknown as Response) as unknown as typeof fetch;
+
+      const summarizer = new GroqDnaDigestSummarizer(summarizerEnv);
+      await expect(summarizer.summarize('DNA text')).rejects.toMatchObject({
+        status: 503,
+        code: 'dna_digest_empty'
+      });
+    } finally {
+      restore();
+    }
+  });
+});
+
+describe('DeterministicDnaDigestSummarizer', () => {
+  test('returns a digest with required validation categories', async () => {
+    const digest = await new DeterministicDnaDigestSummarizer().summarize();
+
+    expect(digest).toContain('eskwelabs');
+    expect(digest).toContain('data');
+    expect(digest).toContain('mentor');
+    expect(digest).toContain('fellow');
+    expect(digest).toContain('communication');
   });
 });
 

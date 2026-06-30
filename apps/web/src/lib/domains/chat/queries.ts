@@ -16,7 +16,7 @@ export function messagesQuery({
   cursor?: string;
 }) {
   return queryOptions({
-    queryKey: [...messagesQueryKey(conversationId), limit, cursor],
+    queryKey: [...messagesQueryKey(conversationId)],
     queryFn: () => listMessages({ conversationId, limit, cursor })
   });
 }

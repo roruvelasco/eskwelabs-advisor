@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, createSign } from 'node:crypto';
 
 import { HttpException } from '../common/http/http-exception';
 import type { ServerEnv } from '../config/env';
@@ -82,6 +82,76 @@ export class GoogleDocsClient {
       return this.accessToken.value;
     }
 
+    if (this.env.GOOGLE_DOCS_SERVICE_ACCOUNT_JSON) {
+      return this.getServiceAccountAccessToken();
+    }
+
+    return this.getRefreshTokenAccessToken();
+  }
+
+  private async getServiceAccountAccessToken() {
+    const credentials = JSON.parse(
+      this.env.GOOGLE_DOCS_SERVICE_ACCOUNT_JSON
+    ) as {
+      client_email?: string;
+      private_key?: string;
+      token_uri?: string;
+    };
+
+    if (!credentials.client_email || !credentials.private_key) {
+      throw new HttpException(
+        503,
+        'Google Docs service account credentials are invalid',
+        'docs_credentials_invalid'
+      );
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    const header = base64UrlJson({ alg: 'RS256', typ: 'JWT' });
+    const claims = base64UrlJson({
+      iss: credentials.client_email,
+      scope: 'https://www.googleapis.com/auth/documents.readonly',
+      aud: credentials.token_uri ?? 'https://oauth2.googleapis.com/token',
+      iat: now,
+      exp: now + 3600
+    });
+    const unsigned = `${header}.${claims}`;
+    const signature = createSign('RSA-SHA256')
+      .update(unsigned)
+      .sign(credentials.private_key, 'base64url');
+
+    const response = await fetch(
+      credentials.token_uri ?? 'https://oauth2.googleapis.com/token',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+          assertion: `${unsigned}.${signature}`
+        })
+      }
+    );
+
+    if (!response.ok) {
+      throw new HttpException(
+        503,
+        'Google Docs authentication failed',
+        'docs_auth_failed'
+      );
+    }
+
+    const payload = (await response.json()) as {
+      access_token: string;
+      expires_in?: number;
+    };
+    this.accessToken = {
+      value: payload.access_token,
+      expiresAt: Date.now() + (payload.expires_in ?? 3600) * 1000
+    };
+    return this.accessToken.value;
+  }
+
+  private async getRefreshTokenAccessToken() {
     const { GOOGLE_REFRESH_TOKEN, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET } =
       this.env;
     if (!GOOGLE_REFRESH_TOKEN || !GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
@@ -160,6 +230,10 @@ export class GoogleDocsClient {
   }
 }
 
+function base64UrlJson(value: unknown) {
+  return Buffer.from(JSON.stringify(value)).toString('base64url');
+}
+
 export class GoogleDocsGeminiDnaDigestGenerator implements DnaDigestSummarizer {
   constructor(
     private docsClient: GoogleDocsClient,
@@ -178,17 +252,20 @@ export class GoogleDocsGeminiDnaDigestGenerator implements DnaDigestSummarizer {
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
         this.env.GEMINI_MODEL
-      )}:generateContent?key=${encodeURIComponent(this.env.GEMINI_API_KEY)}`,
+      )}:generateContent`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': this.env.GEMINI_API_KEY
+        },
         body: JSON.stringify({
           contents: [
             {
               role: 'user',
               parts: [
                 {
-                  text: `Summarize this Eskwelabs DNA reference into a compact system digest for AI advisors. Preserve identity, voice, lexicon, formatting guardrails, and advisory posture. Do not add facts not present in the source.\n\n${text}`
+                  text: `Summarize this Eskwelabs DNA reference into a compact system digest for AI advisors. Preserve identity, voice, lexicon, formatting guardrails, and advisory posture. Do not add facts not present in the source. Include a behavior/tone directives section. Preserve explicit tone, voice, style, persona, speak, respond, answer, must, always, and never instructions verbatim enough that temporary tests remain visible, including unusual tests like "speak like a caveman". The digest must explicitly include these category labels exactly: eskwelabs, data, mentor, fellow, communication.\n\n${text}`
                 }
               ]
             }
@@ -223,6 +300,94 @@ export class GoogleDocsGeminiDnaDigestGenerator implements DnaDigestSummarizer {
   }
 }
 
+export class GroqDnaDigestSummarizer implements DnaDigestSummarizer {
+  constructor(private env: ServerEnv) {}
+
+  async summarize(text: string) {
+    if (!this.env.GROQ_API_KEY) {
+      throw new HttpException(
+        503,
+        'Groq API key is not configured',
+        'groq_not_configured'
+      );
+    }
+
+    const baseUrl = this.env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1';
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      this.env.PROVIDER_TIMEOUT_MS
+    );
+
+    try {
+      const response = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.env.GROQ_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          stream: false,
+          temperature: 0.2,
+          max_tokens: 700,
+          messages: [
+            {
+              role: 'system',
+              content:
+                'You are a precise document summarizer. You produce concise, faithful digests that preserve identity, voice, lexicon, formatting guardrails, and advisory posture. Never add facts, interpretations, or commentary not present in the source. Include a behavior/tone directives section. Preserve explicit tone, voice, style, persona, speak, respond, answer, must, always, and never instructions verbatim enough that temporary tests remain visible, including unusual tests like "speak like a caveman". Include these category labels exactly in the digest: eskwelabs, data, mentor, fellow, communication.'
+            },
+            {
+              role: 'user',
+              content: `Summarize this Eskwelabs DNA reference into a compact system digest for AI advisors. Preserve identity, voice, lexicon, formatting guardrails, and advisory posture. Do not add facts not present in the source.\n\n${text}`
+            }
+          ]
+        }),
+        signal: controller.signal
+      });
+
+      if (!response.ok) {
+        throw new HttpException(
+          503,
+          'DNA digest generation failed',
+          'dna_digest_failed'
+        );
+      }
+
+      const body = (await response.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+      };
+      const digest = body.choices?.[0]?.message?.content?.trim() ?? '';
+
+      if (!digest) {
+        throw new HttpException(
+          503,
+          'DNA digest generation returned no content',
+          'dna_digest_empty'
+        );
+      }
+
+      return digest;
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      if ((error as Error).name === 'AbortError') {
+        throw new HttpException(
+          504,
+          'Provider request timed out',
+          'provider_timeout'
+        );
+      }
+      throw new HttpException(
+        503,
+        'DNA digest generation failed',
+        'dna_digest_failed'
+      );
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+}
+
 type GeminiGenerateResponse = {
   candidates?: Array<{
     content?: {
@@ -240,8 +405,8 @@ function extractGeminiText(payload: GeminiGenerateResponse) {
   return (
     payload.candidates?.[0]?.content?.parts
       ?.map((part) => part.text ?? '')
-      .join('')
-      .trim() ?? ''
+      ?.join('')
+      ?.trim() ?? ''
   );
 }
 
@@ -272,7 +437,14 @@ export class GeminiLlmProvider implements LlmProvider {
   ) {
     return `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
       model
-    )}:${method}?key=${encodeURIComponent(this.env.GEMINI_API_KEY)}`;
+    )}:${method}`;
+  }
+
+  private headers() {
+    return {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': this.env.GEMINI_API_KEY
+    };
   }
 
   private body(request: LlmChatRequest) {
@@ -307,7 +479,7 @@ export class GeminiLlmProvider implements LlmProvider {
         this.endpoint(request.model, 'generateContent'),
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: this.headers(),
           body: JSON.stringify(this.body(request)),
           signal: controller.signal
         }
@@ -368,10 +540,10 @@ export class GeminiLlmProvider implements LlmProvider {
 
     try {
       const response = await fetch(
-        `${this.endpoint(request.model, 'streamGenerateContent')}&alt=sse`,
+        `${this.endpoint(request.model, 'streamGenerateContent')}?alt=sse`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: this.headers(),
           body: JSON.stringify(this.body(request)),
           signal: controller.signal
         }
@@ -771,7 +943,7 @@ export class GroqLlmProvider implements LlmProvider {
 
 export class DeterministicDnaDigestSummarizer implements DnaDigestSummarizer {
   async summarize() {
-    return 'DNA digest for all advisors';
+    return 'eskwelabs data mentor fellow communication DNA digest for all advisors';
   }
 }
 

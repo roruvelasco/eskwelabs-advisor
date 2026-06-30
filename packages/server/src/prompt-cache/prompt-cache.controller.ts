@@ -1,14 +1,22 @@
 import { Controller } from '../common/factories/controller.factory';
-import { paginationParamsDto } from '../common/pagination';
+import { dataResponse, paginationParamsDto } from '../common/pagination';
 
 import { PromptCacheSerializer } from './prompt-cache.serializer';
 import { PromptCacheService } from './prompt-cache.service';
 import { requireActor } from '../common/middleware/auth.middleware';
+import { parseJsonBody } from '../common/middleware/validation.middleware';
+import { updateDnaSourceDto } from './dto/prompt-cache.dto';
+import {
+  PromptContextRefreshUseCase,
+  PromptRollbackUseCase
+} from './use-cases/prompt-cache-workflow.use-case';
 
 export class PromptCacheController extends Controller {
   constructor(
     private promptCacheService: PromptCacheService,
-    private promptCacheSerializer: PromptCacheSerializer
+    private promptCacheSerializer: PromptCacheSerializer,
+    private promptContextRefreshUseCase: PromptContextRefreshUseCase,
+    private promptRollbackUseCase: PromptRollbackUseCase
   ) {
     super();
   }
@@ -29,10 +37,30 @@ export class PromptCacheController extends Controller {
         );
         return c.json(this.promptCacheSerializer.list(result));
       })
+      .get('/admin/prompt-cache/health', async (c) => {
+        const result = await this.promptCacheService.health();
+        return c.json(dataResponse(result));
+      })
+      .get('/admin/prompt-cache/dna-source', async (c) => {
+        const result = await this.promptCacheService.getDnaSource();
+        return c.json(this.promptCacheSerializer.dnaSource(result));
+      })
+      .put('/admin/prompt-cache/dna-source', async (c) => {
+        const actor = c.get('actor');
+        const input = await parseJsonBody(c, updateDnaSourceDto);
+        const result = await this.promptCacheService.updateDnaSource(
+          input.docId,
+          actor?.id
+        );
+        return c.json(this.promptCacheSerializer.dnaSource(result));
+      })
       .post('/admin/prompt-cache/refresh', async (c) => {
         const actor = c.get('actor');
-        const result = await this.promptCacheService.refresh(actor?.id);
-        return c.json({ data: result });
+        const result = await this.promptContextRefreshUseCase.execute(
+          actor?.id,
+          'admin'
+        );
+        return c.json(dataResponse(result));
       })
       .get('/admin/prompt-cache/advisors/:advisorId/snapshots', async (c) => {
         const rows = await this.promptCacheService.listAdvisorSnapshots(
@@ -45,14 +73,16 @@ export class PromptCacheController extends Controller {
         async (c) => {
           const actor = c.get('actor');
           const snapshot =
-            await this.promptCacheService.activateAdvisorSnapshot(
+            await this.promptRollbackUseCase.activateAdvisorSnapshot(
               c.req.param('advisorId'),
               c.req.param('snapshotId'),
               actor?.id
             );
-          return c.json({
-            data: this.promptCacheSerializer.promptSnapshots([snapshot]).data[0]
-          });
+          return c.json(
+            dataResponse(
+              this.promptCacheSerializer.promptSnapshots([snapshot]).data[0]
+            )
+          );
         }
       )
       .get('/admin/prompt-cache/dna-digests', async (c) => {
@@ -61,13 +91,13 @@ export class PromptCacheController extends Controller {
       })
       .post('/admin/prompt-cache/dna-digests/:digestId/activate', async (c) => {
         const actor = c.get('actor');
-        const digest = await this.promptCacheService.activateDnaDigest(
+        const digest = await this.promptRollbackUseCase.activateDnaDigest(
           c.req.param('digestId'),
           actor?.id
         );
-        return c.json({
-          data: this.promptCacheSerializer.dnaDigests([digest]).data[0]
-        });
+        return c.json(
+          dataResponse(this.promptCacheSerializer.dnaDigests([digest]).data[0])
+        );
       });
   }
 }

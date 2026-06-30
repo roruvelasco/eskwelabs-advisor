@@ -1,9 +1,11 @@
 import { paginatedResponse } from '../common/pagination';
+import { promptCacheDto } from './dto/prompt-cache.dto';
+import type { PromptCacheEntry } from './prompt-cache.schema';
 
 export class PromptCacheSerializer {
-  list(result: { rows: unknown[]; nextCursor: string | null }) {
+  list(result: { rows: PromptCacheEntry[]; nextCursor: string | null }) {
     return paginatedResponse(
-      result.rows,
+      result.rows.map((row) => promptCacheDto.parse(row)),
       result.rows.length,
       result.nextCursor
     );
@@ -54,6 +56,22 @@ export class PromptCacheSerializer {
         isActive: row.isActive,
         createdAt: row.createdAt
       }))
+    };
+  }
+
+  dnaSource(row: {
+    docId: string | null;
+    source: 'database' | 'active_digest' | 'env_fallback';
+    updatedBy: string | null;
+    updatedAt: Date | null;
+  }) {
+    return {
+      data: {
+        docId: row.docId,
+        source: row.source,
+        updatedBy: row.updatedBy,
+        updatedAt: row.updatedAt
+      }
     };
   }
 }

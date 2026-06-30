@@ -1,5 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
+  bigint,
+  check,
   index,
   integer,
   numeric,
@@ -36,11 +38,27 @@ export const messagesTable = pgTable(
     blockReason: text('block_reason'),
     promptDocRevision: text('prompt_doc_revision'),
     dnaDigestVersion: text('dna_digest_version'),
+    promptSnapshotHash: text('prompt_snapshot_hash'),
+    systemPromptHash: text('system_prompt_hash'),
+    knowledgeContextHash: text('knowledge_context_hash'),
+    knowledgeResolutionMode: text('knowledge_resolution_mode'),
+    knowledgeUnitCount: integer('knowledge_unit_count'),
+    seq: bigint('seq', { mode: 'number' })
+      .notNull()
+      .default(sql`nextval('messages_seq_seq')`),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow()
   },
   (table) => ({
+    roleCheck: check(
+      'messages_role_check',
+      sql`${table.role} in ('user', 'assistant')`
+    ),
+    statusCheck: check(
+      'messages_status_check',
+      sql`${table.status} in ('ok', 'blocked', 'error', 'pending', 'streaming')`
+    ),
     userClientTurnUnique: uniqueIndex('messages_user_client_turn_unique')
       .on(table.userId, table.clientTurnId)
       .where(sql`${table.clientTurnId} IS NOT NULL`),
@@ -53,6 +71,14 @@ export const messagesTable = pgTable(
       table.conversationId,
       table.createdAt.desc(),
       table.id.desc()
+    ),
+    convoSeqAscIdx: index('messages_convo_seq_asc_idx').on(
+      table.conversationId,
+      table.seq.asc()
+    ),
+    convoSeqDescIdx: index('messages_convo_seq_desc_idx').on(
+      table.conversationId,
+      table.seq.desc()
     )
   })
 );

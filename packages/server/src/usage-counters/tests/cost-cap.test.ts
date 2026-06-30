@@ -22,6 +22,19 @@ function enforcerFor(input: {
         ...input
       })
     } as never,
+    {
+      getEffectiveLimits: async () => ({
+        id: 'default',
+        maxMessagesPerUserPerDay: env.DAILY_MESSAGE_LIMIT,
+        maxTokensPerUserPerDay: env.DAILY_TOKEN_LIMIT,
+        dailyBudgetUsd: String(env.DAILY_SPEND_LIMIT_USD),
+        monthlyBudgetUsd: String(env.DAILY_SPEND_LIMIT_USD * 30),
+        rateLimitWindowSeconds: 60,
+        rateLimitMaxRequests: 100,
+        updatedBy: null,
+        updatedAt: new Date(0)
+      })
+    } as never,
     env
   );
 }
@@ -81,5 +94,19 @@ describe('cost cap enforcer', () => {
         estimatedCostUsd: 0.06
       })
     ).rejects.toMatchObject({ code: 'estimated_spend_limit' });
+  });
+
+  test('allows spend exactly at the decimal cap boundary', async () => {
+    await expect(
+      enforcerFor({
+        messagesToday: 0,
+        tokensToday: 10,
+        estimatedSpendTodayUsd: '0.1'
+      }).assertAllowed({
+        userId: 'user-id',
+        estimatedTokens: 10,
+        estimatedCostUsd: 0.2
+      })
+    ).resolves.toBeUndefined();
   });
 });

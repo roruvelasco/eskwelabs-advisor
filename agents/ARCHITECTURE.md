@@ -107,7 +107,7 @@ Every backend domain at `packages/server/src/<domain>/` follows the same layout:
 ### Dependency Injection
 
 - **Container**: `packages/server/src/di/container.ts` — `createContainer()` returns a `Container` from `@needle-di/core`
-- **Injection Tokens**: Created for non-class deps (`SERVER_ENV`, `DNA_DIGEST_SUMMARIZER`, `PROMPT_CONTEXT_LOADER`, `LLM_PROVIDER`)
+- **Injection Tokens**: Created for non-class deps (`SERVER_ENV`, `DNA_DIGEST_SUMMARIZER`, `PROMPT_CONTEXT_LOADER`, `KNOWLEDGE_CONTEXT_RESOLVER`, `LLM_PROVIDER`, `EMBEDDING_PROVIDER`, `KNOWLEDGE_INDEX_PROVIDER`)
 - **Registration pattern**: `.bind({ provide: XxxService, useFactory: (c) => new XxxService(c.get(XxxRepository)) })`
 - **Controller binding**: Controllers get service + serializer + (optionally) env
 - **Application wiring**: `ApplicationController` receives all controllers + cross-cutting deps, calls `.registerControllers()` which chains `.basePath('/api')` + routes
@@ -115,9 +115,35 @@ Every backend domain at `packages/server/src/<domain>/` follows the same layout:
 ### Prompt Context Flow
 
 - Google Docs remains the prompt/DNA authoring source of truth.
-- `PromptIngestionService` runs only from admin refresh/rollback paths: it reads Google Docs, hashes raw DNA before Gemini, stores durable active rows in `prompt_snapshots` and `dna_digests`, and warms Redis.
-- `PromptContextService` serves chat turns from Redis first, then active Postgres snapshots. If no active snapshot exists, chat fails safely with `prompt_context_unavailable`; it never fetches Google Docs or calls Gemini.
+- `PromptIngestionService` runs from admin refresh/rollback paths and scheduled cron: it reads Google Docs, hashes raw DNA before summarization, stores durable active rows in `prompt_snapshots` and `dna_digests`, and warms Redis. Advisor prompt Doc IDs are stored on `advisors.prompt_doc_id`; the shared DNA Doc ID is resolved from `dna_source_config` with `GOOGLE_DOCS_DNA_DOC_ID` as an env fallback.
+- `PromptCacheService.refresh()` accepts a `source: 'admin' | 'cron'` parameter; telemetry event names use `${source}_cache_refresh` (or `_failed`) to distinguish admin-initiated vs. cron-initiated refreshes.
+- `PromptCacheJobsController` exposes `GET /api/internal/jobs/prompt-cache/refresh` for cron execution, protected by `Authorization: Bearer <CRON_SECRET>`.
+- `PromptContextService` serves chat turns from Redis first, then active Postgres snapshots. If no active snapshot exists, chat fails safely with `prompt_context_unavailable`; it never fetches Google Docs or calls the summarizer.
 - `MessagesService.prepareTurn()` receives compiled-ready context via `PROMPT_CONTEXT_LOADER`, builds the LLM request, and records the prompt snapshot hash and DNA digest hash used for the turn.
+
+### Knowledge Context Flow
+
+- The `knowledge` domain is the post-MVP path for source-backed factual grounding without growing the always-on advisor prompt.
+- `KnowledgeIngestionService` ingests registered Google Doc sources from `knowledge_sources` into versioned `knowledge_units`; source text remains server-side and admin endpoints return metadata only. After ingestion, units are indexed via `KNOWLEDGE_INDEX_PROVIDER` (`PostgresKnowledgeIndexProvider`) which generates Groq embeddings and stores them in pgvector with denormalized retrieval metadata (status, advisor_scope, content_type, etc.) copied from the unit for same-table HNSW filtering.
+- `KNOWLEDGE_CONTEXT_RESOLVER` selects query-specific evidence during `MessagesService.prepareTurn()`. Mentoring and clarification turns skip retrieval; factual policy turns prefer `knowledge_rules`; all other modes use semantic vector search (cosine similarity, threshold < 0.3) via `EMBEDDING_PROVIDER`.
+- Vector search uses a materialized CTE (`WITH candidates AS MATERIALIZED`) that queries `knowledge_embeddings` directly with same-table filters (partial HNSW index scoped to `status = 'published'`), splits global/advisor scope into UNION ALL branches for index usage, over-fetches candidates (`max(limit * 10, 50)`), sets `SET LOCAL hnsw.ef_search = 100` and `hnsw.iterative_scan = strict_order` inside the retrieval transaction, then joins to `knowledge_units` only after candidate selection.
+- `BoundedKnowledgeContextResolver` (decorator) wraps `RepositoryKnowledgeContextResolver` with fail-open resilience:
+  - **Context cache**: 5-minute Redis TTL on resolved context (keyed by advisor, answer mode, query hash), decoupled from ingestion (eventual consistency via TTL only).
+  - **Circuit breaker**: opens after 3 semantic failures within 5 minutes, resets after 60 seconds; isolates chat-time failures from the indexing path.
+  - **Bounded budget**: semantic resolution has a 350ms deadline (`KNOWLEDGE_SEMANTIC_SYNC_BUDGET_MS` via `Promise.race`); on timeout, falls back to lexical FTS search (`searchPublishedUnits` + `findPublishedRules`) with `strategy: 'lexical'`, then schedules an async cache-warm via `DeferredTaskRunner`.
+  - **Embedding cache**: `CachedEmbeddingProvider` wraps the raw `GroqEmbeddingProvider` with Redis persistence (7-day TTL, `embed:{provider}:{model}:{hash}`), in-flight request coalescing, and memory-safe `.finally()` cleanup.
+  - **Embedding timeout**: `GroqEmbeddingProvider` applies `EMBEDDING_PROVIDER_TIMEOUT_MS` (default 5000ms) as a hard safety-net abort on all fetch calls.
+- Selected evidence is injected as a bounded `<selected_knowledge_context>` section, while the advisor prompt and DNA remain behavioral runtime context.
+- Assistant messages record aggregate knowledge metadata, and `message_knowledge_audit` records selected unit/rule IDs, source revisions, hashes, rank, score, and resolver strategy.
+- `EMBEDDING_PROVIDER` (`GroqEmbeddingProvider` using `nomic-embed-text-v1.5`, 768d) generates dense vectors for semantic retrieval. Embedding failures fail closed (empty context), but the bounded resolver's lexical fallback ensures the user still gets FTS-driven results.
+- `replaceUnitsForSourceRevision()` deletes old source embeddings in the same transaction that retires units, preventing stale published vectors in the partial HNSW index.
+
+### Conversation Title Flow
+
+- `SuccessfulTurnPersistenceService` enqueues one `conversation_title_jobs` row after a successful chat turn when the conversation still needs a generated title.
+- `ConversationTitleJobsRepository` claims pending/stale jobs with lease fields so multiple workers can drain safely without double-processing the same conversation.
+- `ConversationTitleWorker` resolves the runtime model, generates and normalizes a short title, updates the conversation title/source, and records completion/failure telemetry.
+- `ConversationTitleJobsController` exposes `GET /api/internal/jobs/conversation-titles/drain` for cron/worker execution. It is protected by `Authorization: Bearer <CRON_SECRET>`, not actor session auth.
 
 ### Middleware Stack (order in `application.controller.ts`)
 
@@ -129,7 +155,7 @@ Every backend domain at `packages/server/src/<domain>/` follows the same layout:
 ### Auth Flow
 
 1. NextAuth sign-in resolves Google email against the Supabase/Postgres `users` table via `AuthService`; missing/inactive users are rejected.
-2. Login intent is role-specific at the provider layer: `/login` uses `google` / `credentials`, while `/admin/login` uses `google-admin` / `credentials-admin`. The sign-in callback rejects role mismatches before creating a JWT session.
+2. Login intent is role-specific at the provider layer: `/login` uses `google` / `credentials`, while `/admin/login` uses `google-admin` / `credentials-admin`. Both account types resolve through the `users` allow-list, and the sign-in callback rejects role mismatches before creating a JWT session.
 3. Next.js middleware (`apps/web/src/middleware.ts`) reads JWT claims, gates routes by `role`/`isActive`, signs forwarded actor headers with HMAC-SHA256 (`ACTOR_FORWARDING_SECRET`) including method, path, timestamp, and nonce, then forwards `x-eskwelabs-actor-*` and signature headers.
 4. Admin and EIF app areas are strictly separated: wrong-role page requests redirect to that role's home, and wrong-role API requests return 403.
 5. Hono `auth.middleware.ts` verifies the HMAC signature and timestamp freshness (300s TTL) before trusting forwarded actor headers. Then validates id/email against the `users` table and sets `c.set('actor', actor)` from DB role/status.
@@ -157,7 +183,7 @@ apps/web/src/app/
 ├── (app)/chat/page.tsx          # ChatShell
 ├── (app)/history/page.tsx       # ConversationHistory
 ├── (auth)/login/page.tsx        # LoginPanel
-├── (auth)/consent/page.tsx      # ConsentNotice
+├── (auth)/consent/page.tsx      # redirects; active notice is chat ConsentDialog
 ├── admin/page.tsx               # AdminDashboard
 └── api/[[...route]]/route.ts   # Hono catch-all (GET/POST/PUT/PATCH/DELETE)
 ```

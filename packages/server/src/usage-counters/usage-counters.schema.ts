@@ -5,6 +5,7 @@ import {
   numeric,
   pgTable,
   primaryKey,
+  timestamp,
   uuid
 } from 'drizzle-orm/pg-core';
 
@@ -21,7 +22,10 @@ export const usageCountersTable = pgTable(
     tokensToday: integer('tokens_today').notNull().default(0),
     estimatedSpendTodayUsd: numeric('estimated_spend_today_usd')
       .notNull()
-      .default('0')
+      .default('0'),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
   },
   (table) => ({
     pk: primaryKey({ columns: [table.userId, table.dayPh] }),

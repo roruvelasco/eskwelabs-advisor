@@ -2,6 +2,8 @@ import { HttpException } from '../common/http/http-exception';
 import type { ServerEnv } from '../config/env';
 
 import type { UsageCountersService } from './usage-counters.service';
+import type { UsageLimitsService } from '../usage-limits/usage-limits.service';
+import { usdGreaterThan, usdToMicros } from './money';
 
 export type CostReservation = {
   userId: string;
@@ -12,6 +14,7 @@ export type CostReservation = {
 export class CostCapEnforcer {
   constructor(
     private usageCountersService: UsageCountersService,
+    private usageLimitsService: UsageLimitsService,
     private env: ServerEnv
   ) {}
 
@@ -20,10 +23,14 @@ export class CostCapEnforcer {
     estimatedTokens: number;
     estimatedCostUsd: number;
   }) {
-    const usage = await this.usageCountersService.currentForUser(input.userId);
-    const spendToday = Number(usage.estimatedSpendTodayUsd);
+    const [usage, limits] = await Promise.all([
+      this.usageCountersService.currentForUser(input.userId),
+      this.usageLimitsService.getEffectiveLimits()
+    ]);
 
-    if (usage.messagesToday >= this.env.DAILY_MESSAGE_LIMIT) {
+    const spendTodayMicros = usdToMicros(usage.estimatedSpendTodayUsd);
+
+    if (usage.messagesToday >= limits.maxMessagesPerUserPerDay) {
       throw new HttpException(
         429,
         'Daily message limit reached',
@@ -31,7 +38,7 @@ export class CostCapEnforcer {
       );
     }
 
-    if (usage.tokensToday >= this.env.DAILY_TOKEN_LIMIT) {
+    if (usage.tokensToday >= limits.maxTokensPerUserPerDay) {
       throw new HttpException(
         429,
         'Daily token limit reached',
@@ -39,7 +46,7 @@ export class CostCapEnforcer {
       );
     }
 
-    if (spendToday >= this.env.DAILY_SPEND_LIMIT_USD) {
+    if (!usdGreaterThan(limits.dailyBudgetUsd, spendTodayMicros)) {
       throw new HttpException(
         429,
         'Daily spend limit reached',
@@ -49,7 +56,7 @@ export class CostCapEnforcer {
 
     if (
       usage.tokensToday + input.estimatedTokens >
-      this.env.DAILY_TOKEN_LIMIT
+      limits.maxTokensPerUserPerDay
     ) {
       throw new HttpException(
         429,
@@ -58,7 +65,12 @@ export class CostCapEnforcer {
       );
     }
 
-    if (spendToday + input.estimatedCostUsd > this.env.DAILY_SPEND_LIMIT_USD) {
+    if (
+      usdGreaterThan(
+        spendTodayMicros + usdToMicros(input.estimatedCostUsd),
+        limits.dailyBudgetUsd
+      )
+    ) {
       throw new HttpException(
         429,
         'Estimated turn would exceed daily spend limit',
@@ -72,16 +84,30 @@ export class CostCapEnforcer {
     estimatedTokens: number;
     estimatedCostUsd: number;
   }): Promise<CostReservation> {
+    const limits = await this.usageLimitsService.getEffectiveLimits();
+
     const result = await this.usageCountersService.reserveTurn(input.userId, {
       estimatedTokens: input.estimatedTokens,
       estimatedCostUsd: input.estimatedCostUsd,
-      maxMessages: this.env.DAILY_MESSAGE_LIMIT,
-      maxTokens: this.env.DAILY_TOKEN_LIMIT,
-      maxSpendUsd: this.env.DAILY_SPEND_LIMIT_USD
+      maxMessages: limits.maxMessagesPerUserPerDay,
+      maxTokens: limits.maxTokensPerUserPerDay,
+      maxSpendUsd: Number(limits.dailyBudgetUsd)
     });
 
     if (result.blockedCode) {
       throw this.blocked(result.blockedCode);
+    }
+
+    const globalResult = await this.usageLimitsService.reserveGlobalBudget(
+      input.estimatedCostUsd
+    );
+
+    if (globalResult.blockedCode) {
+      await this.usageCountersService.releaseReservation(input.userId, {
+        estimatedTokens: input.estimatedTokens,
+        estimatedCostUsd: input.estimatedCostUsd
+      });
+      throw this.blocked(globalResult.blockedCode);
     }
 
     return input;
@@ -101,14 +127,29 @@ export class CostCapEnforcer {
       estimatedCostUsd: reservation.estimatedCostUsd,
       actualCostUsd: input.estimatedCostUsd
     });
+    await this.usageLimitsService.finalizeGlobalReservation({
+      estimatedCostUsd: reservation.estimatedCostUsd,
+      actualCostUsd: input.estimatedCostUsd
+    });
   }
 
   async releaseReservation(reservation?: CostReservation) {
     if (!reservation) return;
-    await this.usageCountersService.releaseReservation(reservation.userId, {
-      estimatedTokens: reservation.estimatedTokens,
-      estimatedCostUsd: reservation.estimatedCostUsd
-    });
+    try {
+      await this.usageCountersService.releaseReservation(reservation.userId, {
+        estimatedTokens: reservation.estimatedTokens,
+        estimatedCostUsd: reservation.estimatedCostUsd
+      });
+    } catch {
+      // per-user release is best-effort
+    }
+    try {
+      await this.usageLimitsService.releaseGlobalReservation(
+        reservation.estimatedCostUsd
+      );
+    } catch {
+      // global release is best-effort
+    }
   }
 
   private blocked(code: string) {
@@ -138,6 +179,14 @@ export class CostCapEnforcer {
         'Estimated turn would exceed daily spend limit',
         code
       );
+    }
+
+    if (code === 'daily_budget_limit') {
+      return new HttpException(429, 'Daily platform budget reached', code);
+    }
+
+    if (code === 'monthly_budget_limit') {
+      return new HttpException(429, 'Monthly platform budget reached', code);
     }
 
     return new HttpException(429, 'Usage limit reached', code);

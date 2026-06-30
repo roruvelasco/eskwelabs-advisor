@@ -24,6 +24,7 @@
     "ldrs": "^1.1.9",
     "lucide-react": "^0.468.0",
     "radix-ui": "^1.4.3",
+    "recharts": "^2.15.0",
     "sonner": "^1.7.1",
     "streamdown": "^2.5.0",
     "tailwind-merge": "^2.6.0",

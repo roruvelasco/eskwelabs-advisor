@@ -46,7 +46,7 @@ export function ConsentDialog({
               <CheckCircle2 className="text-primary size-7" strokeWidth={1.5} />
             </div>
             <div className="space-y-1">
-              <p className="text-foreground font-serif text-xl font-medium tracking-tight">
+              <p className="text-foreground font-serif text-xl font-semibold tracking-tight">
                 You&apos;re all set
               </p>
               <p className="text-muted-foreground text-sm">
@@ -63,7 +63,7 @@ export function ConsentDialog({
               >
                 Notice
               </Badge>
-              <DialogTitle className="text-foreground font-serif text-2xl leading-tight tracking-tight">
+              <DialogTitle className="text-foreground font-serif text-2xl font-semibold leading-tight tracking-tight">
                 Monitoring &amp; Logging Notice
               </DialogTitle>
               <DialogDescription className="text-muted-foreground text-sm leading-relaxed">
@@ -84,7 +84,9 @@ export function ConsentDialog({
                   <li key={label} className="flex items-start gap-2.5">
                     <span className="bg-muted-foreground/40 mt-[7px] size-1 shrink-0 rounded-full" />
                     <span>
-                      <span className="text-foreground font-medium">{label}:</span>{' '}
+                      <span className="text-foreground font-medium">
+                        {label}:
+                      </span>{' '}
                       {detail}
                     </span>
                   </li>
@@ -114,7 +116,9 @@ export function ConsentDialog({
                 onClick={onAcknowledge}
                 disabled={isAcknowledging}
               >
-                {isAcknowledging ? 'Acknowledging…' : 'I Acknowledge and Continue'}
+                {isAcknowledging
+                  ? 'Acknowledging…'
+                  : 'I Acknowledge and Continue'}
               </Button>
             </DialogFooter>
           </>

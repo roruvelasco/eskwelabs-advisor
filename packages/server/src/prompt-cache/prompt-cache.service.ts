@@ -1,14 +1,17 @@
 import { PromptCacheRepository } from './prompt-cache.repository';
-import type { PaginatedResult } from './prompt-cache.repository';
+import type { PaginatedResult } from '../common/pagination';
 import type { PromptCacheEntry } from './prompt-cache.schema';
 import type { RedisService } from '../cache/redis.service';
 import { HttpException } from '../common/http/http-exception';
 import type { TelemetryService } from '../telemetry/telemetry.service';
 import type { DnaDigestsRepository } from './dna-digests.repository';
 import type { DnaDigestRow } from './dna-digests.schema';
+import type { DnaSourceConfigRepository } from './dna-source-config.repository';
 import type { PromptIngestionService } from './prompt-ingestion.service';
 import type { PromptSnapshotsRepository } from './prompt-snapshots.repository';
 import type { PromptSnapshotRow } from './prompt-snapshots.schema';
+import type { RefreshSource } from './use-cases/prompt-cache-workflow.use-case';
+import type { ServerEnv } from '../config/env';
 
 const PROMPT_CONTEXT_TTL_SECONDS = 300;
 
@@ -19,7 +22,9 @@ export class PromptCacheService {
     private promptIngestionService?: PromptIngestionService,
     private promptSnapshotsRepository?: PromptSnapshotsRepository,
     private dnaDigestsRepository?: DnaDigestsRepository,
-    private telemetryService?: TelemetryService
+    private telemetryService?: TelemetryService,
+    private dnaSourceConfigRepository?: DnaSourceConfigRepository,
+    private env?: ServerEnv
   ) {}
 
   async list(
@@ -119,13 +124,18 @@ export class PromptCacheService {
     ]);
   }
 
-  async refresh(actorId?: string) {
+  async refresh(actorId?: string, source: RefreshSource = 'admin') {
     if (!this.promptIngestionService) {
       const result = { status: 'skipped' as const, warmed: null };
-      await this.recordTelemetry('admin_cache_refresh', actorId, 'warning', {
-        status: result.status,
-        code: 'prompt_ingestion_not_configured'
-      });
+      await this.recordTelemetry(
+        `${source}_cache_refresh`,
+        actorId,
+        'warning' as const,
+        {
+          status: result.status,
+          code: 'prompt_ingestion_not_configured'
+        }
+      );
       return result;
     }
 
@@ -141,9 +151,9 @@ export class PromptCacheService {
     };
 
     await this.recordTelemetry(
-      hasFailure ? 'admin_cache_refresh_failed' : 'admin_cache_refresh',
+      hasFailure ? `${source}_cache_refresh_failed` : `${source}_cache_refresh`,
       actorId,
-      hasFailure ? 'error' : 'info',
+      hasFailure ? ('error' as const) : ('info' as const),
       {
         status: result.status,
         advisorPromptCount: warmed.advisorPrompts.length,
@@ -211,5 +221,89 @@ export class PromptCacheService {
       digestHash: digest.hash
     });
     return digest;
+  }
+
+  async getDnaSource() {
+    const configured = await this.dnaSourceConfigRepository?.find();
+    const active = await this.dnaDigestsRepository?.findActive();
+    return {
+      docId:
+        configured?.docId ??
+        active?.docId ??
+        this.env?.GOOGLE_DOCS_DNA_DOC_ID ??
+        null,
+      source: configured
+        ? ('database' as const)
+        : active
+          ? ('active_digest' as const)
+          : ('env_fallback' as const),
+      updatedBy: configured?.updatedBy ?? null,
+      updatedAt: configured?.updatedAt ?? active?.createdAt ?? null
+    };
+  }
+
+  async updateDnaSource(docId: string, actorId?: string) {
+    if (!this.dnaSourceConfigRepository) {
+      throw new HttpException(
+        503,
+        'DNA source config is not configured',
+        'dna_source_config_not_configured'
+      );
+    }
+
+    const row = await this.dnaSourceConfigRepository.upsert({
+      docId,
+      updatedBy: actorId
+    });
+    await this.recordTelemetry('dna_source_updated', actorId, 'info', {
+      docId
+    });
+    return {
+      docId: row.docId,
+      source: 'database' as const,
+      updatedBy: row.updatedBy,
+      updatedAt: row.updatedAt
+    };
+  }
+
+  async health() {
+    const advisorSnapshots = this.promptSnapshotsRepository
+      ? await Promise.all(
+          (await this.promptSnapshotsRepository.listAllActive()).map(
+            async (snapshot) => ({
+              advisorId: snapshot.advisorId,
+              activeSnapshot: {
+                id: snapshot.id,
+                hash: snapshot.hash,
+                revision: snapshot.revision,
+                validationStatus: snapshot.validationStatus,
+                validationReason: snapshot.validationReason,
+                createdAt: snapshot.createdAt.toISOString()
+              }
+            })
+          )
+        )
+      : [];
+
+    const dnaActive = this.dnaDigestsRepository
+      ? await this.dnaDigestsRepository.findActive()
+      : undefined;
+
+    return {
+      advisors: advisorSnapshots,
+      dna: dnaActive
+        ? {
+            active: {
+              id: dnaActive.id,
+              hash: dnaActive.hash,
+              sourceHash: dnaActive.sourceHash,
+              revision: dnaActive.revision,
+              validationStatus: dnaActive.validationStatus,
+              validationReason: dnaActive.validationReason,
+              createdAt: dnaActive.createdAt.toISOString()
+            }
+          }
+        : null
+    };
   }
 }

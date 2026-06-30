@@ -1,4 +1,5 @@
 import {
+  type AnyPgColumn,
   index,
   integer,
   pgTable,
@@ -17,19 +18,22 @@ export const advisorRuntimeVersionsTable = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     advisorId: text('advisor_id')
       .notNull()
-      .references(() => advisorsTable.id),
+      .references((): AnyPgColumn => advisorsTable.id),
     promptSnapshotId: uuid('prompt_snapshot_id').references(
       () => promptSnapshotsTable.id
     ),
     dnaDigestId: uuid('dna_digest_id').references(() => dnaDigestsTable.id),
     modelConfigAdvisorId: text('model_config_advisor_id')
       .notNull()
-      .references(() => modelConfigTable.advisorId),
+      .references((): AnyPgColumn => modelConfigTable.advisorId),
     versionNumber: integer('version_number').notNull(),
     status: text('status').notNull().default('published'),
     publishedAt: timestamp('published_at', { withTimezone: true }),
     publishedBy: uuid('published_by'),
     createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
       .defaultNow()
   },

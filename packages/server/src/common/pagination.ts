@@ -37,6 +37,24 @@ export interface PaginatedResponse<T> {
   };
 }
 
+export interface PaginatedResult<T> {
+  rows: T[];
+  nextCursor: string | null;
+}
+
+export function paginateResult<T>(
+  rows: T[],
+  limit: number,
+  toCursor: (last: T) => Record<string, unknown>
+): PaginatedResult<T> {
+  const hasMore = rows.length > limit;
+  const resultRows = hasMore ? rows.slice(0, limit) : rows;
+  const nextCursor = hasMore
+    ? encodeCursor(toCursor(resultRows[resultRows.length - 1]))
+    : null;
+  return { rows: resultRows, nextCursor };
+}
+
 export function paginatedResponse<T>(
   rows: T[],
   limit: number,
@@ -46,4 +64,12 @@ export function paginatedResponse<T>(
     data: rows,
     meta: { nextCursor, limit }
   };
+}
+
+export interface DataResponse<T> {
+  data: T;
+}
+
+export function dataResponse<T>(data: T): DataResponse<T> {
+  return { data };
 }

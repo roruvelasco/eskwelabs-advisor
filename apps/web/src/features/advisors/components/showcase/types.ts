@@ -4,7 +4,20 @@ export interface Advisor {
   id: string;
   name: string;
   description: string;
+  isActive: boolean;
+  status: string;
+  activeRuntimeVersionId: string | null;
+  availability?: {
+    status: 'available' | 'unavailable';
+    reasons?: string[];
+  };
 }
+
+export type AdvisorCtaState =
+  | { status: 'loading' }
+  | { status: 'error'; retry: () => void }
+  | { status: 'unavailable' }
+  | { status: 'available'; href: string };
 
 // ─── Theme tokens ─────────────────────────────────────────────────────────────
 

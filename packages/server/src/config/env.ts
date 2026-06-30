@@ -38,10 +38,20 @@ export const serverEnvSchema = z
       .default(2_000),
     RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
     RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(100),
+    CREDENTIAL_LOGIN_MAX_ATTEMPTS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(5),
+    CREDENTIAL_LOGIN_LOCKOUT_SECONDS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(900),
     RUNTIME_PROFILE: z
       .enum(['production', 'demo', 'test'])
       .optional()
-      .default('demo'),
+      .default('production'),
     LLM_PROVIDER_MODE: z
       .enum(['auto', 'deterministic', 'gemini', 'groq'])
       .optional()
@@ -56,7 +66,17 @@ export const serverEnvSchema = z
     ACTOR_FORWARDING_SECRET: z
       .string()
       .min(16)
-      .default('dev-actor-forwarding-secret-change-in-prod')
+      .default('dev-actor-forwarding-secret-change-in-prod'),
+    KNOWLEDGE_SEMANTIC_SYNC_BUDGET_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(350),
+    EMBEDDING_PROVIDER_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(5000)
   })
   .refine(
     (data) => {

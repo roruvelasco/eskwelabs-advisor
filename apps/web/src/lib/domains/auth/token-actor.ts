@@ -10,6 +10,10 @@ export function authSecret(): string {
   return secret;
 }
 
+function shouldLogAuthDiagnostics() {
+  return process.env.NODE_ENV !== 'production';
+}
+
 export async function getVerifiedTokenActor(
   request: NextRequest
 ): Promise<SessionActor | null> {
@@ -23,33 +27,20 @@ export async function getVerifiedTokenActor(
     secureCookie: request.nextUrl.protocol === 'https:'
   });
 
-  console.info('token_actor_probe', {
-    path: request.nextUrl.pathname,
-
-    cookieNames,
-    hasNextAuthSessionCookie: cookieNames.some((name) =>
-      name.includes('next-auth.session-token')
-    ),
-
-    hasNextAuthSecret: Boolean(process.env.NEXTAUTH_SECRET),
-    hasAuthSecret: Boolean(process.env.AUTH_SECRET),
-    secretsEqual:
-      Boolean(process.env.NEXTAUTH_SECRET) &&
-      Boolean(process.env.AUTH_SECRET) &&
-      process.env.NEXTAUTH_SECRET === process.env.AUTH_SECRET,
-
-    hasToken: Boolean(token),
-
-    tokenShape: token
-      ? {
-          hasSub: typeof token.sub === 'string',
-          hasId: typeof token.id === 'string',
-          email: token.email ?? null,
-          role: token.role ?? null,
-          isActive: token.isActive ?? null
-        }
-      : null
-  });
+  if (shouldLogAuthDiagnostics()) {
+    console.info('token_actor_probe', {
+      path: request.nextUrl.pathname,
+      cookieCount: cookieNames.length,
+      hasNextAuthSessionCookie: cookieNames.some((name) =>
+        name.includes('next-auth.session-token')
+      ),
+      hasNextAuthSecret: Boolean(process.env.NEXTAUTH_SECRET),
+      hasAuthSecret: Boolean(process.env.AUTH_SECRET),
+      hasToken: Boolean(token),
+      hasTokenId:
+        typeof token?.id === 'string' || typeof token?.sub === 'string'
+    });
+  }
 
   if (!token) return null;
 

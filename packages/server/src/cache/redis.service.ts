@@ -2,6 +2,9 @@ import { Redis } from '@upstash/redis';
 
 import type { ServerEnv } from '../config/env';
 
+const REDIS_SCAN_COUNT = 100;
+const REDIS_DELETE_BATCH_SIZE = 100;
+
 export interface CacheEnvelope<T> {
   value: T;
   valueHash?: string;
@@ -67,12 +70,9 @@ export class RedisService {
     if (prefixes.length === 0) return;
 
     if (this.redis) {
-      const keys = (
-        await Promise.all(
-          prefixes.map((prefix) => this.redis?.keys(`${prefix}*`) ?? [])
-        )
-      ).flat();
-      await this.del(...keys);
+      for (const prefix of prefixes) {
+        await this.delRedisKeysByPattern(`${prefix}*`);
+      }
       return;
     }
 
@@ -104,5 +104,47 @@ export class RedisService {
     const count = (entry.value as number) + 1;
     this.memory.set(key, { value: count, expiresAt: entry.expiresAt });
     return count;
+  }
+
+  async incrWithTtlAtomic(key: string, ttlSeconds: number) {
+    if (this.redis) {
+      const result = await (
+        this.redis as unknown as {
+          eval: (
+            script: string,
+            keys: string[],
+            args: string[]
+          ) => Promise<number | string>;
+        }
+      ).eval(
+        [
+          'local count = redis.call("INCR", KEYS[1])',
+          'if count == 1 then redis.call("EXPIRE", KEYS[1], ARGV[1]) end',
+          'return count'
+        ].join('\n'),
+        [key],
+        [String(ttlSeconds)]
+      );
+      return Number(result);
+    }
+
+    return this.incrWithTtl(key, ttlSeconds);
+  }
+
+  private async delRedisKeysByPattern(pattern: string) {
+    if (!this.redis) return;
+
+    let cursor = '0';
+    do {
+      const [nextCursor, keys] = await this.redis.scan(cursor, {
+        match: pattern,
+        count: REDIS_SCAN_COUNT
+      });
+      cursor = nextCursor;
+
+      for (let i = 0; i < keys.length; i += REDIS_DELETE_BATCH_SIZE) {
+        await this.del(...keys.slice(i, i + REDIS_DELETE_BATCH_SIZE));
+      }
+    } while (cursor !== '0');
   }
 }

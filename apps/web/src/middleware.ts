@@ -18,6 +18,10 @@ const eifApiPrefixes = [
   '/api/consent'
 ];
 
+function shouldLogAuthDiagnostics() {
+  return process.env.NODE_ENV !== 'production';
+}
+
 function isPrefixed(pathname: string, prefixes: string[]) {
   return prefixes.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
@@ -329,26 +333,20 @@ export const middleware = createMiddleware(async (req) => {
     secureCookie: req.nextUrl.protocol === 'https:'
   })) as Record<string, unknown> | null;
 
-  console.info('middleware_token_probe', {
-    path: req.nextUrl.pathname,
-
-    cookieNames,
-    hasSessionCookie: cookieNames.some((name) =>
-      name.includes('next-auth.session-token')
-    ),
-
-    hasToken: Boolean(token),
-    tokenRole: token?.role ?? null,
-    tokenIsActive: token?.isActive ?? null,
-    hasTokenId: typeof token?.id === 'string' || typeof token?.sub === 'string',
-
-    hasNextAuthSecret: Boolean(process.env.NEXTAUTH_SECRET),
-    hasAuthSecret: Boolean(process.env.AUTH_SECRET),
-    secretsEqual:
-      Boolean(process.env.NEXTAUTH_SECRET) &&
-      Boolean(process.env.AUTH_SECRET) &&
-      process.env.NEXTAUTH_SECRET === process.env.AUTH_SECRET
-  });
+  if (shouldLogAuthDiagnostics()) {
+    console.info('middleware_token_probe', {
+      path: req.nextUrl.pathname,
+      cookieCount: cookieNames.length,
+      hasSessionCookie: cookieNames.some((name) =>
+        name.includes('next-auth.session-token')
+      ),
+      hasToken: Boolean(token),
+      hasTokenId:
+        typeof token?.id === 'string' || typeof token?.sub === 'string',
+      hasNextAuthSecret: Boolean(process.env.NEXTAUTH_SECRET),
+      hasAuthSecret: Boolean(process.env.AUTH_SECRET)
+    });
+  }
 
   return token;
 });

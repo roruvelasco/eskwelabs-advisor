@@ -1,7 +1,11 @@
 import type { NextAuthOptions } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import Google from 'next-auth/providers/google';
-import { createContainer, AuthService } from '@eskwelabs-advisor/server';
+import {
+  createContainer,
+  AuthService,
+  TelemetryService
+} from '@eskwelabs-advisor/server';
 import type { ActorRole } from '@eskwelabs-advisor/server';
 
 type AuthResolver = Pick<
@@ -15,12 +19,41 @@ type SessionUserWithActor = {
   role?: string;
   isActive?: boolean;
 };
+type LoginTelemetryRecorder = Pick<TelemetryService, 'record'>;
 
-const defaultAuthService = createContainer().get(AuthService);
+const defaultContainer = createContainer();
+const defaultAuthService = defaultContainer.get(AuthService);
+const defaultTelemetry = defaultContainer.get(TelemetryService);
+
+async function recordLoginTelemetry(
+  telemetry: LoginTelemetryRecorder,
+  event: string,
+  payload: Record<string, unknown>
+) {
+  try {
+    await telemetry.record(event, undefined, 'info', payload);
+  } catch {
+    // telemetry failure must never block login
+  }
+}
 const roleLogin: Record<ActorRole, string> = {
   eif: '/login',
   admin: '/admin/login'
 };
+
+const loginError: Record<'not_in_allowlist' | 'service_unavailable', string> = {
+  not_in_allowlist: 'NotAllowlisted',
+  service_unavailable: 'AuthServiceUnavailable'
+};
+
+function loginRedirect(role: ActorRole, reason: keyof typeof loginError) {
+  return `${roleLogin[role]}?error=${loginError[reason]}`;
+}
+
+function roleMismatchRedirect(requiredRole: ActorRole, actualRole: ActorRole) {
+  const error = actualRole === 'admin' ? 'UseAdminLogin' : 'AdminRequired';
+  return `${roleLogin[requiredRole]}?error=${error}`;
+}
 
 const providerRole: Record<string, ActorRole> = {
   google: 'eif',
@@ -79,7 +112,10 @@ async function authorizeCredentialsForAuth(
   }
 }
 
-export function createAuthConfig(authService: AuthResolver): NextAuthOptions {
+export function createAuthConfig(
+  authService: AuthResolver,
+  telemetry: LoginTelemetryRecorder = defaultTelemetry
+): NextAuthOptions {
   return {
     providers: [
       Credentials({
@@ -200,15 +236,37 @@ export function createAuthConfig(authService: AuthResolver): NextAuthOptions {
         const requiredRole = providerRole[account?.provider ?? ''] ?? 'eif';
         const actor = await resolveLoginForAuth(authService, email, 'signIn');
         if (actor === 'service_unavailable') {
-          return roleLogin[requiredRole];
+          await recordLoginTelemetry(telemetry, 'login_denied', {
+            email,
+            reason: 'service_unavailable',
+            provider: account?.provider
+          });
+          return loginRedirect(requiredRole, 'service_unavailable');
         }
         if (!actor) {
           console.warn('auth_rejected_not_in_allowlist', { email });
-          return roleLogin[requiredRole];
+          await recordLoginTelemetry(telemetry, 'login_denied', {
+            email,
+            reason: 'not_in_allowlist',
+            provider: account?.provider
+          });
+          return loginRedirect(requiredRole, 'not_in_allowlist');
         }
         if (actor.role !== requiredRole) {
-          return '/admin/login';
+          await recordLoginTelemetry(telemetry, 'login_denied', {
+            email,
+            reason: 'role_mismatch',
+            provider: account?.provider,
+            expectedRole: requiredRole,
+            actualRole: actor.role
+          });
+          return roleMismatchRedirect(requiredRole, actor.role);
         }
+        await recordLoginTelemetry(telemetry, 'login_success', {
+          email,
+          role: actor.role,
+          provider: account?.provider
+        });
         return true;
       }
     },

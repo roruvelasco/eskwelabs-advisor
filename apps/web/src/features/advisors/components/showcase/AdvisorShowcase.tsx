@@ -2,16 +2,29 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { DotWave } from '@eskwelabs-advisor/ui';
 
 import { advisorsQuery } from '@/lib/domains/advisors/queries';
 
 import { GREEN, LIGHT, ORDERED_IDS } from './advisor-data';
-import type { ThemeTokens } from './types';
+import type { Advisor, AdvisorCtaState, ThemeTokens } from './types';
 import { AdvisorSection } from './components/AdvisorSection';
 import { HeroSection } from './components/HeroSection';
 import { ScrollProgressBar } from './components/ScrollProgressBar';
 import { StickyNav } from './components/StickyNav';
+
+function getAdvisorCtaState(
+  advisor: Advisor | undefined,
+  isLoading: boolean,
+  isError: boolean,
+  retry: () => void
+): AdvisorCtaState {
+  if (isLoading) return { status: 'loading' };
+  if (isError) return { status: 'error', retry };
+  if (advisor?.isActive && advisor.availability?.status === 'available') {
+    return { status: 'available', href: `/chat?advisor=${advisor.id}` };
+  }
+  return { status: 'unavailable' };
+}
 
 // ─── AdvisorSelection (page root) ────────────────────────────────────────────
 
@@ -27,7 +40,8 @@ export function AdvisorSelection() {
   const {
     data: advisorsResponse,
     isLoading,
-    isError
+    isError,
+    refetch
   } = useQuery(advisorsQuery);
 
   const advisors = advisorsResponse?.data ?? [];
@@ -87,28 +101,19 @@ export function AdvisorSelection() {
       <main>
         <HeroSection sectionRefs={sectionRefs} />
 
-        {isLoading ? (
-          <div
-            className="flex min-h-[40vh] items-center justify-center"
-            style={{ background: LIGHT.bg }}
-          >
-            <DotWave size={40} speed={1} color="#4a8a69" />
-          </div>
-        ) : isError ? (
-          <div
-            className="flex min-h-[40vh] items-center justify-center"
-            style={{ background: LIGHT.bg }}
-          >
-            <p className="font-sans text-sm" style={{ color: LIGHT.bodyColor }}>
-              Could not load advisors.
-            </p>
-          </div>
-        ) : (
-          ORDERED_IDS.map((id, i) => (
+        {ORDERED_IDS.map((id, i) => {
+          const advisor = advisorMap[id];
+          return (
             <AdvisorSection
               key={id}
               advisorId={id}
-              advisor={advisorMap[id]}
+              advisor={advisor}
+              ctaState={getAdvisorCtaState(
+                advisor,
+                isLoading,
+                isError,
+                refetch
+              )}
               isEven={i % 2 === 0}
               sectionRef={(el) => {
                 sectionRefs.current[i] = el;
@@ -117,9 +122,13 @@ export function AdvisorSelection() {
               // imageSrc="/images/dashboard-preview.jpg"
               // imageAlt="Dashboard preview"
             />
-          ))
-        )}
+          );
+        })}
       </main>
+      <footer className="bg-background text-muted-foreground px-6 py-4 text-center text-xs">
+        Conversations are logged and monitored for quality, safety, and usage
+        reporting.
+      </footer>
     </>
   );
 }

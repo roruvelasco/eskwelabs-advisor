@@ -1,9 +1,11 @@
+import type { DrizzleService } from './db/drizzle.service';
+
 export class ApplicationModule {
-  async start() {
-    // Hook future providers here: database, cache, telemetry sinks, workers.
-  }
+  constructor(private drizzleService?: Pick<DrizzleService, 'close'>) {}
+
+  async start() {}
 
   async stop() {
-    // Close long-lived resources here when a non-serverless runtime needs it.
+    await this.drizzleService?.close();
   }
 }

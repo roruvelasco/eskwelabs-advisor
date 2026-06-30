@@ -7,7 +7,7 @@ import { motion, useInView } from 'motion/react';
 
 import { ADVISOR_CONFIG, GREEN, LIGHT } from '../advisor-data';
 import { EASE, rm } from '../motion-constants';
-import type { Advisor, ThemeTokens } from '../types';
+import type { Advisor, AdvisorCtaState, ThemeTokens } from '../types';
 import type { AdvisorId } from '../advisor-data';
 import { DashboardVisual } from '../visuals/DashboardVisual';
 import { ModelingVisual } from '../visuals/ModelingVisual';
@@ -19,6 +19,7 @@ import { fadeUp, StatCard } from './StatCard';
 interface AdvisorSectionProps {
   advisorId: AdvisorId;
   advisor: Advisor | undefined;
+  ctaState: AdvisorCtaState;
   sectionRef: (el: HTMLElement | null) => void;
   isEven: boolean;
   // Optional image replacements — pass to replace abstract visuals
@@ -29,6 +30,7 @@ interface AdvisorSectionProps {
 export function AdvisorSection({
   advisorId,
   advisor,
+  ctaState,
   sectionRef,
   isEven,
   imageSrc,
@@ -52,8 +54,22 @@ export function AdvisorSection({
     sectionRef(el);
   }
 
-  const chatHref = `/chat?advisor=${advisorId}`;
   const [ctaHovered, setCtaHovered] = useState(false);
+  const ctaLabel =
+    ctaState.status === 'loading'
+      ? 'Checking availability'
+      : ctaState.status === 'unavailable'
+        ? 'Advisor unavailable'
+        : cfg.cta;
+  const ctaStyle = {
+    background:
+      ctaState.status === 'available' && ctaHovered
+        ? theme.ctaHoverBg
+        : theme.ctaBg,
+    opacity: ctaState.status === 'available' ? 1 : 0.58
+  };
+  const ctaClassName =
+    'group inline-flex min-h-12 items-center gap-3 rounded-full px-7 py-3.5 font-sans text-sm font-medium text-white shadow-sm transition-all duration-300 focus-visible:outline-none focus-visible:ring-2';
 
   return (
     <GrainOverlay
@@ -170,22 +186,42 @@ export function AdvisorSection({
               custom={0.52}
               initial="hidden"
               animate={isInView ? 'visible' : 'hidden'}
-              className="mt-10"
+              className="mt-10 flex min-h-20 flex-col items-start gap-3"
             >
-              <Link
-                href={chatHref}
-                onMouseEnter={() => setCtaHovered(true)}
-                onMouseLeave={() => setCtaHovered(false)}
-                className="group inline-flex items-center gap-3 rounded-full px-7 py-3.5 font-sans text-sm font-medium text-white shadow-sm transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 active:scale-[0.98]"
-                style={{
-                  background: ctaHovered ? theme.ctaHoverBg : theme.ctaBg
-                }}
-              >
-                {cfg.cta}
-                <span className="inline-block transition-transform group-hover:translate-x-0.5">
-                  →
-                </span>
-              </Link>
+              {ctaState.status === 'available' ? (
+                <Link
+                  href={ctaState.href}
+                  onMouseEnter={() => setCtaHovered(true)}
+                  onMouseLeave={() => setCtaHovered(false)}
+                  className={`${ctaClassName} active:scale-[0.98]`}
+                  style={ctaStyle}
+                >
+                  {ctaLabel}
+                  <span className="inline-block transition-transform group-hover:translate-x-0.5">
+                    →
+                  </span>
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  aria-disabled="true"
+                  className={`${ctaClassName} cursor-not-allowed`}
+                  style={ctaStyle}
+                >
+                  {ctaLabel}
+                </button>
+              )}
+              {ctaState.status === 'error' && (
+                <button
+                  type="button"
+                  onClick={ctaState.retry}
+                  className="font-sans text-xs underline-offset-4 transition hover:underline focus-visible:outline-none focus-visible:ring-2"
+                  style={{ color: theme.bodyColor }}
+                >
+                  Could not refresh availability. Retry
+                </button>
+              )}
             </motion.div>
           </div>
 

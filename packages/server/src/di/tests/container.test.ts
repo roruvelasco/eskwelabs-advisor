@@ -7,8 +7,10 @@ import { ConversationController } from '../../conversations/conversations.contro
 import { MessageController } from '../../messages/messages.controller';
 import { ModelConfigController } from '../../model-config/model-config.controller';
 import { PromptCacheController } from '../../prompt-cache/prompt-cache.controller';
+import { PromptCacheJobsController } from '../../prompt-cache/prompt-cache-jobs.controller';
 import { TelemetryController } from '../../telemetry/telemetry.controller';
 import { UsageCounterController } from '../../usage-counters/usage-counters.controller';
+import { UsageLimitsController } from '../../usage-limits/usage-limits.controller';
 import { UsersController } from '../../users/users.controller';
 import { createContainer } from '../container';
 
@@ -31,11 +33,17 @@ describe('dependency container', () => {
     expect(container.get(PromptCacheController)).toBeInstanceOf(
       PromptCacheController
     );
+    expect(container.get(PromptCacheJobsController)).toBeInstanceOf(
+      PromptCacheJobsController
+    );
     expect(container.get(TelemetryController)).toBeInstanceOf(
       TelemetryController
     );
     expect(container.get(UsageCounterController)).toBeInstanceOf(
       UsageCounterController
+    );
+    expect(container.get(UsageLimitsController)).toBeInstanceOf(
+      UsageLimitsController
     );
     expect(container.get(UsersController)).toBeInstanceOf(UsersController);
   });

@@ -67,31 +67,33 @@ When asked to build a new feature, fix a bug, or make any code change:
 
 ### Backend Domains (`packages/server/src/<domain>/`)
 
-| Domain                | Files                                                                                                            | Key DI Tokens                                                                                                  |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `admin`               | controller, service, repository, serializer, schema (stub), access-policy, use-cases, dto, tests                 | AdminController, AdminService, AdminRepository                                                                 |
-| `advisors`            | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                        | AdvisorController, AdvisorsService, AdvisorsRepository                                                         |
-| `conversations`       | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                        | ConversationController, ConversationsService, ConversationsRepository                                          |
-| `conversation-titles` | controller, worker, generator, repository, serializer, schema, use-cases, dto, tests                             | ConversationTitleJobsController, ConversationTitleWorker, ConversationTitleGenerator                           |
-| `messages`            | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                        | MessageController, MessagesService, MessagesRepository                                                         |
-| `model-config`        | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                        | ModelConfigController, ModelConfigService, ModelConfigRepository                                               |
-| `prompt-cache`        | controller, ingestion/context services, repositories, serializers, schemas, access-policy, use-cases, dto, tests | PromptCacheController, PromptCacheService, PromptCacheRepository, PromptIngestionService, PromptContextService |
-| `usage-counters`      | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests (+ cost-cap.service)   | UsageCounterController, UsageCountersService, UsageCountersRepository                                          |
-| `telemetry`           | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                        | TelemetryController, TelemetryService, TelemetryRepository                                                     |
-| `users`               | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                        | UsersController, UsersService, UsersRepository                                                                 |
+| Domain                | Files                                                                                                                     | Key DI Tokens                                                                                                                                                        |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `admin`               | controller, service, repository, serializer, schema (stub), access-policy, use-cases, dto, tests                          | AdminController, AdminService, AdminRepository                                                                                                                       |
+| `advisors`            | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                                 | AdvisorController, AdvisorsService, AdvisorsRepository                                                                                                               |
+| `conversations`       | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                                 | ConversationController, ConversationsService, ConversationsRepository                                                                                                |
+| `conversation-titles` | controller, worker, generator, normalizer, model resolver, repository, schema, successful-turn persistence                | ConversationTitleJobsController, ConversationTitleWorker, ConversationTitleGenerator, ConversationTitleJobsRepository                                                |
+| `messages`            | controller, service, repository, serializer, schema, query-policy, access-policy, use-cases, dto, tests                   | MessageController, MessagesService, MessagesRepository, QueryPolicyService                                                                                           |
+| `knowledge`           | controller (& jobs), ingestion/context resolver services, repository, serializer, schemas, dto, tests                     | KnowledgeController, KnowledgeJobsController, KnowledgeService, KnowledgeRepository, KNOWLEDGE_CONTEXT_RESOLVER                                                      |
+| `model-config`        | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                                 | ModelConfigController, ModelConfigService, ModelConfigRepository                                                                                                     |
+| `prompt-cache`        | controller (& jobs), ingestion/context services, repositories, serializers, schemas, access-policy, use-cases, dto, tests | PromptCacheController, PromptCacheJobsController, PromptCacheService, PromptCacheRepository, DnaSourceConfigRepository, PromptIngestionService, PromptContextService |
+| `usage-counters`      | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests (+ cost-cap.service)            | UsageCounterController, UsageCountersService, UsageCountersRepository                                                                                                |
+| `usage-limits`        | controller, service, repository, serializer, schema, dto                                                                  | UsageLimitsController, UsageLimitsService, UsageLimitsRepository                                                                                                     |
+| `telemetry`           | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                                 | TelemetryController, TelemetryService, TelemetryRepository                                                                                                           |
+| `users`               | controller, service, repository, serializer, schema, access-policy, use-cases, dto, tests                                 | UsersController, UsersService, UsersRepository                                                                                                                       |
 
 Cross-cutting: `auth/` (auth-request.ts, auth.service.ts), `cache/` (redis.service.ts), `rate-limit/` (rate-limit.service.ts), `config/` (env.ts), `adapters/` (advisor-adapters.ts), `db/` (drizzle.service.ts), `di/` (container.ts), `common/factories/` (controller.factory.ts, repository.factory.ts), `common/middleware/` (auth.middleware.ts, error.middleware.ts, rate-limit.middleware.ts, security.middleware.ts, validation.middleware.ts), `common/http/` (http-exception.ts), `common/utils/` (client-ip.ts, day-ph.ts, hono.ts)
 
 ### Frontend Domains (`apps/web/src/`)
 
-| Route Group      | Pages             | Features            | Domain Libs                            |
-| ---------------- | ----------------- | ------------------- | -------------------------------------- |
-| `(auth)/login`   | login/page.tsx    | LoginPanel          | domains/auth/{api,session,queries}.ts  |
-| `(auth)/consent` | consent/page.tsx  | ConsentNotice       | domains/auth/{api,session,queries}.ts  |
-| `(app)/advisors` | advisors/page.tsx | AdvisorSelection    | domains/advisors/{api,queries}.ts      |
-| `(app)/chat`     | chat/page.tsx     | ChatShell           | domains/chat/{api,queries}.ts          |
-| `(app)/history`  | history/page.tsx  | ConversationHistory | domains/conversations/{api,queries}.ts |
-| `admin`          | admin/page.tsx    | AdminDashboard      | domains/admin/{api,queries}.ts         |
+| Route Group      | Pages             | Features                                                 | Domain Libs                            |
+| ---------------- | ----------------- | -------------------------------------------------------- | -------------------------------------- |
+| `(auth)/login`   | login/page.tsx    | LoginPanel                                               | domains/auth/{api,session,queries}.ts  |
+| `(auth)/consent` | consent/page.tsx  | Redirects to app; active notice is ConsentDialog in chat | domains/auth/{api,session,queries}.ts  |
+| `(app)/advisors` | advisors/page.tsx | AdvisorSelection                                         | domains/advisors/{api,queries}.ts      |
+| `(app)/chat`     | chat/page.tsx     | ChatShell                                                | domains/chat/{api,queries}.ts          |
+| `(app)/history`  | history/page.tsx  | ConversationHistory                                      | domains/conversations/{api,queries}.ts |
+| `admin`          | admin/page.tsx    | AdminDashboard                                           | domains/admin/{api,queries}.ts         |
 
 ### UI Components (`packages/ui/src/`)
 
@@ -107,7 +109,7 @@ Cross-cutting: `auth/` (auth-request.ts, auth.service.ts), `cache/` (redis.servi
 
 ### Database Tables
 
-`advisors`, `users`, `conversations`, `messages`, `model_config`, `prompt_cache`, `prompt_snapshots`, `dna_digests`, `usage_counters`, `telemetry_events`, `advisor_runtime_versions`, `conversation_title_jobs` — see [DATABASE.md](agents/DATABASE.md).
+`advisors`, `users`, `conversations`, `messages`, `model_config`, `prompt_cache`, `prompt_snapshots`, `dna_digests`, `dna_source_config`, `knowledge_sources`, `knowledge_units`, `knowledge_embeddings`, `knowledge_rules`, `message_knowledge_audit`, `usage_counters`, `usage_limits`, `usage_budget_counters`, `usage_limit_audit_events`, `telemetry_events`, `advisor_runtime_versions`, `conversation_title_jobs` — see [DATABASE.md](agents/DATABASE.md). RLS is enabled on all tables (see DATABASE.md §Row-Level Security).
 
 ## Design System
 
@@ -125,7 +127,7 @@ To change the look, edit the CSS variables — not component files. See [UI-PRAC
 ## Auth & CSP
 
 - **Cookie-based auth**: `eskwelabs_actor_email`, `eskwelabs_actor_id`, `eskwelabs_actor_role`, `eskwelabs_actor_active` cookies set by middleware (httpOnly)
-- **Role-specific login**: EIF login uses NextAuth provider IDs `google` / `credentials`; admin login uses `google-admin` / `credentials-admin`. The sign-in callback rejects role mismatches before creating a JWT session.
+- **Role-specific login**: EIF login uses NextAuth provider IDs `google` / `credentials`; admin login uses `google-admin` / `credentials-admin`. Both Google and credentials resolve against the Supabase/Postgres `users` allow-list, and the sign-in callback rejects role mismatches before creating a JWT session.
 - **Next.js middleware** (`apps/web/src/middleware.ts`): reads JWT via `getToken()`, gates routes against JWT claims (`role`, `isActive`). Signs forwarded actor headers with HMAC-SHA256 (`ACTOR_FORWARDING_SECRET`) including method, path, timestamp, and nonce. Strips incoming forged actor/signature headers before setting trusted values. Never queries Postgres.
 - **Strict role split**: Admin sessions are redirected away from EIF app routes to `/admin`; EIF sessions are redirected away from admin pages to `/advisors`. Admin APIs and EIF APIs return 403 for the wrong role.
 - **Hono middleware** (`auth.middleware.ts`): `createAuthMiddleware(usersService, env)` verifies HMAC signature and timestamp freshness (300s TTL) before trusting forwarded `id`/`email`. Then validates against the `users` table via `UsersService`, sets `c.get('actor')` from DB role/status. Two helpers: `requireActor(roles)` for route gating.
@@ -136,7 +138,7 @@ To change the look, edit the CSS variables — not component files. See [UI-PRAC
 ## Key Env Vars
 
 Defined in `packages/server/src/config/env.ts` via zod schema. All declared in `turbo.json` `globalPassThroughEnv`:
-`DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `GOOGLE_DOCS_SERVICE_ACCOUNT_JSON`, `OPENAI_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_DOCS_DNA_DOC_ID`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `GROQ_API_KEY`, `GROQ_BASE_URL`, `DAILY_MESSAGE_LIMIT`, `DAILY_TOKEN_LIMIT`, `DAILY_SPEND_LIMIT_USD`, `DEFAULT_MAX_OUTPUT_TOKENS`, `RATE_LIMIT_WINDOW_SECONDS`, `RATE_LIMIT_MAX_REQUESTS`, `ACTOR_FORWARDING_SECRET`
+`DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `GOOGLE_DOCS_SERVICE_ACCOUNT_JSON`, `GOOGLE_REFRESH_TOKEN`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_DOCS_DNA_DOC_ID`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `GROQ_API_KEY`, `GROQ_BASE_URL`, `PROVIDER_TIMEOUT_MS`, `DAILY_MESSAGE_LIMIT`, `DAILY_TOKEN_LIMIT`, `DAILY_SPEND_LIMIT_USD`, `DEFAULT_MAX_OUTPUT_TOKENS`, `RATE_LIMIT_WINDOW_SECONDS`, `RATE_LIMIT_MAX_REQUESTS`, `CREDENTIAL_LOGIN_MAX_ATTEMPTS`, `CREDENTIAL_LOGIN_LOCKOUT_SECONDS`, `RUNTIME_PROFILE`, `LLM_PROVIDER_MODE`, `PROMPT_PROVIDER_MODE`, `TITLE_GENERATION_PROVIDER`, `TITLE_GENERATION_MODEL`, `CRON_SECRET`, `ACTOR_FORWARDING_SECRET`, `KNOWLEDGE_SEMANTIC_SYNC_BUDGET_MS`, `EMBEDDING_PROVIDER_TIMEOUT_MS`
 
 ## Code Style
 
@@ -157,12 +159,13 @@ Defined in `packages/server/src/config/env.ts` via zod schema. All declared in `
 - **Tailwind v4: `not-{breakpoint}:` variant** — `not-md:` means "apply only when NOT at md breakpoint and above." This is v4-only — v3 does not have this. Do not confuse with `max-md:` ("below md").
 - **Tailwind v4: responsive variant direction** — `max-md:` = below 768px (desktop-down). `not-md:` = everywhere except exactly at `md`. Prefer mobile-first (`md:`) over `max-md:` except for targeted overrides.
 - Path alias `@/` maps to `apps/web/src/*` in web, `packages/server/src/*` in server
-- `UsersRepository` now uses **Drizzle queries**; other repos still use in-memory Maps (migration in progress)
+- All repositories use **Drizzle ORM query builder** (`this.drizzle.db`). `usage-counters` and `conversation-title-jobs` also use raw SQL via `sql\`...\``for advisory locks /`FOR UPDATE SKIP LOCKED`
 - Adapters (`advisor-adapters.ts`) are deterministic stubs — no real LLM/Google Docs calls
 - Supabase clients (`client.ts`, `server.ts`) return `null` — stubs
 - All frontend components are placeholders (feature pages), but UI components in `packages/ui` are real shadcn components
 - `apps/web/src/lib/utils.ts` re-exports `cn` from `@eskwelabs-advisor/ui/utils` — necessary for shadcn CLI compatibility
 - shadcn v4 generates Radix imports from the `radix-ui` meta-package (not individual `@radix-ui/react-*` packages)
+- Admin usage charts use `recharts` in `apps/web`, styled with existing shadcn/Tailwind chart tokens from `globals.css`
 - **shadcn CLI requires `-c apps/web`** — the `components.json` lives at `apps/web/components.json` and controls path aliases. Always run `npx shadcn@latest add <component> -c apps/web --yes`, then manually move the generated file from `apps/web/src/components/ui/` to `packages/ui/src/components/ui/` and add its export to `packages/ui/src/index.ts`.
 - **Git hooks** (Husky v9 + lint-staged): `pre-commit` runs Prettier + ESLint on staged files; `pre-push` runs `turbo check` + `turbo test`. Skip with `--no-verify` in emergencies. `git add -p` partial-hunk staging will cause lint-staged to reformat the whole file — commit the full file in that case.
 
@@ -193,3 +196,37 @@ When the codebase changes (new domain, new table, new route, new env var, packag
 8. **Quirks** — if any new unexpected behavior emerges
 
 Also update the corresponding `agents/*` files for deep-dive details.
+
+## Session Summary: Admin UI Polish & Seed Realism
+
+### Goal
+
+Polish admin UI consistency with a reusable card component, inline headers, table pagination at page size 5, remove redundant elements, and generate realistic seed data.
+
+### Key Decisions
+
+- `AdminCard` extracted as single source of truth for all card-with-table layouts — `tableMode` flag controls `p-0` vs default padding
+- All Users filter removed entirely — per-user filtering rarely used and clutters toolbar
+- Cursor-based "Load more" replaced with client-side pagination — cleaner UX with page navigation
+- Seed script focuses on data quantity metadata realism (token counts, costs, timestamps, multi-provider) rather than deep conversational content
+- Default page size 5 ensures compact tables work on smaller screens while still scannable
+
+### Done
+
+- **AdminCard** created at `apps/web/src/features/admin/components/admin-card.tsx` — reusable Card with `flex flex-1 flex-col`, inline `CardTitle` + `CardDescription`, `tableMode` prop
+- **Usage panel**: inline headers on all cards, All Users filter removed, date pickers + export always single row (`grid-cols-3`), User columns sortable via `accessorFn`, pagination enabled with `pageSize={5}`, "Load more" removed
+- **AdminDataTable**: defaults changed to `pageSize=5`, `pageSizeOptions=[5,10,20,50]`
+- **Telemetry panel**: pie chart removed, `recharts` imports cleaned up, table fills full width
+- **Admin dashboard**: green `h3` Dashboard section header removed (redundant with page title)
+- **Cache and Telemetry tables**: `pageSize` changed from 20 to 5
+- **Seed script** (`scripts/seed.ts`): 20 EIF users + admin + intern, 6-15 conversations per user (250+ total), 3-10 turns each (1800+ messages), 3 providers/models (groq/llama, gemini/gemini-2.0-flash, gpt/gpt-4o-mini), 500 telemetry events with detailed payloads, 6 knowledge sources with 2-4 units each, 6-month budget counters, 5 audit events
+
+### Relevant Files
+
+- `apps/web/src/features/admin/components/admin-card.tsx`
+- `apps/web/src/features/admin/components/admin-data-table.tsx`
+- `apps/web/src/features/admin/components/usage-panel.tsx`
+- `apps/web/src/features/admin/components/telemetry-panel.tsx`
+- `apps/web/src/features/admin/components/admin-dashboard.tsx`
+- `apps/web/src/features/admin/components/cache-panel.tsx`
+- `scripts/seed.ts`

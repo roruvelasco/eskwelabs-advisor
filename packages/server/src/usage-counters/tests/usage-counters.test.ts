@@ -58,6 +58,112 @@ describe('usage counters service', () => {
       }
     ]);
   });
+
+  test('summarizes daily usage with zero-filled missing days', async () => {
+    const service = new UsageCountersService({
+      dailyTotals: async () => [
+        {
+          dayPh: '2026-06-01',
+          messages: 2,
+          tokens: 100,
+          estimatedSpendUsd: '0.010000'
+        },
+        {
+          dayPh: '2026-06-03',
+          messages: 1,
+          tokens: 50,
+          estimatedSpendUsd: '0.005000'
+        }
+      ],
+      summaryTotals: async () => ({
+        messages: 3,
+        tokens: 150,
+        estimatedSpendUsd: '0.015000',
+        activeUsers: 1
+      }),
+      topUsers: async () => [
+        {
+          userId: 'user-1',
+          userEmail: 'intern@example.com',
+          messages: 3,
+          tokens: 150,
+          estimatedSpendUsd: '0.015000'
+        }
+      ]
+    } as never);
+
+    const summary = await service.summary({
+      fromDayPh: '2026-06-01',
+      toDayPh: '2026-06-03',
+      topUsersLimit: 5
+    });
+
+    expect(summary).toEqual({
+      range: {
+        fromDayPh: '2026-06-01',
+        toDayPh: '2026-06-03',
+        timeZone: 'Asia/Manila'
+      },
+      totals: {
+        messages: 3,
+        tokens: 150,
+        estimatedSpendUsd: '0.015000',
+        activeUsers: 1
+      },
+      days: [
+        {
+          dayPh: '2026-06-01',
+          messages: 2,
+          tokens: 100,
+          estimatedSpendUsd: '0.010000'
+        },
+        {
+          dayPh: '2026-06-02',
+          messages: 0,
+          tokens: 0,
+          estimatedSpendUsd: '0'
+        },
+        {
+          dayPh: '2026-06-03',
+          messages: 1,
+          tokens: 50,
+          estimatedSpendUsd: '0.005000'
+        }
+      ],
+      topUsers: [
+        {
+          userId: 'user-1',
+          userEmail: 'intern@example.com',
+          messages: 3,
+          tokens: 150,
+          estimatedSpendUsd: '0.015000'
+        }
+      ]
+    });
+  });
+
+  test('rejects summary ranges longer than 90 days', async () => {
+    const service = new UsageCountersService({
+      dailyTotals: async () => [],
+      summaryTotals: async () => ({
+        messages: 0,
+        tokens: 0,
+        estimatedSpendUsd: '0',
+        activeUsers: 0
+      }),
+      topUsers: async () => []
+    } as never);
+
+    await expect(
+      service.summary({
+        fromDayPh: '2026-01-01',
+        toDayPh: '2026-04-02'
+      })
+    ).rejects.toMatchObject({
+      status: 400,
+      code: 'validation_failed'
+    });
+  });
 });
 
 describe('usage counters repository', () => {

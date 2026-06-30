@@ -4,16 +4,18 @@ import { getConversation, listConversations } from './api';
 
 export function conversationsQuery({
   advisorId,
+  search,
   limit,
   cursor
 }: {
   advisorId?: string;
+  search?: string;
   limit?: number;
   cursor?: string;
 } = {}) {
   return queryOptions({
-    queryKey: ['conversations', advisorId, limit, cursor],
-    queryFn: () => listConversations({ advisorId, limit, cursor }),
+    queryKey: ['conversations', advisorId, search, limit, cursor],
+    queryFn: () => listConversations({ advisorId, search, limit, cursor }),
     staleTime: 30_000
   });
 }

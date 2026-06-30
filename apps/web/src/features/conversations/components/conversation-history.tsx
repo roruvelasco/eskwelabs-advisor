@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { MessageSquareText, Plus } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
@@ -13,6 +13,7 @@ import {
   CardTitle,
   Container,
   GrainOverlay,
+  Input,
   Select,
   SelectContent,
   SelectItem,
@@ -32,6 +33,11 @@ type ConversationRow = {
   updatedAt: string;
 };
 
+type ConversationsResponse = {
+  data?: ConversationRow[];
+  meta?: { nextCursor: string | null };
+};
+
 function formatUpdatedAt(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'Unknown';
@@ -45,23 +51,49 @@ function formatUpdatedAt(value: string) {
 export function ConversationHistory() {
   const router = useRouter();
   const [advisorId, setAdvisorId] = useState<string>('all');
+  const [search, setSearch] = useState('');
+  const [cursor, setCursor] = useState<string | undefined>();
+  const [pages, setPages] = useState<ConversationRow[]>([]);
   const scopedAdvisorId = advisorId === 'all' ? undefined : advisorId;
   const { data: advisorsData, isLoading: advisorsLoading } =
     useQuery(advisorsQuery);
   const {
     data: conversationsData,
     isLoading: conversationsLoading,
+    isFetching: conversationsFetching,
     isError
-  } = useQuery(conversationsQuery({ advisorId: scopedAdvisorId }));
-
-  const advisors = advisorsData?.data ?? [];
-  const advisorNameById = useMemo(
-    () => new Map(advisors.map((advisor) => [advisor.id, advisor.name])),
-    [advisors]
+  } = useQuery(
+    conversationsQuery({
+      advisorId: scopedAdvisorId,
+      search: search.trim() || undefined,
+      limit: 20,
+      cursor
+    })
   );
-  const conversations =
-    (conversationsData as { data?: ConversationRow[] } | undefined)?.data ?? [];
-  const isLoading = advisorsLoading || conversationsLoading;
+
+  const advisorNameById = useMemo(
+    () =>
+      new Map(
+        (advisorsData?.data ?? []).map((advisor) => [advisor.id, advisor.name])
+      ),
+    [advisorsData]
+  );
+  useEffect(() => {
+    setCursor(undefined);
+    setPages([]);
+  }, [scopedAdvisorId, search]);
+
+  useEffect(() => {
+    const rows = (conversationsData as ConversationsResponse | undefined)?.data;
+    if (!rows) return;
+    setPages((current) => (cursor ? [...current, ...rows] : rows));
+  }, [conversationsData, cursor]);
+
+  const conversations = pages;
+  const nextCursor = (conversationsData as ConversationsResponse | undefined)
+    ?.meta?.nextCursor;
+  const isLoading =
+    advisorsLoading || (conversationsLoading && pages.length === 0);
 
   return (
     <GrainOverlay intensity="subtle" className="bg-background min-h-dvh">
@@ -69,7 +101,7 @@ export function ConversationHistory() {
         <div className="space-y-6">
           <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div className="space-y-2">
-              <h1 className="text-foreground font-serif text-3xl font-semibold">
+              <h1 className="text-foreground font-serif text-3xl font-bold">
                 Conversation history
               </h1>
               <p className="text-muted-foreground text-sm">
@@ -77,17 +109,25 @@ export function ConversationHistory() {
               </p>
             </div>
             <div className="xs:flex-row flex flex-col gap-2">
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search conversations"
+                className="xs:w-64 w-full"
+              />
               <Select value={advisorId} onValueChange={setAdvisorId}>
                 <SelectTrigger className="xs:w-64 w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All advisors</SelectItem>
-                  {advisors.map((advisor) => (
-                    <SelectItem key={advisor.id} value={advisor.id}>
-                      {advisor.name}
-                    </SelectItem>
-                  ))}
+                  {(advisorsData?.data ?? []).map(
+                    (advisor: { id: string; name: string }) => (
+                      <SelectItem key={advisor.id} value={advisor.id}>
+                        {advisor.name}
+                      </SelectItem>
+                    )
+                  )}
                 </SelectContent>
               </Select>
               <Button
@@ -153,8 +193,23 @@ export function ConversationHistory() {
                   </button>
                 ))
               )}
+              {nextCursor && !isLoading && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  disabled={conversationsFetching}
+                  onClick={() => setCursor(nextCursor)}
+                >
+                  {conversationsFetching ? 'Loading...' : 'Load more'}
+                </Button>
+              )}
             </CardContent>
           </Card>
+          <p className="text-muted-foreground text-center text-xs">
+            Conversations are logged and monitored for quality, safety, and
+            usage reporting.
+          </p>
         </div>
       </Container>
     </GrainOverlay>

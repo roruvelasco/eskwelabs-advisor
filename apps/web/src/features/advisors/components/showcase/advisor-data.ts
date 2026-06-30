@@ -13,8 +13,8 @@ export const ADVISOR_CONFIG = {
     stats: [
       { value: 6, suffix: '', label: 'chart types' },
       { value: 3, suffix: '', label: 'dashboard layers' },
-      { value: 1, suffix: '', label: 'clear decision path' },
-    ],
+      { value: 1, suffix: '', label: 'clear decision path' }
+    ]
   },
   'ssot-memo': {
     index: 1,
@@ -26,8 +26,8 @@ export const ADVISOR_CONFIG = {
     stats: [
       { value: 4, suffix: '', label: 'memo sections' },
       { value: 12, suffix: '+', label: 'question prompts' },
-      { value: 1, suffix: '', label: 'aligned document' },
-    ],
+      { value: 1, suffix: '', label: 'aligned document' }
+    ]
   },
   'data-modeling': {
     index: 2,
@@ -39,14 +39,18 @@ export const ADVISOR_CONFIG = {
     stats: [
       { value: 5, suffix: '+', label: 'entity types' },
       { value: 3, suffix: '', label: 'relationship layers' },
-      { value: 1, suffix: '', label: 'clean schema' },
-    ],
-  },
+      { value: 1, suffix: '', label: 'clean schema' }
+    ]
+  }
 } as const;
 
 export type AdvisorId = keyof typeof ADVISOR_CONFIG;
 
-export const ORDERED_IDS: AdvisorId[] = ['data-dashboard', 'ssot-memo', 'data-modeling'];
+export const ORDERED_IDS: AdvisorId[] = [
+  'data-dashboard',
+  'ssot-memo',
+  'data-modeling'
+];
 
 // ─── Theme token objects ───────────────────────────────────────────────────────
 
@@ -71,7 +75,7 @@ export const LIGHT: ThemeTokens = {
   navText: 'rgba(26,74,53,0.60)',
   navActiveText: '#ffffff',
   navActiveBg: '#2d6a4f',
-  progressBar: 'rgba(45,106,79,0.50)',
+  progressBar: 'rgba(45,106,79,0.50)'
 };
 
 // Deep forest green theme — interpolated into during Dashboard scroll
@@ -95,5 +99,5 @@ export const GREEN: ThemeTokens = {
   navText: 'rgba(196,218,207,0.60)',
   navActiveText: '#f0ede6',
   navActiveBg: '#2d6a4f',
-  progressBar: 'rgba(90,171,130,0.50)',
+  progressBar: 'rgba(90,171,130,0.50)'
 };
