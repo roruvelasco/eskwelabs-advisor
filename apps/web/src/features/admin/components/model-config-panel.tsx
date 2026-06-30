@@ -1,13 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Pie, PieChart, Cell } from 'recharts';
 
 import {
   Badge,
   Button,
   Card,
   CardContent,
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
   Dialog,
   DialogContent,
   DialogFooter,
@@ -177,7 +181,35 @@ function EditModelDialog({ row }: { row: ModelConfigRow }) {
 
 export function ModelConfigPanel() {
   const { data, isLoading, error } = useQuery(modelConfigQuery);
-  const rows = (data as { data: ModelConfigRow[] } | undefined)?.data ?? [];
+  const rows = useMemo(
+    () => (data as { data: ModelConfigRow[] } | undefined)?.data ?? [],
+    [data]
+  );
+
+  const providerData = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of rows) {
+      counts.set(row.provider, (counts.get(row.provider) ?? 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .map(([provider, count]) => ({
+        provider: PROVIDERS[provider]?.label ?? provider,
+        value: count,
+        fill: `var(--color-${provider})`
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [rows]);
+
+  const chartConfig = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(PROVIDERS).map(([key, { label }], i) => [
+          key,
+          { label, color: `var(--chart-${(i % 5) + 1})` }
+        ])
+      ),
+    []
+  );
 
   if (error) {
     return (
@@ -192,75 +224,143 @@ export function ModelConfigPanel() {
   }
 
   return (
-    <Card className="flex flex-1 flex-col">
-      <CardContent className="flex flex-1 flex-col p-0">
-        <AdminDataTable
-          columns={
-            [
-              {
-                accessorKey: 'advisorId',
-                header: 'Advisor',
-                cell: ({ row }) => (
-                  <span className="font-medium">
-                    {ADVISOR_LABELS[row.original.advisorId] ??
-                      row.original.advisorId}
+    <div className="space-y-6">
+      <Card>
+        <CardContent className="grid gap-6 pt-6 lg:grid-cols-[1fr_2fr]">
+          <div className="flex flex-col items-center">
+            <ChartContainer
+              config={chartConfig}
+              className="aspect-square max-h-[240px] w-full"
+            >
+              <PieChart>
+                <ChartTooltip
+                  cursor={false}
+                  content={<ChartTooltipContent hideLabel />}
+                />
+                <Pie
+                  data={providerData}
+                  dataKey="value"
+                  nameKey="provider"
+                  innerRadius={60}
+                  strokeWidth={2}
+                >
+                  {providerData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                  ))}
+                </Pie>
+              </PieChart>
+            </ChartContainer>
+            <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+              {providerData.map((item) => (
+                <div key={item.provider} className="flex items-center gap-2">
+                  <div
+                    className="h-2 w-2 rounded-sm"
+                    style={{ backgroundColor: item.fill }}
+                  />
+                  <span className="text-muted-foreground">{item.provider}</span>
+                  <span className="ml-auto font-medium tabular-nums">
+                    {item.value}
                   </span>
-                )
-              },
-              {
-                accessorKey: 'provider',
-                header: 'Provider',
-                cell: ({ row }) => (
-                  <span className="capitalize">{row.original.provider}</span>
-                )
-              },
-              {
-                accessorKey: 'model',
-                header: 'Model',
-                cell: ({ row }) => (
-                  <span className="font-mono text-xs">
-                    {row.original.model}
-                  </span>
-                )
-              },
-              {
-                accessorKey: 'isEnabled',
-                header: 'Status',
-                cell: ({ row }) => (
-                  <Badge
-                    variant={row.original.isEnabled ? 'default' : 'destructive'}
-                  >
-                    {row.original.isEnabled ? 'Enabled' : 'Disabled'}
-                  </Badge>
-                )
-              },
-              {
-                accessorKey: 'updatedAt',
-                header: 'Last Updated',
-                cell: ({ row }) => (
-                  <span className="text-muted-foreground text-xs">
-                    {formatDate(row.original.updatedAt)}
-                  </span>
-                )
-              },
-              {
-                id: 'actions',
-                header: '',
-                cell: ({ row }) => (
-                  <div className="text-right">
-                    <EditModelDialog row={row.original} />
-                  </div>
-                )
-              }
-            ] as ColumnDef<ModelConfigRow>[]
-          }
-          data={rows}
-          isLoading={isLoading}
-          emptyMessage="No model configuration rows found."
-          enableSorting={true}
-          enablePagination={false}
-        />
-      </CardContent>
-    </Card>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="flex flex-col items-center justify-center text-center">
+            <p className="font-serif text-4xl font-bold text-[#2d6a4f]">
+              {rows.length}
+            </p>
+            <p className="text-muted-foreground mt-1 text-sm">
+              Total configurations
+            </p>
+            <div className="mt-4 flex gap-6 text-sm">
+              <div>
+                <p className="font-semibold tabular-nums">
+                  {rows.filter((r) => r.isEnabled).length}
+                </p>
+                <p className="text-muted-foreground text-xs">Enabled</p>
+              </div>
+              <div>
+                <p className="font-semibold tabular-nums">
+                  {rows.filter((r) => !r.isEnabled).length}
+                </p>
+                <p className="text-muted-foreground text-xs">Disabled</p>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+      <Card className="flex flex-1 flex-col">
+        <CardContent className="flex flex-1 flex-col p-0">
+          <AdminDataTable
+            columns={
+              [
+                {
+                  accessorKey: 'advisorId',
+                  header: 'Advisor',
+                  cell: ({ row }) => (
+                    <span className="font-medium">
+                      {ADVISOR_LABELS[row.original.advisorId] ??
+                        row.original.advisorId}
+                    </span>
+                  )
+                },
+                {
+                  accessorKey: 'provider',
+                  header: 'Provider',
+                  cell: ({ row }) => (
+                    <span className="capitalize">{row.original.provider}</span>
+                  )
+                },
+                {
+                  accessorKey: 'model',
+                  header: 'Model',
+                  cell: ({ row }) => (
+                    <span className="font-mono text-xs">
+                      {row.original.model}
+                    </span>
+                  )
+                },
+                {
+                  accessorKey: 'isEnabled',
+                  header: 'Status',
+                  cell: ({ row }) => (
+                    <Badge
+                      variant={
+                        row.original.isEnabled ? 'default' : 'destructive'
+                      }
+                    >
+                      {row.original.isEnabled ? 'Enabled' : 'Disabled'}
+                    </Badge>
+                  )
+                },
+                {
+                  accessorKey: 'updatedAt',
+                  header: 'Last Updated',
+                  cell: ({ row }) => (
+                    <span className="text-muted-foreground text-xs">
+                      {formatDate(row.original.updatedAt)}
+                    </span>
+                  )
+                },
+                {
+                  id: 'actions',
+                  header: '',
+                  cell: ({ row }) => (
+                    <div className="text-right">
+                      <EditModelDialog row={row.original} />
+                    </div>
+                  )
+                }
+              ] as ColumnDef<ModelConfigRow>[]
+            }
+            data={rows}
+            isLoading={isLoading}
+            emptyMessage="No model configuration rows found."
+            enableSorting={true}
+            enablePagination={false}
+          />
+        </CardContent>
+      </Card>
+    </div>
   );
 }
