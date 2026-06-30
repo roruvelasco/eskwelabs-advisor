@@ -56,11 +56,16 @@ Response: `{ data: { id, email, role, isActive } | null }`
 **Controller**: `AdvisorController` (`packages/server/src/advisors/`)
 **Auth**: `requireActor(['eif', 'admin'])` on public list, `requireActor(['admin'])` on admin prompt-source routes
 
-| Method  | Path                                           | Body                              | Description                                    |
-| ------- | ---------------------------------------------- | --------------------------------- | ---------------------------------------------- |
-| `GET`   | `/api/advisors`                                | —                                 | List all public advisors                       |
-| `GET`   | `/api/admin/advisors/prompt-sources`           | —                                 | List admin-only advisor prompt Doc ID metadata |
-| `PATCH` | `/api/admin/advisors/:advisorId/prompt-source` | `{ promptDocId: string \| null }` | Update an advisor prompt Google Doc ID         |
+| Method   | Path                                           | Body                                                                         | Description                                    |
+| -------- | ---------------------------------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------- |
+| `GET`    | `/api/advisors`                                | —                                                                            | List all active public advisors                |
+| `GET`    | `/api/admin/advisors`                          | `?search&status&isActive&limit&cursor`                                       | List advisors for admin management             |
+| `POST`   | `/api/admin/advisors`                          | `{ id, name, description?, promptDocId?, status?, isActive?, modelConfig? }` | Create an advisor                              |
+| `PATCH`  | `/api/admin/advisors/:advisorId`               | `{ name?, description?, promptDocId?, status?, isActive?, modelConfig? }`    | Update advisor metadata/lifecycle              |
+| `DELETE` | `/api/admin/advisors/:advisorId`               | —                                                                            | Soft-disable an advisor                        |
+| `POST`   | `/api/admin/advisors/:advisorId/publish`       | —                                                                            | Publish a runnable advisor runtime version     |
+| `GET`    | `/api/admin/advisors/prompt-sources`           | —                                                                            | List admin-only advisor prompt Doc ID metadata |
+| `PATCH`  | `/api/admin/advisors/:advisorId/prompt-source` | `{ promptDocId: string \| null }`                                            | Update an advisor prompt Google Doc ID         |
 
 Response: `{ data: Advisor[] }`
 

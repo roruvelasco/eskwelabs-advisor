@@ -53,13 +53,17 @@ Indexes: `users_created_desc_idx` on `(created_at DESC, id DESC)`.
 
 ### `advisors` (`advisorsTable` in code, `advisors` in DB)
 
-| Column        | Type                | Constraints               |
-| ------------- | ------------------- | ------------------------- |
-| `id`          | `text`              | PK                        |
-| `name`        | `text`              | NOT NULL                  |
-| `description` | `text`              | NOT NULL, default `''`    |
-| `is_active`   | `boolean`           | NOT NULL, default `true`  |
-| `created_at`  | `timestamp with tz` | NOT NULL, default `now()` |
+| Column                      | Type                | Constraints                             |
+| --------------------------- | ------------------- | --------------------------------------- |
+| `id`                        | `text`              | PK                                      |
+| `name`                      | `text`              | NOT NULL                                |
+| `description`               | `text`              | NOT NULL, default `''`                  |
+| `prompt_doc_id`             | `text`              | nullable                                |
+| `is_active`                 | `boolean`           | NOT NULL, default `true`                |
+| `status`                    | `text`              | NOT NULL, default `'active'`            |
+| `active_runtime_version_id` | `uuid`              | nullable, FK → advisor_runtime_versions |
+| `created_at`                | `timestamp with tz` | NOT NULL, default `now()`               |
+| `updated_at`                | `timestamp with tz` | NOT NULL, default `now()`               |
 
 Type: `Advisor`
 
