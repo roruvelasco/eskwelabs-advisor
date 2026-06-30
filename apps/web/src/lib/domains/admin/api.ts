@@ -7,6 +7,28 @@ type ModelConfigUpdateInput = {
   isEnabled?: boolean;
 };
 type UpdateAdvisorPromptSourceInput = { promptDocId: string | null };
+type AdvisorModelConfigInput = {
+  provider: string;
+  model: string;
+  isEnabled?: boolean;
+};
+export type CreateAdvisorInput = {
+  id: string;
+  name: string;
+  description?: string;
+  promptDocId?: string | null;
+  status?: string;
+  isActive?: boolean;
+  modelConfig?: AdvisorModelConfigInput;
+};
+export type UpdateAdvisorInput = {
+  name?: string;
+  description?: string;
+  promptDocId?: string | null;
+  status?: string;
+  isActive?: boolean;
+  modelConfig?: AdvisorModelConfigInput;
+};
 type CreateUserInput = { email: string; role: 'eif' | 'admin' };
 type UpdateUserInput = { role?: 'eif' | 'admin'; isActive?: boolean };
 
@@ -40,6 +62,30 @@ export interface PromptRefreshResult {
 export interface PaginatedData<T> {
   data: T[];
   meta: { nextCursor: string | null; limit: number };
+}
+
+export interface AdminAdvisor {
+  id: string;
+  name: string;
+  description: string;
+  promptDocId: string | null;
+  isActive: boolean;
+  status: string;
+  activeRuntimeVersionId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  modelConfig: {
+    advisorId: string;
+    provider: string;
+    model: string;
+    isEnabled: boolean;
+    updatedBy: string | null;
+    updatedAt: string;
+  } | null;
+  availability?: {
+    status: 'available' | 'unavailable';
+    reasons?: string[];
+  };
 }
 
 export interface UsageSummaryResponse {
@@ -115,10 +161,102 @@ export function getUsageSummary({
     .then(parseApiResponse) as Promise<UsageSummaryResponse>;
 }
 
+export interface AdvisorBreakdownResponse {
+  data: Array<{
+    advisorId: string;
+    messages: number;
+    tokens: number;
+    estimatedSpendUsd: string;
+  }>;
+}
+
+export function getAdvisorBreakdown({
+  fromDayPh,
+  toDayPh
+}: {
+  fromDayPh?: string;
+  toDayPh?: string;
+} = {}): Promise<AdvisorBreakdownResponse> {
+  return apiClient.admin['usage-counters']['advisor-breakdown']
+    .$get({ query: queryParams({ fromDayPh, toDayPh }) })
+    .then(parseApiResponse) as Promise<AdvisorBreakdownResponse>;
+}
+
 export function listModelConfig(): Promise<DataResponse<unknown[]>> {
   return apiClient.admin['model-config']
     .$get()
     .then(parseApiResponse) as Promise<DataResponse<unknown[]>>;
+}
+
+export function listAdminAdvisors({
+  search,
+  status,
+  isActive,
+  limit = 100,
+  cursor
+}: {
+  search?: string;
+  status?: string;
+  isActive?: boolean;
+  limit?: number;
+  cursor?: string;
+} = {}): Promise<PaginatedData<AdminAdvisor>> {
+  const list = apiClient.admin.advisors.$get as (input: {
+    query?: Record<string, string>;
+  }) => Promise<Response>;
+
+  return list({
+    query: queryParams({ search, status, isActive, limit, cursor })
+  }).then(parseApiResponse) as Promise<PaginatedData<AdminAdvisor>>;
+}
+
+export function createAdvisor(
+  input: CreateAdvisorInput
+): Promise<DataResponse<AdminAdvisor>> {
+  const create = apiClient.admin.advisors.$post as (input: {
+    json: CreateAdvisorInput;
+  }) => Promise<Response>;
+
+  return create({ json: input }).then(parseApiResponse) as Promise<
+    DataResponse<AdminAdvisor>
+  >;
+}
+
+export function updateAdvisor(
+  advisorId: string,
+  input: UpdateAdvisorInput
+): Promise<DataResponse<AdminAdvisor>> {
+  const update = apiClient.admin.advisors[':advisorId'].$patch as (input: {
+    param: { advisorId: string };
+    json: UpdateAdvisorInput;
+  }) => Promise<Response>;
+
+  return update({ param: { advisorId }, json: input }).then(
+    parseApiResponse
+  ) as Promise<DataResponse<AdminAdvisor>>;
+}
+
+export function deleteAdvisor(
+  advisorId: string
+): Promise<DataResponse<AdminAdvisor>> {
+  const destroy = apiClient.admin.advisors[':advisorId'].$delete as (input: {
+    param: { advisorId: string };
+  }) => Promise<Response>;
+
+  return destroy({ param: { advisorId } }).then(parseApiResponse) as Promise<
+    DataResponse<AdminAdvisor>
+  >;
+}
+
+export function publishAdvisor(
+  advisorId: string
+): Promise<DataResponse<unknown>> {
+  const publish = apiClient.admin.advisors[':advisorId'].publish
+    .$post as (input: { param: { advisorId: string } }) => Promise<Response>;
+
+  return publish({ param: { advisorId } }).then(parseApiResponse) as Promise<
+    DataResponse<unknown>
+  >;
 }
 
 export function listAdvisorPromptSources(): Promise<DataResponse<unknown[]>> {

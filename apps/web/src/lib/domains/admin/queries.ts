@@ -2,12 +2,14 @@ import { queryOptions } from '@tanstack/react-query';
 
 import {
   getAdminUsage,
+  getAdvisorBreakdown,
   getDnaSource,
   getUsageLimits,
   getUsageLimitsReview,
   getUsageSummary,
   getKnowledgeHealth,
   listAdvisorPromptSources,
+  listAdminAdvisors,
   listKnowledgeSources,
   listPromptCache,
   listUsageCounters,
@@ -88,10 +90,43 @@ export function usageSummaryQuery({
   });
 }
 
+export function advisorBreakdownQuery({
+  fromDayPh,
+  toDayPh
+}: {
+  fromDayPh?: string;
+  toDayPh?: string;
+} = {}) {
+  return queryOptions({
+    queryKey: ['admin', 'usage-counters', 'advisor-breakdown', fromDayPh, toDayPh],
+    queryFn: () => getAdvisorBreakdown({ fromDayPh, toDayPh })
+  });
+}
+
 export const modelConfigQuery = queryOptions({
   queryKey: ['admin', 'model-config'],
   queryFn: listModelConfig
 });
+
+export function adminAdvisorsQuery({
+  search,
+  status,
+  isActive,
+  limit,
+  cursor
+}: {
+  search?: string;
+  status?: string;
+  isActive?: boolean;
+  limit?: number;
+  cursor?: string;
+} = {}) {
+  return queryOptions({
+    queryKey: ['admin', 'advisors', search, status, isActive, limit, cursor],
+    queryFn: () =>
+      listAdminAdvisors({ search, status, isActive, limit, cursor })
+  });
+}
 
 export const advisorPromptSourcesQuery = queryOptions({
   queryKey: ['admin', 'advisor-prompt-sources'],

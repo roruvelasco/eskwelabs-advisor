@@ -26,7 +26,7 @@ export async function parseApiResponse<T>(response: Response): Promise<T> {
 }
 
 export function queryParams(
-  input: Record<string, string | number | undefined | null>
+  input: Record<string, string | number | boolean | undefined | null>
 ) {
   const query: Record<string, string> = {};
 
