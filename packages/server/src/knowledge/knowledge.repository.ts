@@ -145,7 +145,7 @@ export class KnowledgeRepository extends Repository {
     const rows = await this.drizzle.db
       .select({ count: count() })
       .from(knowledgeSourcesTable)
-      .where(eq(knowledgeSourcesTable.status, 'published'));
+      .where(inArray(knowledgeSourcesTable.status, ['published', 'active']));
     return rows[0]?.count ?? 0;
   }
 
