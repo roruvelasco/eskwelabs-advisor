@@ -1,23 +1,12 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { ChevronsUpDown } from 'lucide-react';
 
-import {
-  Badge,
-  Button,
-  Card,
-  CardContent,
-  Skeleton,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from '@eskwelabs-advisor/ui';
+import { Badge, Button, Card, CardContent } from '@eskwelabs-advisor/ui';
 
 import { telemetryQuery } from '@/lib/domains/admin/queries';
+import { AdminDataTable } from './admin-data-table';
+import type { ColumnDef } from '@tanstack/react-table';
 
 interface TelemetryEventRow {
   id: string;
@@ -80,23 +69,6 @@ function statusVariant(severity: TelemetryEventRow['severity']) {
   return 'secondary' as const;
 }
 
-function SortHead({
-  children,
-  className
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <TableHead className={className}>
-      <span className="flex items-center gap-1.5 text-xs uppercase tracking-widest">
-        {children}
-        <ChevronsUpDown className="text-muted-foreground/40 size-3 shrink-0" />
-      </span>
-    </TableHead>
-  );
-}
-
 export function TelemetryPanel() {
   const { data, isLoading, error, refetch } = useQuery(telemetryQuery());
 
@@ -121,56 +93,64 @@ export function TelemetryPanel() {
   return (
     <Card className="flex flex-1 flex-col">
       <CardContent className="flex flex-1 flex-col p-0">
-        {isLoading ? (
-          <div className="space-y-3 px-8 py-8">
-            {Array.from({ length: 4 }).map((_, index) => (
-              <Skeleton key={index} className="h-10 w-full" />
-            ))}
-          </div>
-        ) : events.length === 0 ? (
-          <div className="flex flex-1 items-center justify-center">
-            <p className="text-muted-foreground text-sm">
-              No events recorded yet.
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <SortHead className="pl-6">Event</SortHead>
-                  <SortHead>Status</SortHead>
-                  <SortHead>User</SortHead>
-                  <SortHead>Detail</SortHead>
-                  <SortHead>Timestamp</SortHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {events.map((event) => (
-                  <TableRow key={event.id}>
-                    <TableCell className="py-4 pl-6 text-xs font-medium">
-                      {EVENT_LABELS[event.eventName] ?? event.eventName}
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <Badge variant={statusVariant(event.severity)}>
-                        {event.severity}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground py-4 text-xs">
-                      {extractUser(event.payload)}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground max-w-xs py-4 text-xs">
-                      {extractDetail(event.payload)}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground py-4 pr-6 text-xs">
-                      {formatDate(event.createdAt)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
+        <AdminDataTable
+          columns={
+            [
+              {
+                accessorKey: 'eventName',
+                header: 'Event',
+                cell: ({ row }) => (
+                  <span className="text-xs font-medium">
+                    {EVENT_LABELS[row.original.eventName] ??
+                      row.original.eventName}
+                  </span>
+                )
+              },
+              {
+                accessorKey: 'severity',
+                header: 'Status',
+                cell: ({ row }) => (
+                  <Badge variant={statusVariant(row.original.severity)}>
+                    {row.original.severity}
+                  </Badge>
+                )
+              },
+              {
+                id: 'user',
+                header: 'User',
+                cell: ({ row }) => (
+                  <span className="text-muted-foreground text-xs">
+                    {extractUser(row.original.payload)}
+                  </span>
+                )
+              },
+              {
+                id: 'detail',
+                header: 'Detail',
+                cell: ({ row }) => (
+                  <span className="text-muted-foreground max-w-xs text-xs">
+                    {extractDetail(row.original.payload)}
+                  </span>
+                )
+              },
+              {
+                accessorKey: 'createdAt',
+                header: 'Timestamp',
+                cell: ({ row }) => (
+                  <span className="text-muted-foreground text-xs">
+                    {formatDate(row.original.createdAt)}
+                  </span>
+                )
+              }
+            ] as ColumnDef<TelemetryEventRow>[]
+          }
+          data={events}
+          isLoading={isLoading}
+          emptyMessage="No events recorded yet."
+          enableSorting={true}
+          enablePagination={true}
+          pageSize={20}
+        />
       </CardContent>
     </Card>
   );
