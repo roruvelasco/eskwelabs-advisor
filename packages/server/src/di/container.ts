@@ -325,7 +325,12 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
     })
     .bind({
       provide: AdvisorsService,
-      useFactory: (c) => new AdvisorsService(c.get(AdvisorsRepository))
+      useFactory: (c) =>
+        new AdvisorsService(
+          c.get(AdvisorsRepository),
+          c.get(ModelConfigService),
+          c.get(AdvisorRuntimeVersionRepository)
+        )
     })
     .bind({
       provide: AdvisorRuntimeService,
@@ -335,7 +340,9 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
           c.get(AdvisorRuntimeVersionRepository),
           c.get(ModelConfigService),
           c.get(ModelRateService),
-          c.get(PROMPT_CONTEXT_LOADER)
+          c.get(PROMPT_CONTEXT_LOADER),
+          c.get(PromptSnapshotsRepository),
+          c.get(DnaDigestsRepository)
         )
     })
     .bind({

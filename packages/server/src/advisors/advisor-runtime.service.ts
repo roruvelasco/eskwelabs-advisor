@@ -5,6 +5,8 @@ import type {
   PromptContextLoader,
   PreparedPromptContext
 } from '../prompt-cache/prompt-context.service';
+import type { DnaDigestsRepository } from '../prompt-cache/dna-digests.repository';
+import type { PromptSnapshotsRepository } from '../prompt-cache/prompt-snapshots.repository';
 import type { AdvisorRuntimeVersionRepository } from './advisor-runtime.repository';
 import type { AdvisorsRepository } from './advisors.repository';
 
@@ -35,7 +37,9 @@ export class AdvisorRuntimeService {
     private runtimeVersionRepository: AdvisorRuntimeVersionRepository,
     private modelConfigService: ModelConfigService,
     private modelRateService: ModelRateService,
-    private promptContextLoader: PromptContextLoader
+    private promptContextLoader: PromptContextLoader,
+    private promptSnapshotsRepository?: PromptSnapshotsRepository,
+    private dnaDigestsRepository?: DnaDigestsRepository
   ) {}
 
   async resolveModelConfig(advisorId: string) {
@@ -200,5 +204,70 @@ export class AdvisorRuntimeService {
     }
 
     return { ready: true, reasons: [] };
+  }
+
+  async publish(advisorId: string) {
+    const advisor = await this.advisorsRepository.findById(advisorId);
+
+    if (!advisor) {
+      throw new HttpException(404, 'Advisor not found', 'advisor_not_found');
+    }
+
+    if (!advisor.isActive || advisor.status !== 'active') {
+      throw new HttpException(422, 'Advisor is not active', 'advisor_inactive');
+    }
+
+    if (!advisor.promptDocId) {
+      throw new HttpException(
+        422,
+        'Advisor prompt source is not configured',
+        'advisor_prompt_not_configured'
+      );
+    }
+
+    const [snapshot, digest, modelConfig] = await Promise.all([
+      this.promptSnapshotsRepository?.findActive(advisorId),
+      this.dnaDigestsRepository?.findActive(),
+      this.modelConfigService.getForAdvisor(advisorId)
+    ]);
+
+    if (!snapshot) {
+      throw new HttpException(
+        422,
+        'Advisor has no active prompt snapshot',
+        'advisor_prompt_snapshot_missing'
+      );
+    }
+
+    if (!digest) {
+      throw new HttpException(
+        422,
+        'DNA digest is not active',
+        'dna_digest_missing'
+      );
+    }
+
+    if (!modelConfig) {
+      throw new HttpException(
+        422,
+        'Advisor model configuration is missing',
+        'model_config_missing'
+      );
+    }
+
+    if (!modelConfig.isEnabled) {
+      throw new HttpException(
+        422,
+        'Advisor model configuration is disabled',
+        'advisor_model_disabled'
+      );
+    }
+
+    this.modelRateService.assertRateConfigured(
+      modelConfig.provider,
+      modelConfig.model
+    );
+
+    return this.runtimeVersionRepository.publish(advisorId);
   }
 }
