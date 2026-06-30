@@ -556,13 +556,15 @@ export function UsagePanel() {
         </div>
       </div>
 
-      <AdminCard title="Top Users" description="Highest estimated spend in this range." tableMode>
-        <AdminDataTable
+              <AdminCard title="Top Users" description="Highest estimated spend in this range." tableMode>
+                <AdminDataTable
             columns={
               [
                 {
                   id: 'user',
                   header: 'User',
+                  accessorFn: (row: { userEmail?: string | null; userId: string }) =>
+                    row.userEmail ?? row.userId,
                   cell: ({ row }) => (
                     <span className="font-medium">
                       {row.original.userEmail ??
@@ -621,6 +623,8 @@ export function UsagePanel() {
                 {
                   id: 'user',
                   header: 'User',
+                  accessorFn: (row: { userEmail?: string | null; userId: string }) =>
+                    row.userEmail ?? row.userId,
                   cell: ({ row }) => (
                     <span className="font-medium">
                       {row.original.userEmail ??
