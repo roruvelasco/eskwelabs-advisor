@@ -233,8 +233,6 @@ export function UsagePanel() {
   const todayPh = phToday();
   const [fromDayPh, setFromDayPh] = useState(addDays(todayPh, -29));
   const [toDayPh, setToDayPh] = useState(todayPh);
-  const [cursor, setCursor] = useState<string | undefined>();
-  const [pages, setPages] = useState<UsageCounterRow[]>([]);
 
   const {
     data: summaryData,
@@ -250,14 +248,12 @@ export function UsagePanel() {
   const {
     data: countersData,
     isLoading: countersLoading,
-    isFetching: countersFetching,
     error: countersError
   } = useQuery(
     usageCountersQuery({
       fromDayPh,
       toDayPh,
-      limit: 50,
-      cursor
+      limit: 50
     })
   );
   const { data: usersData, isLoading: usersLoading } = useQuery(usersQuery());
@@ -267,21 +263,9 @@ export function UsagePanel() {
     advisorBreakdownQuery({ fromDayPh, toDayPh })
   );
 
-  useEffect(() => {
-    setCursor(undefined);
-    setPages([]);
-  }, [fromDayPh, toDayPh]);
-
-  useEffect(() => {
-    const rows = (countersData as UsageResponse | undefined)?.data;
-    if (!rows) return;
-    setPages((current) => (cursor ? [...current, ...rows] : rows));
-  }, [countersData, cursor]);
-
   const summary = summaryData?.data;
-  const counters = pages;
-  const nextCursor = (countersData as UsageResponse | undefined)?.meta
-    ?.nextCursor;
+  const counters =
+    (countersData as { data: UsageCounterRow[] } | undefined)?.data ?? [];
   const users = (usersData as { data: UserRow[] } | undefined)?.data ?? [];
   const advisorBreakdown =
     (advisorData as { data: AdvisorBreakdownItem[] } | undefined)?.data ?? [];
@@ -612,7 +596,8 @@ export function UsagePanel() {
             isLoading={summaryLoading}
             emptyMessage="No users recorded for this range."
             enableSorting={true}
-            enablePagination={false}
+            enablePagination={true}
+            pageSize={5}
           />
       </AdminCard>
 
@@ -675,21 +660,9 @@ export function UsagePanel() {
             isLoading={isTableLoading}
             emptyMessage="No usage recorded for this range."
             enableSorting={true}
-            enablePagination={false}
+            enablePagination={true}
+            pageSize={5}
           />
-          {nextCursor && (
-            <div className="border-border border-t p-4">
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full"
-                disabled={countersFetching}
-                onClick={() => setCursor(nextCursor)}
-              >
-                {countersFetching ? 'Loading...' : 'Load more'}
-              </Button>
-            </div>
-          )}
       </AdminCard>
     </div>
   );
