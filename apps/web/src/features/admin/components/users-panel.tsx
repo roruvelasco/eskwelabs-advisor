@@ -14,7 +14,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   Input,
   Label,
   Select,
@@ -71,8 +70,21 @@ function SortHead({
   );
 }
 
-function CreateUserDialog() {
+function CreateUserButton() {
   const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+        <PlusIcon className="size-4" />
+        Add User
+      </Button>
+      {open && <CreateUserDialogInline onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+function CreateUserDialogInline({ onClose }: { onClose: () => void }) {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<'eif' | 'admin'>('eif');
   const queryClient = useQueryClient();
@@ -85,7 +97,7 @@ function CreateUserDialog() {
       toast.success(`User ${email.trim()} saved`);
       setEmail('');
       setRole('eif');
-      setOpen(false);
+      onClose();
     },
     onError: () => {
       toast.error('Failed to save user');
@@ -98,16 +110,7 @@ function CreateUserDialog() {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button
-          size="icon"
-          className="bg-success hover:bg-success/90 text-success-foreground size-10 rounded-full shadow-md"
-          aria-label="Add user"
-        >
-          <PlusIcon className="size-5" />
-        </Button>
-      </DialogTrigger>
+    <Dialog open={true} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Add User</DialogTitle>
@@ -195,6 +198,9 @@ export function UsersPanel() {
 
   return (
     <Card className="relative flex flex-1 flex-col">
+      <div className="flex items-center justify-end border-b px-4 py-3 sm:px-6">
+        <CreateUserButton />
+      </div>
       <CardContent className="flex flex-1 flex-col p-0">
         {isLoading ? (
           <div className="space-y-3 px-8 py-8">
@@ -245,9 +251,6 @@ export function UsersPanel() {
           </div>
         )}
       </CardContent>
-      <div className="flex justify-end px-6 py-4">
-        <CreateUserDialog />
-      </div>
     </Card>
   );
 }

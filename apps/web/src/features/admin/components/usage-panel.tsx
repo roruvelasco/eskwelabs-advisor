@@ -2,14 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import {
-  ActivityIcon,
-  ChevronsUpDown,
-  Download,
-  MessageSquareIcon,
-  UsersIcon,
-  WalletCardsIcon
-} from 'lucide-react';
+import { ChevronsUpDown, Download } from 'lucide-react';
 import {
   Area,
   AreaChart,
@@ -50,6 +43,8 @@ import {
   usageSummaryQuery,
   usersQuery
 } from '@/lib/domains/admin/queries';
+
+import { AdminKpiCard } from './admin-kpi-card';
 
 interface UsageCounterRow {
   userId: string;
@@ -99,36 +94,6 @@ function formatEventName(value: string) {
     .split('_')
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
-}
-
-function MetricCard({
-  label,
-  value,
-  icon: Icon,
-  loading
-}: {
-  label: string;
-  value: string | number;
-  icon: React.ComponentType<{ className?: string }>;
-  loading: boolean;
-}) {
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardDescription className="text-xs uppercase tracking-widest">
-          {label}
-        </CardDescription>
-        <Icon className="text-muted-foreground size-4" />
-      </CardHeader>
-      <CardContent>
-        {loading ? (
-          <Skeleton className="h-8 w-24" />
-        ) : (
-          <p className="text-2xl font-semibold tabular-nums">{value}</p>
-        )}
-      </CardContent>
-    </Card>
-  );
 }
 
 function SortHead({
@@ -336,30 +301,26 @@ export function UsagePanel() {
         </Button>
       </div>
 
-      <div className="grid shrink-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard
+      <div className="grid shrink-0 grid-cols-2 gap-3 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <AdminKpiCard
           label="Messages"
           value={summary?.totals.messages.toLocaleString() ?? 0}
-          icon={MessageSquareIcon}
-          loading={summaryLoading}
+          isLoading={summaryLoading}
         />
-        <MetricCard
+        <AdminKpiCard
           label="Tokens"
           value={summary?.totals.tokens.toLocaleString() ?? 0}
-          icon={ActivityIcon}
-          loading={summaryLoading}
+          isLoading={summaryLoading}
         />
-        <MetricCard
+        <AdminKpiCard
           label="Estimated Spend"
-          value={formatUsd(summary?.totals.estimatedSpendUsd ?? 0)}
-          icon={WalletCardsIcon}
-          loading={summaryLoading}
+          value={formatUsd(summary?.totals.estimatedSpendUsd ?? 0, 2)}
+          isLoading={summaryLoading}
         />
-        <MetricCard
+        <AdminKpiCard
           label="Active Users"
           value={summary?.totals.activeUsers.toLocaleString() ?? 0}
-          icon={UsersIcon}
-          loading={summaryLoading}
+          isLoading={summaryLoading}
         />
       </div>
 

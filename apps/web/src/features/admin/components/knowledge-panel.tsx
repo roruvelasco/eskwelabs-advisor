@@ -383,10 +383,13 @@ function AddKnowledgeSourceDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm">
-          <PlusIcon className="size-4" />
+        <button
+          type="button"
+          className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium transition-colors hover:text-[#2d6a4f]"
+        >
+          <PlusIcon className="size-3.5" />
           Add Source
-        </Button>
+        </button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>

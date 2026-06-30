@@ -18,13 +18,7 @@ import {
 
 import { useRouter } from 'next/navigation';
 
-import {
-  Avatar,
-  AvatarFallback,
-  Card,
-  CardContent,
-  Skeleton
-} from '@eskwelabs-advisor/ui';
+import { Avatar, AvatarFallback } from '@eskwelabs-advisor/ui';
 
 import {
   Tooltip,
@@ -46,6 +40,7 @@ import { ModelConfigPanel } from './model-config-panel';
 import { TelemetryPanel } from './telemetry-panel';
 import { UsagePanel } from './usage-panel';
 import { UsersPanel } from './users-panel';
+import { AdminKpiCard } from './admin-kpi-card';
 
 type AdminSection =
   | 'usage'
@@ -103,33 +98,6 @@ const sections: Array<{
   { id: 'telemetry', label: 'Events', icon: LayoutDashboardIcon },
   { id: 'users', label: 'Users', icon: UsersIcon }
 ];
-
-function KpiCard({
-  label,
-  value,
-  isLoading
-}: {
-  label: string;
-  value: number | undefined;
-  isLoading: boolean;
-}) {
-  return (
-    <Card className="border-[#e2e0db] bg-white">
-      <CardContent className="px-4 py-3 sm:px-5 sm:py-4">
-        <p className="text-[10px] font-medium uppercase tracking-widest text-[#8a8578] sm:text-xs">
-          {label}
-        </p>
-        {isLoading || value === undefined ? (
-          <Skeleton className="mt-2 h-7 w-14 sm:h-8 sm:w-16" />
-        ) : (
-          <p className="mt-1 font-serif text-xl font-semibold text-[#2d6a4f] sm:text-2xl">
-            {value.toLocaleString()}
-          </p>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
 
 function useKpiCards(section: AdminSection) {
   const { data: overviewData, isLoading: overviewLoading } =
@@ -233,13 +201,8 @@ function useKpiCards(section: AdminSection) {
       ]
     },
     users: {
-      isLoading: overviewLoading,
-      cards: [
-        { label: 'Total Users', value: overview?.counts.users },
-        { label: 'Models', value: overview?.counts.modelConfigs },
-        { label: 'Usage Rows', value: overview?.counts.usageRows },
-        { label: 'Events', value: overview?.counts.telemetryEvents }
-      ]
+      isLoading: false,
+      cards: []
     }
   };
 
@@ -252,7 +215,7 @@ function OverviewCards({ section }: { section: AdminSection }) {
   return (
     <div className="grid shrink-0 grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
       {cards.map((card) => (
-        <KpiCard
+        <AdminKpiCard
           key={`${section}-${card.label}`}
           label={card.label}
           value={card.value}
@@ -408,10 +371,17 @@ export function AdminDashboard() {
   const adminInitials = adminName.slice(0, 2).toUpperCase();
   const sectionLabel = sections.find((s) => s.id === section)?.label ?? 'Admin';
   const heading = section === 'usage' ? 'Dashboard Overview' : sectionLabel;
+
+  const { data: overviewData } = useQuery(adminUsageQuery);
+  const userCount = (overviewData as { data: AdminOverview } | undefined)?.data
+    ?.counts?.users;
+
   const description =
     section === 'usage'
       ? 'Monitor platform usage, models, and system health.'
-      : `Manage ${sectionLabel.toLowerCase()} settings and status.`;
+      : section === 'users'
+        ? `Manage users settings and status${userCount !== undefined ? ` · ${userCount} total` : ''}.`
+        : `Manage ${sectionLabel.toLowerCase()} settings and status.`;
 
   const handleSelect = (id: AdminSection) => {
     setSection(id);
@@ -500,7 +470,9 @@ export function AdminDashboard() {
               {section === 'limits' && <LimitsEditButton />}
             </div>
 
-            {section !== 'limits' && <OverviewCards section={section} />}
+            {section !== 'limits' && section !== 'users' && (
+              <OverviewCards section={section} />
+            )}
 
             <div className="mt-4 sm:mt-6">
               {section === 'usage' && (
