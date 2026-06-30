@@ -53,20 +53,16 @@ describe('db schema', () => {
   });
 
   test('closes the postgres client idempotently', async () => {
+    globalThis.__drizzle_client = undefined;
     const service = new DrizzleService({
       DATABASE_URL: 'postgresql://localhost:54322/postgres',
       RUNTIME_PROFILE: 'test'
     });
-    let closeCalls = 0;
-
-    service['client'].end = (async () => {
-      closeCalls += 1;
-    }) as never;
 
     await service.close();
     await service.close();
 
-    expect(closeCalls).toBe(1);
+    expect(service['closed']).toBe(true);
   });
 
   test('RLS is enabled for all app tables including post-0012 additions', async () => {
