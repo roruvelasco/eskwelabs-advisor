@@ -5,6 +5,8 @@ import { AdminRepository } from '../admin/admin.repository';
 import { AdminSerializer } from '../admin/admin.serializer';
 import { AdminService } from '../admin/admin.service';
 import { AdminOverviewUseCase } from '../admin/use-cases/admin-overview.use-case';
+import { getAvailableProviderKeys } from '../model-config/provider-availability';
+import { ModelCatalogService } from '../model-config/model-catalog.service';
 import {
   DeterministicDnaDigestSummarizer,
   DeterministicLlmProvider,
@@ -189,29 +191,23 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
       useFactory: (c) => {
         const env = c.get(SERVER_ENV);
         const providers = new Map<string, LlmProvider>();
+        const available = getAvailableProviderKeys(env);
 
-        if (env.LLM_PROVIDER_MODE === 'deterministic') {
-          providers.set('deterministic', new DeterministicLlmProvider());
-          return new RoutingLlmProvider(providers);
-        }
-
-        if (env.GROQ_API_KEY) {
-          providers.set('groq', new GroqLlmProvider(env));
-        }
-
-        if (env.GEMINI_API_KEY) {
-          providers.set('gemini', new GeminiLlmProvider(env));
-        }
-
-        if (env.OPENROUTER_API_KEY) {
-          providers.set('openrouter', new OpenRouterLlmProvider(env));
-        }
-
-        if (env.LLM_PROVIDER_MODE === 'auto' && providers.size === 0) {
-          if (env.RUNTIME_PROFILE === 'production') {
-            return new RoutingLlmProvider(providers);
+        for (const key of available) {
+          switch (key) {
+            case 'groq':
+              providers.set('groq', new GroqLlmProvider(env));
+              break;
+            case 'gemini':
+              providers.set('gemini', new GeminiLlmProvider(env));
+              break;
+            case 'openrouter':
+              providers.set('openrouter', new OpenRouterLlmProvider(env));
+              break;
+            case 'deterministic':
+              providers.set('deterministic', new DeterministicLlmProvider());
+              break;
           }
-          providers.set('deterministic', new DeterministicLlmProvider());
         }
 
         return new RoutingLlmProvider(providers);
@@ -329,6 +325,10 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
       useFactory: () => new ModelRateService()
     })
     .bind({
+      provide: ModelCatalogService,
+      useFactory: (c) => new ModelCatalogService(c.get(SERVER_ENV))
+    })
+    .bind({
       provide: AdvisorsService,
       useFactory: (c) =>
         new AdvisorsService(
@@ -361,7 +361,8 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
     })
     .bind({
       provide: ModelConfigService,
-      useFactory: (c) => new ModelConfigService(c.get(ModelConfigRepository))
+      useFactory: (c) =>
+        new ModelConfigService(c.get(ModelConfigRepository), c.get(SERVER_ENV))
     })
     .bind({
       provide: KnowledgeIngestionService,
@@ -646,7 +647,8 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
         new ModelConfigController(
           c.get(ModelConfigService),
           c.get(ModelConfigSerializer),
-          c.get(TelemetryService)
+          c.get(TelemetryService),
+          c.get(ModelCatalogService)
         )
     })
     .bind({
