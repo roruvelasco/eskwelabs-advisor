@@ -1,8 +1,9 @@
 'use client';
 
 import { Suspense, useEffect, useState, type FormEvent } from 'react';
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { signIn } from 'next-auth/react';
 import { z } from 'zod';
 
@@ -256,7 +257,15 @@ export function AuthLoginPanel({ config }: { config: AuthLoginConfig }) {
       </div>
 
       <div className="pr-25 hidden items-end md:flex md:w-2/5">
-        <div className="bg-primary h-[88%] w-full rounded-t-3xl" />
+        <div className="relative h-[88%] w-full overflow-hidden rounded-t-3xl">
+          <Image
+            src="/images/user_banner.webp"
+            alt=""
+            fill
+            className="object-cover"
+            priority
+          />
+        </div>
       </div>
     </GrainOverlay>
   );
