@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Download } from 'lucide-react';
 import {
@@ -64,11 +64,6 @@ interface AdvisorBreakdownItem {
   tokens: number;
   estimatedSpendUsd: string;
 }
-
-type UsageResponse = {
-  data?: UsageCounterRow[];
-  meta?: { nextCursor: string | null };
-};
 
 function phToday() {
   return new Date().toLocaleDateString('en-CA', {
@@ -540,129 +535,141 @@ export function UsagePanel() {
         </div>
       </div>
 
-              <AdminCard title="Top Users" description="Highest estimated spend in this range." tableMode>
-                <AdminDataTable
-            columns={
-              [
-                {
-                  id: 'user',
-                  header: 'User',
-                  accessorFn: (row: { userEmail?: string | null; userId: string }) =>
-                    row.userEmail ?? row.userId,
-                  cell: ({ row }) => (
-                    <span className="font-medium">
-                      {row.original.userEmail ??
-                        emailById.get(row.original.userId) ??
-                        `${row.original.userId.slice(0, 8)}...`}
-                    </span>
-                  )
-                },
-                {
-                  accessorKey: 'messages',
-                  header: 'Messages',
-                  cell: ({ row }) => (
-                    <span className="tabular-nums">
-                      {row.original.messages.toLocaleString()}
-                    </span>
-                  )
-                },
-                {
-                  accessorKey: 'tokens',
-                  header: 'Tokens',
-                  cell: ({ row }) => (
-                    <span className="tabular-nums">
-                      {row.original.tokens.toLocaleString()}
-                    </span>
-                  )
-                },
-                {
-                  accessorKey: 'estimatedSpendUsd',
-                  header: 'Est. Spend',
-                  cell: ({ row }) => (
-                    <span className="tabular-nums">
-                      {formatUsd(row.original.estimatedSpendUsd)}
-                    </span>
-                  )
-                }
-              ] as ColumnDef<{
-                userId: string;
-                userEmail?: string | null;
-                messages: number;
-                tokens: number;
-                estimatedSpendUsd: string;
-              }>[]
-            }
-            data={summary?.topUsers ?? []}
-            isLoading={summaryLoading}
-            emptyMessage="No users recorded for this range."
-            enableSorting={true}
-            enablePagination={true}
-            pageSize={5}
-          />
+      <AdminCard
+        title="Top Users"
+        description="Highest estimated spend in this range."
+        tableMode
+      >
+        <AdminDataTable
+          columns={
+            [
+              {
+                id: 'user',
+                header: 'User',
+                accessorFn: (row: {
+                  userEmail?: string | null;
+                  userId: string;
+                }) => row.userEmail ?? row.userId,
+                cell: ({ row }) => (
+                  <span className="font-medium">
+                    {row.original.userEmail ??
+                      emailById.get(row.original.userId) ??
+                      `${row.original.userId.slice(0, 8)}...`}
+                  </span>
+                )
+              },
+              {
+                accessorKey: 'messages',
+                header: 'Messages',
+                cell: ({ row }) => (
+                  <span className="tabular-nums">
+                    {row.original.messages.toLocaleString()}
+                  </span>
+                )
+              },
+              {
+                accessorKey: 'tokens',
+                header: 'Tokens',
+                cell: ({ row }) => (
+                  <span className="tabular-nums">
+                    {row.original.tokens.toLocaleString()}
+                  </span>
+                )
+              },
+              {
+                accessorKey: 'estimatedSpendUsd',
+                header: 'Est. Spend',
+                cell: ({ row }) => (
+                  <span className="tabular-nums">
+                    {formatUsd(row.original.estimatedSpendUsd)}
+                  </span>
+                )
+              }
+            ] as ColumnDef<{
+              userId: string;
+              userEmail?: string | null;
+              messages: number;
+              tokens: number;
+              estimatedSpendUsd: string;
+            }>[]
+          }
+          data={summary?.topUsers ?? []}
+          isLoading={summaryLoading}
+          emptyMessage="No users recorded for this range."
+          enableSorting={true}
+          enablePagination={true}
+          pageSize={5}
+        />
       </AdminCard>
 
-      <AdminCard title="Detailed Usage" description="Daily per-user usage counters." tableMode>
+      <AdminCard
+        title="Detailed Usage"
+        description="Daily per-user usage counters."
+        tableMode
+      >
         <AdminDataTable
-            columns={
-              [
-                {
-                  id: 'user',
-                  header: 'User',
-                  accessorFn: (row: { userEmail?: string | null; userId: string }) =>
-                    row.userEmail ?? row.userId,
-                  cell: ({ row }) => (
-                    <span className="font-medium">
-                      {row.original.userEmail ??
-                        emailById.get(row.original.userId) ??
-                        `${row.original.userId.slice(0, 8)}...`}
-                    </span>
-                  )
-                },
-                {
-                  accessorKey: 'dayPh',
-                  header: 'Day',
-                  cell: ({ row }) => (
-                    <span className="text-muted-foreground text-sm">
-                      {row.original.dayPh}
-                    </span>
-                  )
-                },
-                {
-                  accessorKey: 'messagesToday',
-                  header: 'Messages',
-                  cell: ({ row }) => (
-                    <span className="tabular-nums">
-                      {row.original.messagesToday.toLocaleString()}
-                    </span>
-                  )
-                },
-                {
-                  accessorKey: 'tokensToday',
-                  header: 'Tokens',
-                  cell: ({ row }) => (
-                    <span className="tabular-nums">
-                      {row.original.tokensToday.toLocaleString()}
-                    </span>
-                  )
-                },
-                {
-                  accessorKey: 'estimatedSpendTodayUsd',
-                  header: 'Est. Spend',
-                  cell: ({ row }) => (
-                    <span className="tabular-nums">
-                      {formatUsd(row.original.estimatedSpendTodayUsd)}
-                    </span>
-                  )
-                }
-              ] as ColumnDef<UsageCounterRow>[]
-            }
-            data={counters}
-            isLoading={isTableLoading}
-            emptyMessage="No usage recorded for this range."
-            enableSorting={true}
-            enablePagination={true}
-            pageSize={5}
-          />
+          columns={
+            [
+              {
+                id: 'user',
+                header: 'User',
+                accessorFn: (row: {
+                  userEmail?: string | null;
+                  userId: string;
+                }) => row.userEmail ?? row.userId,
+                cell: ({ row }) => (
+                  <span className="font-medium">
+                    {row.original.userEmail ??
+                      emailById.get(row.original.userId) ??
+                      `${row.original.userId.slice(0, 8)}...`}
+                  </span>
+                )
+              },
+              {
+                accessorKey: 'dayPh',
+                header: 'Day',
+                cell: ({ row }) => (
+                  <span className="text-muted-foreground text-sm">
+                    {row.original.dayPh}
+                  </span>
+                )
+              },
+              {
+                accessorKey: 'messagesToday',
+                header: 'Messages',
+                cell: ({ row }) => (
+                  <span className="tabular-nums">
+                    {row.original.messagesToday.toLocaleString()}
+                  </span>
+                )
+              },
+              {
+                accessorKey: 'tokensToday',
+                header: 'Tokens',
+                cell: ({ row }) => (
+                  <span className="tabular-nums">
+                    {row.original.tokensToday.toLocaleString()}
+                  </span>
+                )
+              },
+              {
+                accessorKey: 'estimatedSpendTodayUsd',
+                header: 'Est. Spend',
+                cell: ({ row }) => (
+                  <span className="tabular-nums">
+                    {formatUsd(row.original.estimatedSpendTodayUsd)}
+                  </span>
+                )
+              }
+            ] as ColumnDef<UsageCounterRow>[]
+          }
+          data={counters}
+          isLoading={isTableLoading}
+          emptyMessage="No usage recorded for this range."
+          enableSorting={true}
+          enablePagination={true}
+          pageSize={5}
+        />
       </AdminCard>
     </div>
   );
