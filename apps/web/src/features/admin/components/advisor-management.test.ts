@@ -33,16 +33,13 @@ describe('admin advisor management wiring', () => {
     expect(source).toContain('adminAdvisorsQuery');
   });
 
-  test('model panel only offers backend-supported providers', async () => {
+  test('model panel fetches providers from backend catalog', async () => {
     const source = await Bun.file(
       import.meta.dir + '/model-config-panel.tsx'
     ).text();
 
-    expect(source).toContain('gemini');
-    expect(source).toContain('groq');
-    expect(source).toContain('deterministic');
-    expect(source).not.toContain('openai');
-    expect(source).not.toContain('anthropic');
-    expect(source).not.toContain('google:');
+    expect(source).toContain('modelCatalogQuery');
+    expect(source).not.toContain("PROVIDERS['gemini']");
+    expect(source).not.toContain('PROVIDERS.gemini');
   });
 });

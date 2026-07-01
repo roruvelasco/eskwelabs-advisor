@@ -34,7 +34,11 @@ import {
 } from '@eskwelabs-advisor/ui';
 
 import { updateModelConfig } from '@/lib/domains/admin/api';
-import { modelConfigQuery } from '@/lib/domains/admin/queries';
+import type { ModelCatalogResponse } from '@/lib/domains/admin/api';
+import {
+  modelCatalogQuery,
+  modelConfigQuery
+} from '@/lib/domains/admin/queries';
 import { AdminDataTable } from './admin-data-table';
 import type { ColumnDef } from '@tanstack/react-table';
 
@@ -47,28 +51,6 @@ interface ModelConfigRow {
   updatedAt: string;
 }
 
-const ADVISOR_LABELS: Record<string, string> = {
-  'data-dashboard': 'Data Dashboard Advisor',
-  'ssot-memo': 'SSOT Memo Advisor',
-  'data-modeling': 'Data Modeling Advisor',
-  'dna-digest': 'DNA Digest Summarizer'
-};
-
-const PROVIDERS: Record<string, { label: string; models: string[] }> = {
-  gemini: {
-    label: 'Gemini',
-    models: ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.0-flash']
-  },
-  groq: {
-    label: 'Groq',
-    models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant']
-  },
-  deterministic: {
-    label: 'Deterministic',
-    models: ['deterministic-model']
-  }
-};
-
 function formatDate(iso: string) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '-';
@@ -79,13 +61,24 @@ function formatDate(iso: string) {
   });
 }
 
-function EditModelDialog({ row }: { row: ModelConfigRow }) {
+function EditModelDialog({
+  row,
+  catalog
+}: {
+  row: ModelConfigRow;
+  catalog: ModelCatalogResponse['data']['providers'];
+}) {
   const [open, setOpen] = useState(false);
   const [provider, setProvider] = useState(row.provider);
   const [model, setModel] = useState(row.model);
   const [isEnabled, setIsEnabled] = useState(row.isEnabled);
   const queryClient = useQueryClient();
-  const models = PROVIDERS[provider]?.models ?? [model].filter(Boolean);
+
+  const providerEntry = catalog.find((p) => p.provider === provider);
+  const models = providerEntry?.models.map((m) => m.model) ?? [];
+  const providerAvailable = Boolean(providerEntry);
+  const modelAvailable = providerAvailable && models.includes(model);
+  const isStale = !providerAvailable || !modelAvailable;
 
   const { mutate, isPending } = useMutation({
     mutationFn: () =>
@@ -105,7 +98,8 @@ function EditModelDialog({ row }: { row: ModelConfigRow }) {
 
   function handleProviderChange(nextProvider: string) {
     setProvider(nextProvider);
-    setModel(PROVIDERS[nextProvider]?.models[0] ?? '');
+    const entry = catalog.find((p) => p.provider === nextProvider);
+    setModel(entry?.models[0]?.model ?? '');
   }
 
   return (
@@ -121,12 +115,17 @@ function EditModelDialog({ row }: { row: ModelConfigRow }) {
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>
-            {ADVISOR_LABELS[row.advisorId] ?? row.advisorId}
-          </DialogTitle>
+          <DialogTitle>{row.advisorId}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
+          {isStale && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+              The current configuration ({row.provider}/{row.model}) is no
+              longer available. Select a new provider and model to save.
+            </div>
+          )}
+
           <div className="space-y-1.5">
             <Label htmlFor={`provider-${row.advisorId}`}>Provider</Label>
             <Select value={provider} onValueChange={handleProviderChange}>
@@ -137,9 +136,9 @@ function EditModelDialog({ row }: { row: ModelConfigRow }) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(PROVIDERS).map(([key, providerOption]) => (
-                  <SelectItem key={key} value={key}>
-                    {providerOption.label}
+                {catalog.map((p) => (
+                  <SelectItem key={p.provider} value={p.provider}>
+                    {p.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -173,7 +172,10 @@ function EditModelDialog({ row }: { row: ModelConfigRow }) {
         </div>
 
         <DialogFooter showCloseButton>
-          <Button onClick={() => mutate()} disabled={isPending || !model}>
+          <Button
+            onClick={() => mutate()}
+            disabled={isPending || !model || isStale}
+          >
             {isPending ? 'Saving...' : 'Save'}
           </Button>
         </DialogFooter>
@@ -184,10 +186,24 @@ function EditModelDialog({ row }: { row: ModelConfigRow }) {
 
 export function ModelConfigPanel() {
   const { data, isLoading, error } = useQuery(modelConfigQuery);
+  const { data: catalogData } = useQuery(modelCatalogQuery);
+  const catalog = useMemo(
+    () =>
+      (catalogData as ModelCatalogResponse | undefined)?.data?.providers ?? [],
+    [catalogData]
+  );
   const rows = useMemo(
     () => (data as { data: ModelConfigRow[] } | undefined)?.data ?? [],
     [data]
   );
+
+  const providerLabelMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const p of catalog) {
+      map[p.provider] = p.label;
+    }
+    return map;
+  }, [catalog]);
 
   const providerData = useMemo(() => {
     const counts = new Map<string, number>();
@@ -195,23 +211,23 @@ export function ModelConfigPanel() {
       counts.set(row.provider, (counts.get(row.provider) ?? 0) + 1);
     }
     return Array.from(counts.entries())
-      .map(([provider, count]) => ({
-        provider: PROVIDERS[provider]?.label ?? provider,
+      .map(([p, count]) => ({
+        provider: providerLabelMap[p] ?? p.charAt(0).toUpperCase() + p.slice(1),
         value: count,
-        fill: `var(--color-${provider})`
+        fill: `var(--color-${p})`
       }))
       .sort((a, b) => b.value - a.value);
-  }, [rows]);
+  }, [rows, providerLabelMap]);
 
   const chartConfig = useMemo(
     () =>
       Object.fromEntries(
-        Object.entries(PROVIDERS).map(([key, { label }], i) => [
-          key,
-          { label, color: `var(--chart-${(i % 5) + 1})` }
+        catalog.map((p, i) => [
+          p.provider,
+          { label: p.label, color: `var(--chart-${(i % 5) + 1})` }
         ])
       ),
-    []
+    [catalog]
   );
 
   if (error) {
@@ -278,8 +294,7 @@ export function ModelConfigPanel() {
                     header: 'Advisor',
                     cell: ({ row }) => (
                       <span className="font-medium">
-                        {ADVISOR_LABELS[row.original.advisorId] ??
-                          row.original.advisorId}
+                        {row.original.advisorId}
                       </span>
                     )
                   },
@@ -331,7 +346,10 @@ export function ModelConfigPanel() {
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <EditModelDialog row={row.original} />
+                              <EditModelDialog
+                                row={row.original}
+                                catalog={catalog}
+                              />
                             </TooltipTrigger>
                             <TooltipContent>Edit</TooltipContent>
                           </Tooltip>

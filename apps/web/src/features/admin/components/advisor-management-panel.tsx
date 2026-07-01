@@ -41,6 +41,7 @@ import {
 import type {
   AdminAdvisor,
   CreateAdvisorInput,
+  ModelCatalogResponse,
   UpdateAdvisorInput
 } from '@/lib/domains/admin/api';
 import {
@@ -49,23 +50,11 @@ import {
   publishAdvisor,
   updateAdvisor
 } from '@/lib/domains/admin/api';
-import { adminAdvisorsQuery } from '@/lib/domains/admin/queries';
+import {
+  adminAdvisorsQuery,
+  modelCatalogQuery
+} from '@/lib/domains/admin/queries';
 import { AdminDataTable } from './admin-data-table';
-
-const PROVIDERS: Record<string, { label: string; models: string[] }> = {
-  gemini: {
-    label: 'Gemini',
-    models: ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.0-flash']
-  },
-  groq: {
-    label: 'Groq',
-    models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant']
-  },
-  deterministic: {
-    label: 'Deterministic',
-    models: ['deterministic-model']
-  }
-};
 
 function formatDate(iso: string | null) {
   if (!iso) return '-';
@@ -111,6 +100,9 @@ function invalidateAdvisorQueries(
 
 export function CreateAdvisorButton() {
   const [open, setOpen] = useState(false);
+  const { data: catalogData } = useQuery(modelCatalogQuery);
+  const catalog =
+    (catalogData as ModelCatalogResponse | undefined)?.data?.providers ?? [];
 
   return (
     <>
@@ -118,7 +110,13 @@ export function CreateAdvisorButton() {
         <PlusIcon className="size-4" />
         Add Advisor
       </Button>
-      {open && <AdvisorDialog mode="create" onClose={() => setOpen(false)} />}
+      {open && (
+        <AdvisorDialog
+          mode="create"
+          catalog={catalog}
+          onClose={() => setOpen(false)}
+        />
+      )}
     </>
   );
 }
@@ -126,14 +124,20 @@ export function CreateAdvisorButton() {
 function AdvisorDialog({
   mode,
   row,
+  catalog,
   onClose
 }: {
   mode: 'create' | 'edit';
   row?: AdminAdvisor;
+  catalog: ModelCatalogResponse['data']['providers'];
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
   const isCreate = mode === 'create';
+  const firstProvider = catalog[0];
+  const currentProvider = row?.modelConfig?.provider;
+  const providerAvailable = catalog.some((p) => p.provider === currentProvider);
+
   const [id, setId] = useState(row?.id ?? '');
   const [name, setName] = useState(row?.name ?? '');
   const [description, setDescription] = useState(row?.description ?? '');
@@ -141,16 +145,25 @@ function AdvisorDialog({
   const [isActive, setIsActive] = useState(row?.isActive ?? true);
   const [status, setStatus] = useState(row?.status ?? 'active');
   const [provider, setProvider] = useState(
-    row?.modelConfig?.provider ?? 'gemini'
+    isCreate ? (firstProvider?.provider ?? '') : (currentProvider ?? '')
   );
   const [model, setModel] = useState(
-    row?.modelConfig?.model ?? PROVIDERS.gemini.models[0]
+    isCreate
+      ? (firstProvider?.models[0]?.model ?? '')
+      : (row?.modelConfig?.model ?? '')
   );
   const [modelEnabled, setModelEnabled] = useState(
     row?.modelConfig?.isEnabled ?? true
   );
 
-  const models = PROVIDERS[provider]?.models ?? [model].filter(Boolean);
+  const providerEntry = catalog.find((p) => p.provider === provider);
+  const models =
+    providerEntry?.models.map((m) => m.model) ?? [model].filter(Boolean);
+  const modelAvailable = Boolean(
+    providerEntry?.models.some((m) => m.model === model)
+  );
+  const isStale =
+    !isCreate && currentProvider && (!providerAvailable || !modelAvailable);
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -187,7 +200,8 @@ function AdvisorDialog({
 
   function handleProviderChange(nextProvider: string) {
     setProvider(nextProvider);
-    setModel(PROVIDERS[nextProvider]?.models[0] ?? '');
+    const entry = catalog.find((p) => p.provider === nextProvider);
+    setModel(entry?.models[0]?.model ?? '');
   }
 
   function handleActiveChange(nextActive: boolean) {
@@ -199,6 +213,8 @@ function AdvisorDialog({
   const canSave =
     name.trim().length > 0 &&
     model.trim().length > 0 &&
+    provider.trim().length > 0 &&
+    !isStale &&
     (!isCreate || /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id.trim()));
 
   return (
@@ -251,6 +267,13 @@ function AdvisorDialog({
             />
           </div>
 
+          {isStale && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 sm:col-span-2 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+              The current model ({currentProvider}/{row?.modelConfig?.model}) is
+              no longer available. Select a new provider and model to save.
+            </div>
+          )}
+
           <div className="space-y-1.5">
             <Label htmlFor="advisor-provider">Provider</Label>
             <Select value={provider} onValueChange={handleProviderChange}>
@@ -258,9 +281,9 @@ function AdvisorDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(PROVIDERS).map(([key, option]) => (
-                  <SelectItem key={key} value={key}>
-                    {option.label}
+                {catalog.map((p) => (
+                  <SelectItem key={p.provider} value={p.provider}>
+                    {p.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -315,7 +338,13 @@ function AdvisorDialog({
   );
 }
 
-function AdvisorActions({ row }: { row: AdminAdvisor }) {
+function AdvisorActions({
+  row,
+  catalog
+}: {
+  row: AdminAdvisor;
+  catalog: ModelCatalogResponse['data']['providers'];
+}) {
   const [editing, setEditing] = useState(false);
   const queryClient = useQueryClient();
 
@@ -449,6 +478,7 @@ function AdvisorActions({ row }: { row: AdminAdvisor }) {
         <AdvisorDialog
           mode="edit"
           row={row}
+          catalog={catalog}
           onClose={() => setEditing(false)}
         />
       )}
@@ -460,6 +490,9 @@ export function AdvisorManagementPanel() {
   const { data, isLoading, error, refetch } = useQuery(
     adminAdvisorsQuery({ limit: 100 })
   );
+  const { data: catalogData } = useQuery(modelCatalogQuery);
+  const catalog =
+    (catalogData as ModelCatalogResponse | undefined)?.data?.providers ?? [];
   const rows = useMemo(() => data?.data ?? [], [data]);
 
   if (error) {
@@ -557,7 +590,9 @@ export function AdvisorManagementPanel() {
               {
                 id: 'actions',
                 header: '',
-                cell: ({ row }) => <AdvisorActions row={row.original} />
+                cell: ({ row }) => (
+                  <AdvisorActions row={row.original} catalog={catalog} />
+                )
               }
             ] as ColumnDef<AdminAdvisor>[]
           }
