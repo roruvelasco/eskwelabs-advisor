@@ -5,7 +5,7 @@ export type ModelRate = {
   outputUsdPerMillionTokens: number;
 };
 
-const MODEL_RATES: ModelRate[] = [
+export const MODEL_RATES: ModelRate[] = [
   {
     provider: 'gemini',
     model: 'gemini-2.0-flash',
