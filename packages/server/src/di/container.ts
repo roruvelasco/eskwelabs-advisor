@@ -13,6 +13,7 @@ import {
   GoogleDocsGeminiDnaDigestGenerator,
   GroqDnaDigestSummarizer,
   GroqLlmProvider,
+  OpenRouterLlmProvider,
   RoutingLlmProvider,
   type DnaDigestSummarizer,
   type LlmProvider
@@ -200,6 +201,10 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
 
         if (env.GEMINI_API_KEY) {
           providers.set('gemini', new GeminiLlmProvider(env));
+        }
+
+        if (env.OPENROUTER_API_KEY) {
+          providers.set('openrouter', new OpenRouterLlmProvider(env));
         }
 
         if (env.LLM_PROVIDER_MODE === 'auto' && providers.size === 0) {

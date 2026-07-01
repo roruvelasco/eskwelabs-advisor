@@ -37,6 +37,36 @@ const MODEL_RATES: ModelRate[] = [
     outputUsdPerMillionTokens: 0.08
   },
   {
+    provider: 'openrouter',
+    model: 'meta-llama/llama-3.3-70b-instruct',
+    inputUsdPerMillionTokens: 0.1,
+    outputUsdPerMillionTokens: 0.32
+  },
+  {
+    provider: 'openrouter',
+    model: 'meta-llama/llama-3.1-8b-instruct',
+    inputUsdPerMillionTokens: 0.02,
+    outputUsdPerMillionTokens: 0.04
+  },
+  {
+    provider: 'openrouter',
+    model: 'deepseek/deepseek-v4-flash',
+    inputUsdPerMillionTokens: 0.098,
+    outputUsdPerMillionTokens: 0.196
+  },
+  {
+    provider: 'openrouter',
+    model: 'mistralai/ministral-3b-2512',
+    inputUsdPerMillionTokens: 0.1,
+    outputUsdPerMillionTokens: 0.1
+  },
+  {
+    provider: 'openrouter',
+    model: 'meta-llama/llama-4-scout',
+    inputUsdPerMillionTokens: 0.1,
+    outputUsdPerMillionTokens: 0.3
+  },
+  {
     provider: 'deterministic',
     model: 'deterministic-model',
     inputUsdPerMillionTokens: 0,

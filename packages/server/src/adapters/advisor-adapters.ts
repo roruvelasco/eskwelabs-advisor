@@ -941,6 +941,280 @@ export class GroqLlmProvider implements LlmProvider {
   }
 }
 
+export class OpenRouterLlmProvider implements LlmProvider {
+  constructor(private env: ServerEnv) {}
+
+  private get baseUrl() {
+    return this.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
+  }
+
+  async complete(request: LlmChatRequest) {
+    if (!this.env.OPENROUTER_API_KEY) {
+      throw new HttpException(
+        503,
+        'OpenRouter API key is not configured',
+        'openrouter_not_configured'
+      );
+    }
+
+    const startedAt = Date.now();
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      this.env.PROVIDER_TIMEOUT_MS
+    );
+
+    try {
+      const body = {
+        model: request.model,
+        messages: request.messages.map((m) => ({
+          role: m.role,
+          content: m.content
+        })),
+        max_tokens: this.env.DEFAULT_MAX_OUTPUT_TOKENS,
+        stream: false
+      };
+
+      const response = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.env.OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal
+      });
+
+      if (!response.ok) {
+        throw await this.mapError(response);
+      }
+
+      const result = (await response.json()) as {
+        choices: Array<{ message: { content: string }; finish_reason: string }>;
+        usage?: {
+          prompt_tokens: number;
+          completion_tokens: number;
+          total_tokens: number;
+        };
+      };
+
+      const choice = result.choices?.[0];
+      if (!choice?.message?.content) {
+        throw new HttpException(
+          502,
+          'OpenRouter returned an invalid response',
+          'openrouter_invalid_response'
+        );
+      }
+
+      const promptTokens = result.usage?.prompt_tokens ?? 0;
+      const completionTokens = result.usage?.completion_tokens ?? 0;
+
+      return {
+        content: choice.message.content,
+        promptTokens,
+        completionTokens,
+        latencyMs: Date.now() - startedAt,
+        estimatedCostUsd: formatEstimatedCostUsd(
+          estimateModelCostUsd({
+            provider: request.provider,
+            model: request.model,
+            promptTokens,
+            completionTokens
+          }) ?? 0
+        )
+      };
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      if ((error as Error).name === 'AbortError') {
+        throw new HttpException(
+          504,
+          'OpenRouter request timed out',
+          'provider_timeout'
+        );
+      }
+      throw new HttpException(
+        502,
+        'OpenRouter request failed',
+        'openrouter_request_failed'
+      );
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  async *stream(request: LlmChatRequest): AsyncGenerator<LlmChatChunk> {
+    if (!this.env.OPENROUTER_API_KEY) {
+      throw new HttpException(
+        503,
+        'OpenRouter API key is not configured',
+        'openrouter_not_configured'
+      );
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      this.env.PROVIDER_TIMEOUT_MS
+    );
+
+    try {
+      const response = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.env.OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: request.model,
+          messages: request.messages.map((m) => ({
+            role: m.role,
+            content: m.content
+          })),
+          max_tokens: this.env.DEFAULT_MAX_OUTPUT_TOKENS,
+          stream: true
+        }),
+        signal: controller.signal
+      });
+
+      if (!response.ok || !response.body) {
+        throw new HttpException(
+          502,
+          'OpenRouter stream failed',
+          'openrouter_stream_failed'
+        );
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let promptTokens = 0;
+      let completionTokens = 0;
+      let finishReason: string | undefined;
+
+      let isDone = false;
+      while (!isDone) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith('data:')) continue;
+          const data = trimmed.slice('data:'.length).trim();
+          if (data === '[DONE]') {
+            isDone = true;
+            break;
+          }
+
+          try {
+            const chunk = JSON.parse(data) as {
+              choices?: Array<{
+                delta?: { content?: string };
+                finish_reason?: string;
+              }>;
+              usage?: {
+                prompt_tokens: number;
+                completion_tokens: number;
+                total_tokens: number;
+              };
+            };
+            const delta = chunk.choices?.[0]?.delta?.content;
+            if (delta) {
+              yield { type: 'delta', content: delta };
+            }
+
+            if (chunk.usage) {
+              promptTokens = chunk.usage.prompt_tokens ?? 0;
+              completionTokens = chunk.usage.completion_tokens ?? 0;
+            }
+
+            if (chunk.choices?.[0]?.finish_reason) {
+              finishReason = chunk.choices[0].finish_reason;
+            }
+          } catch {
+            /* skip malformed JSON */
+          }
+        }
+      }
+
+      yield {
+        type: 'done',
+        usage: {
+          promptTokens,
+          completionTokens,
+          totalTokens: promptTokens + completionTokens,
+          estimatedCostUsd: formatEstimatedCostUsd(
+            estimateModelCostUsd({
+              provider: request.provider,
+              model: request.model,
+              promptTokens,
+              completionTokens
+            }) ?? 0
+          )
+        },
+        finishReason: finishReason ?? 'stop'
+      };
+    } catch (error) {
+      if ((error as Error).name === 'AbortError') {
+        throw new HttpException(
+          504,
+          'OpenRouter stream timed out',
+          'provider_timeout'
+        );
+      }
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        502,
+        'OpenRouter stream failed',
+        'openrouter_stream_failed'
+      );
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  private async mapError(response: Response) {
+    switch (response.status) {
+      case 401:
+      case 403:
+        return new HttpException(
+          502,
+          'OpenRouter authentication failed',
+          'openrouter_auth_error'
+        );
+      case 404:
+        return new HttpException(
+          502,
+          'OpenRouter model not found',
+          'openrouter_model_error'
+        );
+      case 429:
+        return new HttpException(
+          502,
+          'OpenRouter rate limit exceeded',
+          'openrouter_rate_limited'
+        );
+      default:
+        if (response.status >= 500) {
+          return new HttpException(
+            502,
+            'OpenRouter upstream error',
+            'openrouter_upstream_error'
+          );
+        }
+        return new HttpException(
+          502,
+          'OpenRouter request failed',
+          'openrouter_request_failed'
+        );
+    }
+  }
+}
+
 export class DeterministicDnaDigestSummarizer implements DnaDigestSummarizer {
   async summarize() {
     return 'eskwelabs data mentor fellow communication DNA digest for all advisors';

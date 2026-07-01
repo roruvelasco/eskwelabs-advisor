@@ -27,6 +27,11 @@ export const serverEnvSchema = z
       .string()
       .optional()
       .default('https://api.groq.com/openai/v1'),
+    OPENROUTER_API_KEY: z.string().optional().default(''),
+    OPENROUTER_BASE_URL: z
+      .string()
+      .optional()
+      .default('https://openrouter.ai/api/v1'),
     PROVIDER_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
     DAILY_MESSAGE_LIMIT: z.coerce.number().int().positive().default(25),
     DAILY_TOKEN_LIMIT: z.coerce.number().int().positive().default(100_000),
@@ -53,7 +58,7 @@ export const serverEnvSchema = z
       .optional()
       .default('production'),
     LLM_PROVIDER_MODE: z
-      .enum(['auto', 'deterministic', 'gemini', 'groq'])
+      .enum(['auto', 'deterministic', 'gemini', 'groq', 'openrouter'])
       .optional()
       .default('auto'),
     PROMPT_PROVIDER_MODE: z
