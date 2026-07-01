@@ -4,6 +4,7 @@ import {
   getAdminUsage,
   getAdvisorBreakdown,
   getDnaSource,
+  getModelCatalog,
   getUsageLimits,
   getUsageLimitsReview,
   getUsageSummary,
@@ -98,7 +99,13 @@ export function advisorBreakdownQuery({
   toDayPh?: string;
 } = {}) {
   return queryOptions({
-    queryKey: ['admin', 'usage-counters', 'advisor-breakdown', fromDayPh, toDayPh],
+    queryKey: [
+      'admin',
+      'usage-counters',
+      'advisor-breakdown',
+      fromDayPh,
+      toDayPh
+    ],
     queryFn: () => getAdvisorBreakdown({ fromDayPh, toDayPh })
   });
 }
@@ -106,6 +113,11 @@ export function advisorBreakdownQuery({
 export const modelConfigQuery = queryOptions({
   queryKey: ['admin', 'model-config'],
   queryFn: listModelConfig
+});
+
+export const modelCatalogQuery = queryOptions({
+  queryKey: ['admin', 'model-catalog'],
+  queryFn: getModelCatalog
 });
 
 export function adminAdvisorsQuery({

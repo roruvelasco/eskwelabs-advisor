@@ -117,6 +117,30 @@ export interface UsageSummaryResponse {
   };
 }
 
+export interface CatalogModel {
+  model: string;
+  inputUsdPerMillionTokens: number;
+  outputUsdPerMillionTokens: number;
+}
+
+export interface CatalogProvider {
+  provider: string;
+  label: string;
+  models: CatalogModel[];
+}
+
+export interface ModelCatalogResponse {
+  data: {
+    providers: CatalogProvider[];
+  };
+}
+
+export function getModelCatalog(): Promise<ModelCatalogResponse> {
+  return apiClient.admin['model-config'].catalog
+    .$get()
+    .then(parseApiResponse) as Promise<ModelCatalogResponse>;
+}
+
 export function getAdminUsage(): Promise<DataResponse<unknown>> {
   return apiClient.admin.usage.$get().then(parseApiResponse) as Promise<
     DataResponse<unknown>
