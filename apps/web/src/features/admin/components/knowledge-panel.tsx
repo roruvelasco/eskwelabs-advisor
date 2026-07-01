@@ -2,7 +2,12 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { PencilIcon, PlusIcon, RefreshCwIcon } from 'lucide-react';
+import {
+  MoreVertical,
+  PencilIcon,
+  PlusIcon,
+  RefreshCwIcon
+} from 'lucide-react';
 
 import {
   Badge,
@@ -15,6 +20,10 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   Input,
   Label,
   Select,
@@ -164,15 +173,62 @@ function payloadString(payload: Record<string, unknown>, key: string) {
   return typeof value === 'string' ? value : null;
 }
 
-function EditSourceDialog({
+function RowActionsMenu({
   row,
-  advisorScopes
+  advisorScopes,
+  onRefresh,
+  isRefreshing
 }: {
   row: SelectionRow;
   advisorScopes: string[];
+  onRefresh: () => void;
+  isRefreshing: boolean;
+}) {
+  const [editOpen, setEditOpen] = useState(false);
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" aria-label="Row actions">
+            <MoreVertical className="size-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={onRefresh} disabled={isRefreshing}>
+            <RefreshCwIcon
+              className={`mr-2 size-4 ${isRefreshing ? 'animate-spin' : ''}`}
+            />
+            Refresh Source
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setEditOpen(true)}>
+            <PencilIcon className="mr-2 size-4" />
+            Edit Source
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <EditSourceDialog
+        row={row}
+        advisorScopes={advisorScopes}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+      />
+    </>
+  );
+}
+
+function EditSourceDialog({
+  row,
+  advisorScopes,
+  open,
+  onOpenChange
+}: {
+  row: SelectionRow;
+  advisorScopes: string[];
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
   const [docId, setDocId] = useState(row.docId ?? '');
   const [title, setTitle] = useState(row.source?.title ?? row.label);
   const [contentType, setContentType] = useState(
@@ -204,7 +260,7 @@ function EditSourceDialog({
       });
       queryClient.invalidateQueries({ queryKey: ['admin', 'telemetry'] });
       toast.success('Document source updated');
-      setOpen(false);
+      onOpenChange(false);
     },
     onError: () => {
       toast.error('Failed to update document source');
@@ -217,12 +273,7 @@ function EditSourceDialog({
       : docId.trim().length > 0 && title.trim().length > 0;
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label="Edit document source">
-          <PencilIcon className="size-4" />
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Edit Document Source</DialogTitle>
@@ -300,7 +351,7 @@ function EditSourceDialog({
           ) : null}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <Button
@@ -622,34 +673,13 @@ function SelectionsTable({ advisorScopes }: { advisorScopes: string[] }) {
             id: 'actions',
             header: '',
             cell: ({ row }) => (
-              <div className="flex justify-end gap-1">
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Refresh document source"
-                        disabled={refreshMutation.isPending}
-                        onClick={() => refreshMutation.mutate(row.original)}
-                      >
-                        <RefreshCwIcon className="size-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Refresh</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <EditSourceDialog
-                        row={row.original}
-                        advisorScopes={advisorScopes}
-                      />
-                    </TooltipTrigger>
-                    <TooltipContent>Edit</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+              <div className="flex justify-end">
+                <RowActionsMenu
+                  row={row.original}
+                  advisorScopes={advisorScopes}
+                  onRefresh={() => refreshMutation.mutate(row.original)}
+                  isRefreshing={refreshMutation.isPending}
+                />
               </div>
             )
           }
