@@ -1,21 +1,33 @@
 import { describe, expect, test } from 'bun:test';
 
 import { ModelConfigService } from '../model-config.service';
+import type { ServerEnv } from '../../config/env';
+
+const mockEnv = {
+  LLM_PROVIDER_MODE: 'auto',
+  GROQ_API_KEY: 'gsk_test',
+  GEMINI_API_KEY: '',
+  OPENROUTER_API_KEY: '',
+  RUNTIME_PROFILE: 'test'
+} as ServerEnv;
 
 describe('model config service', () => {
   test('lists advisor model config from the repository', async () => {
-    const service = new ModelConfigService({
-      list: async () => [
-        {
-          advisorId: 'data-dashboard',
-          provider: 'gemini',
-          model: 'gemini-2.5-flash-lite',
-          isEnabled: true,
-          updatedBy: null,
-          updatedAt: new Date()
-        }
-      ]
-    } as never);
+    const service = new ModelConfigService(
+      {
+        list: async () => [
+          {
+            advisorId: 'data-dashboard',
+            provider: 'gemini',
+            model: 'gemini-2.5-flash-lite',
+            isEnabled: true,
+            updatedBy: null,
+            updatedAt: new Date()
+          }
+        ]
+      } as never,
+      mockEnv
+    );
 
     await expect(service.list()).resolves.toEqual([
       expect.objectContaining({
@@ -29,19 +41,22 @@ describe('model config service', () => {
 
   test('updates enabled state with model configuration', async () => {
     const updates: unknown[] = [];
-    const service = new ModelConfigService({
-      upsert: async (advisorId: string, input: unknown) => {
-        updates.push({ advisorId, input });
-        return {
-          advisorId,
-          provider: 'groq',
-          model: 'llama-3.3-70b-versatile',
-          isEnabled: false,
-          updatedBy: 'admin-id',
-          updatedAt: new Date()
-        };
-      }
-    } as never);
+    const service = new ModelConfigService(
+      {
+        upsert: async (advisorId: string, input: unknown) => {
+          updates.push({ advisorId, input });
+          return {
+            advisorId,
+            provider: 'groq',
+            model: 'llama-3.3-70b-versatile',
+            isEnabled: false,
+            updatedBy: 'admin-id',
+            updatedAt: new Date()
+          };
+        }
+      } as never,
+      mockEnv
+    );
 
     await expect(
       service.update('data-dashboard', {
