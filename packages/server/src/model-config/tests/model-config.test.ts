@@ -39,6 +39,52 @@ describe('model config service', () => {
     ]);
   });
 
+  test('rejects unavailable provider with 422', async () => {
+    const service = new ModelConfigService(
+      {
+        upsert: async () => {
+          throw new Error('upsert should not be called');
+        }
+      } as never,
+      mockEnv
+    );
+
+    const err = await service
+      .update('data-dashboard', {
+        provider: 'openai',
+        model: 'gpt-4',
+        updatedBy: 'admin-id'
+      })
+      .catch((e: Error) => e);
+
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Record<string, unknown>).status).toBe(422);
+    expect((err as Record<string, unknown>).code).toBe('model_not_available');
+  });
+
+  test('rejects available provider but unavailable model with 422', async () => {
+    const service = new ModelConfigService(
+      {
+        upsert: async () => {
+          throw new Error('upsert should not be called');
+        }
+      } as never,
+      mockEnv
+    );
+
+    const err = await service
+      .update('data-dashboard', {
+        provider: 'groq',
+        model: 'nonexistent-model',
+        updatedBy: 'admin-id'
+      })
+      .catch((e: Error) => e);
+
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Record<string, unknown>).status).toBe(422);
+    expect((err as Record<string, unknown>).code).toBe('model_not_available');
+  });
+
   test('updates enabled state with model configuration', async () => {
     const updates: unknown[] = [];
     const service = new ModelConfigService(

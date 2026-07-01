@@ -151,6 +151,48 @@ Response (list, paginated): `{ data: Message[], meta: { nextCursor: string | nul
 | ------ | ------------------------------------ | ---------------------------------------------------------- | ------------------------------- |
 | `GET`  | `/api/admin/model-config`            | —                                                          | List all model configs          |
 | `PUT`  | `/api/admin/model-config/:advisorId` | `{ provider: string, model: string, isEnabled?: boolean }` | Update model config for advisor |
+| `GET`  | `/api/admin/model-config/catalog`    | —                                                          | Available providers and models  |
+
+### Model Catalog
+
+`GET /api/admin/model-config/catalog` returns available providers and their model rates, filtered by `LLM_PROVIDER_MODE` and configured API keys. Provider and model availability match the same logic used by the runtime LLM provider factory.
+
+Response:
+
+```json
+{
+  "data": {
+    "providers": [
+      {
+        "provider": "groq",
+        "label": "Groq",
+        "models": [
+          {
+            "model": "llama-3.3-70b-versatile",
+            "inputUsdPerMillionTokens": 0.59,
+            "outputUsdPerMillionTokens": 0.79
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+### Model Config Update Validation
+
+`PUT /api/admin/model-config/:advisorId` validates that the `provider` is in the available set and that the `model` exists in the registered rate table. Either check failing returns:
+
+```json
+{
+  "error": {
+    "code": "model_not_available",
+    "message": "Model \"unknown-model\" is not available for provider \"groq\""
+  }
+}
+```
+
+HTTP status: `422 Unprocessable Entity`.
 
 ---
 
