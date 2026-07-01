@@ -220,7 +220,7 @@ export function UsersPanel() {
           isLoading={isLoading}
           emptyMessage="No users found."
           enableSorting={true}
-          enablePagination={false}
+          enablePagination={true}
         />
       </CardContent>
     </Card>
