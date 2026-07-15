@@ -4,12 +4,16 @@ import {
   requireConsent
 } from '../common/middleware/auth.middleware';
 import { parseJsonBody } from '../common/middleware/validation.middleware';
-import { validationFailed } from '../common/http/http-exception';
+import { notFound, validationFailed } from '../common/http/http-exception';
 import { paginationParamsDto } from '../common/pagination';
 import { z } from 'zod';
 
+import type { ServerEnv } from '../config/env';
+import { ConversationSharesSerializer } from './conversation-shares.serializer';
+import { ConversationSharesService } from './conversation-shares.service';
 import { ConversationsSerializer } from './conversations.serializer';
 import { ConversationsService } from './conversations.service';
+import { shareIdParamDto } from './dto/conversation-shares.dto';
 
 const createConversationSchema = z.object({
   advisorId: z.string().min(1),
@@ -19,7 +23,10 @@ const createConversationSchema = z.object({
 export class ConversationController extends Controller {
   constructor(
     private conversationsService: ConversationsService,
-    private conversationsSerializer: ConversationsSerializer
+    private conversationsSerializer: ConversationsSerializer,
+    private conversationSharesService: ConversationSharesService,
+    private conversationSharesSerializer: ConversationSharesSerializer,
+    private serverEnv: Pick<ServerEnv, 'APP_ORIGIN'>
   ) {
     super();
   }
@@ -70,6 +77,33 @@ export class ConversationController extends Controller {
         }
         await this.conversationsService.delete(actor, parsed.data);
         return c.body(null, 204);
+      })
+      .post('/conversations/:id/share', async (c) => {
+        const actor = c.get('actor')!;
+        const parsed = z.string().uuid().safeParse(c.req.param('id'));
+        if (!parsed.success) {
+          throw validationFailed({ issues: parsed.error.issues });
+        }
+        const share = await this.conversationSharesService.share(
+          actor,
+          parsed.data
+        );
+        return c.json(
+          this.conversationSharesSerializer.link(
+            share,
+            this.serverEnv.APP_ORIGIN
+          )
+        );
+      })
+      .get('/share/:shareId', async (c) => {
+        const parsed = shareIdParamDto.safeParse(c.req.param('shareId'));
+        if (!parsed.success) {
+          throw notFound();
+        }
+        const view = await this.conversationSharesService.sharedView(
+          parsed.data
+        );
+        return c.json(this.conversationSharesSerializer.sharedView(view));
       });
   }
 }

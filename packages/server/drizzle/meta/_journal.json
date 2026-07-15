@@ -162,6 +162,13 @@
       "when": 1782833953029,
       "tag": "0022_chubby_tyger_tiger",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1784035667299,
+      "tag": "0023_sad_roland_deschain",
+      "breakpoints": true
     }
   ]
 }

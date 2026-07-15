@@ -14,6 +14,7 @@ import {
 import { AdvisorChip } from './advisor-chip';
 import { cn } from '@/lib/utils';
 import { ChatSidebar } from './chat-sidebar';
+import { CopyConversationLinkButton } from './copy-conversation-link-button';
 import { ChatComposer } from './chat-composer';
 import { ChatMessages, type Message } from './chat-messages';
 import { ConsentDialog } from '@/features/auth/components/consent-dialog';
@@ -390,9 +391,14 @@ function ChatLayoutInner() {
                 className="size-9"
               />
             </div>
-            {currentAdvisorId && (
-              <AdvisorChip id={currentAdvisorId} name={currentAdvisorName} />
-            )}
+            <div className="flex items-center gap-2">
+              {conversationId && (
+                <CopyConversationLinkButton conversationId={conversationId} />
+              )}
+              {currentAdvisorId && (
+                <AdvisorChip id={currentAdvisorId} name={currentAdvisorName} />
+              )}
+            </div>
           </header>
 
           {isLoading && !hasCachedData && !sendMutation.isPending ? (

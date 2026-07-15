@@ -319,6 +319,22 @@ Indexes: composite on `(status, claimed_at)` for claim queries, composite on `(s
 
 Type: `ConversationTitleJob`
 
+### `conversation_shares` (`conversationSharesTable` in code, `conversation_shares` in DB)
+
+| Column            | Type                | Constraints                            |
+| ----------------- | ------------------- | -------------------------------------- |
+| `id`              | `uuid`              | PK, default `gen_random_uuid()`        |
+| `share_id`        | `text`              | NOT NULL, unique (32-byte base64url)   |
+| `conversation_id` | `uuid`              | NOT NULL, FK → conversations (CASCADE) |
+| `created_by`      | `uuid`              | NOT NULL, FK → users                   |
+| `is_active`       | `boolean`           | NOT NULL, default `true`               |
+| `created_at`      | `timestamp with tz` | NOT NULL, default `now()`              |
+| `updated_at`      | `timestamp with tz` | NOT NULL, default `now()`              |
+
+Indexes: unique on `share_id` (public lookup), unique on `conversation_id` (one share per conversation — share is idempotent).
+
+Type: `ConversationShare`
+
 ## Relationship Map
 
 ```
@@ -338,6 +354,7 @@ advisors ──1:N── advisor_runtime_versions
 advisor_runtime_versions ──1:N── conversations (via advisor_runtime_version_id)
 
 conversations ──1:1── conversation_title_jobs
+conversations ──1:1── conversation_shares
 
 knowledge_sources ──1:N── knowledge_units ──1:N── knowledge_embeddings
 knowledge_units ──1:N── knowledge_rules

@@ -572,7 +572,10 @@ describe('conversations controller - DELETE /conversations/:id', () => {
 
     const controller = new ConversationController(
       mockService as never,
-      { list: (rows: unknown) => ({ data: rows }) } as never
+      { list: (rows: unknown) => ({ data: rows }) } as never,
+      {} as never,
+      {} as never,
+      { APP_ORIGIN: 'http://localhost:3000' }
     );
 
     app.route('/', controller.routes());

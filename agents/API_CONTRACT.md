@@ -106,18 +106,25 @@ Response: `{ data: User }`
 **Controller**: `ConversationController` (`packages/server/src/conversations/`)
 **Auth**: `requireActor(['eif', 'admin'])`
 
-| Method   | Path                     | Query / Body                            | Description                                      |
-| -------- | ------------------------ | --------------------------------------- | ------------------------------------------------ |
-| `GET`    | `/api/conversations`     | `?advisorId&search&limit&cursor`        | List conversations for current actor (paginated) |
-| `POST`   | `/api/conversations`     | `{ advisorId: string, title?: string }` | Create conversation                              |
-| `GET`    | `/api/conversations/:id` | —                                       | Get conversation detail                          |
-| `DELETE` | `/api/conversations/:id` | —                                       | Delete conversation (owner-only)                 |
+| Method   | Path                           | Query / Body                            | Description                                      |
+| -------- | ------------------------------ | --------------------------------------- | ------------------------------------------------ |
+| `GET`    | `/api/conversations`           | `?advisorId&search&limit&cursor`        | List conversations for current actor (paginated) |
+| `POST`   | `/api/conversations`           | `{ advisorId: string, title?: string }` | Create conversation                              |
+| `GET`    | `/api/conversations/:id`       | —                                       | Get conversation detail                          |
+| `DELETE` | `/api/conversations/:id`       | —                                       | Delete conversation (owner-only)                 |
+| `POST`   | `/api/conversations/:id/share` | —                                       | Create or reuse a public share link (owner-only) |
+| `GET`    | `/api/share/:shareId`          | —                                       | **Public, no auth** — read-only shared view      |
 
 Response (list, paginated): `{ data: Conversation[], meta: { nextCursor: string | null, limit: number } }`
 Response (single): `{ data: Conversation }`
 Response (delete): `204 No Content`
 
 **Auth (delete)**: `requireActor(['eif', 'admin'])` + `requireConsent()` | **Scope**: owner-only | **Errors**: `400` (invalid UUID), `404` (not found / not owner) | **Side effect**: messages for the conversation are deleted through DB cascade
+
+### Conversation Sharing
+
+- `POST /api/conversations/:id/share` — idempotent: reuses the existing share row per conversation (unique on `conversation_id`), reactivating it if inactive. Response: `{ data: { shareId: string, url: string } }` where `url` = `${APP_ORIGIN}/share/${shareId}`. Errors: `400` (invalid UUID), `403` (not owner).
+- `GET /api/share/:shareId` — public route (no `requireActor`); serves the read-only page at `/share/:shareId`. Response: `{ data: { conversation: { title, advisorName, createdAt }, messages: [{ role, content, createdAt }] } }` — serializer whitelists via Zod parse so no user identity, internal IDs, token counts, or prompt metadata can leak. Only `status = 'ok'` messages are included (capped at 500). Errors: `404` (unknown/malformed shareId, inactive share, or deleted conversation).
 
 ---
 

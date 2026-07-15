@@ -1,6 +1,10 @@
 import { queryOptions } from '@tanstack/react-query';
 
-import { getConversation, listConversations } from './api';
+import {
+  getConversation,
+  getSharedConversation,
+  listConversations
+} from './api';
 
 export function conversationsQuery({
   advisorId,
@@ -24,5 +28,13 @@ export function conversationQuery(id: string) {
   return queryOptions({
     queryKey: ['conversation', id],
     queryFn: () => getConversation(id)
+  });
+}
+
+export function sharedConversationQuery(shareId: string) {
+  return queryOptions({
+    queryKey: ['shared-conversation', shareId],
+    queryFn: () => getSharedConversation(shareId),
+    retry: false
   });
 }

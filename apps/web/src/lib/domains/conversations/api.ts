@@ -56,3 +56,43 @@ export function deleteConversation(id: string) {
     param: { id }
   });
 }
+
+export interface ConversationShareLinkData {
+  shareId: string;
+  url: string;
+}
+
+export interface SharedMessageData {
+  role: 'user' | 'assistant';
+  content: string;
+  createdAt: string;
+}
+
+export interface SharedConversationData {
+  conversation: {
+    title: string;
+    advisorName: string;
+    createdAt: string;
+  };
+  messages: SharedMessageData[];
+}
+
+export function shareConversation(
+  id: string
+): Promise<{ data: ConversationShareLinkData }> {
+  return apiClient.conversations[':id'].share
+    .$post({
+      param: { id }
+    })
+    .then(parseApiResponse) as Promise<{ data: ConversationShareLinkData }>;
+}
+
+export function getSharedConversation(
+  shareId: string
+): Promise<{ data: SharedConversationData }> {
+  return apiClient.share[':shareId']
+    .$get({
+      param: { shareId }
+    })
+    .then(parseApiResponse) as Promise<{ data: SharedConversationData }>;
+}

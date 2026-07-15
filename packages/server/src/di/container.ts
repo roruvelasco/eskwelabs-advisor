@@ -41,6 +41,9 @@ import {
 } from '../background/deferred-task-runner';
 import { getServerEnv, type ServerEnv } from '../config/env';
 import { ConversationController } from '../conversations/conversations.controller';
+import { ConversationSharesRepository } from '../conversations/conversation-shares.repository';
+import { ConversationSharesSerializer } from '../conversations/conversation-shares.serializer';
+import { ConversationSharesService } from '../conversations/conversation-shares.service';
 import { ConversationsRepository } from '../conversations/conversations.repository';
 import { ConversationsSerializer } from '../conversations/conversations.serializer';
 import { ConversationsService } from '../conversations/conversations.service';
@@ -231,6 +234,10 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
       useFactory: (c) => new ConversationsRepository(c.get(DrizzleService))
     })
     .bind({
+      provide: ConversationSharesRepository,
+      useFactory: (c) => new ConversationSharesRepository(c.get(DrizzleService))
+    })
+    .bind({
       provide: MessagesRepository,
       useFactory: (c) => new MessagesRepository(c.get(DrizzleService))
     })
@@ -282,6 +289,10 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
     .bind({
       provide: ConversationsSerializer,
       useFactory: () => new ConversationsSerializer()
+    })
+    .bind({
+      provide: ConversationSharesSerializer,
+      useFactory: () => new ConversationSharesSerializer()
     })
     .bind({
       provide: MessagesSerializer,
@@ -356,6 +367,15 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
         new ConversationsService(
           c.get(ConversationsRepository),
           c.get(AdvisorRuntimeService),
+          c.get(AdvisorsService)
+        )
+    })
+    .bind({
+      provide: ConversationSharesService,
+      useFactory: (c) =>
+        new ConversationSharesService(
+          c.get(ConversationSharesRepository),
+          c.get(ConversationsRepository),
           c.get(AdvisorsService)
         )
     })
@@ -628,7 +648,10 @@ export function createContainer(deferredTaskRunner?: DeferredTaskRunner) {
       useFactory: (c) =>
         new ConversationController(
           c.get(ConversationsService),
-          c.get(ConversationsSerializer)
+          c.get(ConversationsSerializer),
+          c.get(ConversationSharesService),
+          c.get(ConversationSharesSerializer),
+          c.get(SERVER_ENV)
         )
     })
     .bind({
